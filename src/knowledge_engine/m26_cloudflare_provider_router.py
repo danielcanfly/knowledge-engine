@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -41,12 +42,28 @@ FALLBACK_DISABLED_CONFIGURATION = "DISABLED_CONFIGURATION"
 FALLBACK_CLOUDFLARE_DAILY_QUOTA = "CLOUDFLARE_DAILY_QUOTA_3036"
 FALLBACK_CLOUDFLARE_TRANSIENT = "CLOUDFLARE_TRANSIENT_OR_CAPACITY"
 FALLBACK_CLOUDFLARE_CONFIGURATION = "CLOUDFLARE_CONFIGURATION_DISABLED"
+MINIMAX_REVIEWER_RATE_LIMIT_429 = "MINIMAX_REVIEWER_RATE_LIMIT_429"
+MINIMAX_REVIEWER_HTTP_5XX = "MINIMAX_REVIEWER_HTTP_5XX"
+MINIMAX_REVIEWER_RETRY_EXHAUSTION = "MINIMAX_REVIEWER_RETRY_EXHAUSTION"
+_REVIEWER_HTTP_5XX_RE = re.compile(r"^provider HTTP ([5-9]\d\d)$")
 
 
 class CloudflareFallbackRequired(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+def classify_semantic_reviewer_failure(error: LiveGateError) -> str | None:
+    message = str(error).strip()
+    if message == "provider HTTP 429":
+        return MINIMAX_REVIEWER_RATE_LIMIT_429
+    if message == "provider retry exhaustion":
+        return MINIMAX_REVIEWER_RETRY_EXHAUSTION
+    match = _REVIEWER_HTTP_5XX_RE.fullmatch(message)
+    if match and 500 <= int(match.group(1)) <= 599:
+        return MINIMAX_REVIEWER_HTTP_5XX
+    return None
 
 
 def next_utc_midnight(now: datetime | None = None) -> datetime:
@@ -192,6 +209,10 @@ class CloudflareRouterState:
                 "closure_fallback_model": MINIMAX_MODEL,
                 "semantic_reviewer": MINIMAX_PROVIDER,
                 "semantic_reviewer_model": MINIMAX_MODEL,
+                "semantic_reviewer_primary": MINIMAX_PROVIDER,
+                "semantic_reviewer_primary_model": MINIMAX_MODEL,
+                "semantic_reviewer_availability_fallback": CLOUDFLARE_PROVIDER,
+                "semantic_reviewer_availability_fallback_model": CLOUDFLARE_MODEL,
                 "active_route": (
                     CLOUDFLARE_PROVIDER if self.state == STATE_AVAILABLE else MINIMAX_PROVIDER
                 ),
@@ -342,15 +363,23 @@ class ProviderRoutingClient:
         self.closure_provider_final = ""
         self.fallback_used = False
         self.fallback_reason = FALLBACK_NONE
+        self.semantic_reviewer_primary = MINIMAX_PROVIDER
+        self.semantic_reviewer_primary_model = MINIMAX_MODEL
+        self.semantic_reviewer_availability_fallback = CLOUDFLARE_PROVIDER
+        self.semantic_reviewer_availability_fallback_model = CLOUDFLARE_MODEL
+        self.semantic_reviewer_final = ""
+        self.semantic_reviewer_final_model = ""
+        self.semantic_reviewer_fallback_used = False
+        self.semantic_reviewer_fallback_reason = FALLBACK_NONE
+        self.semantic_reviewer_fallback_blocked_reason = ""
         self.attempts: list[dict[str, Any]] = []
         self.failed_cloudflare_selected_evidence_digest = ""
         self.fallback_selected_evidence_digest = ""
+        self.reviewer_provider_diversity: bool | None = None
 
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]:
         if call_class == SEMANTIC_REVIEW_CALL_CLASS:
-            result = self.reviewer.call(payload, call_class)
-            self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
-            return result
+            return self._call_semantic_reviewer(payload, call_class)
 
         route, reason = self.state.route_before_call()
         if route == MINIMAX_PROVIDER:
@@ -396,6 +425,22 @@ class ProviderRoutingClient:
             "cloudflare_last_infra_error_class": snapshot[
                 "cloudflare_last_infra_error_class"
             ],
+            "semantic_reviewer_primary": self.semantic_reviewer_primary,
+            "semantic_reviewer_primary_model": self.semantic_reviewer_primary_model,
+            "semantic_reviewer_availability_fallback": (
+                self.semantic_reviewer_availability_fallback
+            ),
+            "semantic_reviewer_availability_fallback_model": (
+                self.semantic_reviewer_availability_fallback_model
+            ),
+            "semantic_reviewer_final": self.semantic_reviewer_final,
+            "semantic_reviewer_final_model": self.semantic_reviewer_final_model,
+            "semantic_reviewer_fallback_used": self.semantic_reviewer_fallback_used,
+            "semantic_reviewer_fallback_reason": self.semantic_reviewer_fallback_reason,
+            "semantic_reviewer_fallback_blocked_reason": (
+                self.semantic_reviewer_fallback_blocked_reason
+            ),
+            "reviewer_provider_diversity": self._reviewer_provider_diversity(),
             "provider_attempts": list(self.attempts),
             "failed_cloudflare_selected_evidence_digest": (
                 self.failed_cloudflare_selected_evidence_digest
@@ -411,18 +456,123 @@ class ProviderRoutingClient:
             "state_scope": snapshot["state_scope"],
         }
 
+    def _reviewer_provider_diversity(self) -> bool | None:
+        if not self.semantic_reviewer_final or not self.closure_provider_final:
+            return None
+        return self.semantic_reviewer_final != self.closure_provider_final
+
+    def _call_semantic_reviewer(
+        self, payload: Mapping[str, Any], call_class: str
+    ) -> dict[str, Any]:
+        started = time.monotonic()
+        try:
+            result = self.reviewer.call(payload, call_class)
+        except LiveGateError as exc:
+            reviewer_fallback_reason = classify_semantic_reviewer_failure(exc)
+            self.semantic_reviewer_final = ""
+            self.semantic_reviewer_final_model = ""
+            self.semantic_reviewer_fallback_used = False
+            self.semantic_reviewer_fallback_reason = FALLBACK_NONE
+            self.semantic_reviewer_fallback_blocked_reason = ""
+            if reviewer_fallback_reason is None:
+                self._record_reviewer_attempt_failure(
+                    call_class,
+                    MINIMAX_PROVIDER,
+                    MINIMAX_MODEL,
+                    error_class=str(exc),
+                    result="failed",
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
+                self.reviewer_provider_diversity = None
+                raise
+
+            self._record_reviewer_attempt_failure(
+                call_class,
+                MINIMAX_PROVIDER,
+                MINIMAX_MODEL,
+                error_class=str(exc),
+                fallback_reason=reviewer_fallback_reason,
+                result="fallback_required",
+                latency_ms=int((time.monotonic() - started) * 1000),
+            )
+            self.semantic_reviewer_fallback_reason = reviewer_fallback_reason
+
+            if self.cloudflare is None:
+                self.semantic_reviewer_fallback_blocked_reason = "CLOUDFLARE_UNAVAILABLE"
+                self.reviewer_provider_diversity = None
+                raise
+
+            cloudflare_state = self.state.eligible_state()
+            if cloudflare_state != STATE_AVAILABLE:
+                self.semantic_reviewer_fallback_blocked_reason = cloudflare_state
+                self.reviewer_provider_diversity = None
+                raise
+
+            self.semantic_reviewer_fallback_used = True
+            try:
+                result = self.cloudflare.call(payload, call_class)
+            except CloudflareFallbackRequired as cloudflare_exc:
+                self._record_reviewer_attempt_failure(
+                    call_class,
+                    CLOUDFLARE_PROVIDER,
+                    CLOUDFLARE_MODEL,
+                    error_class=cloudflare_exc.reason,
+                    fallback_reason=reviewer_fallback_reason,
+                    result="fallback_required",
+                )
+                self._record_cloudflare_state_failure(cloudflare_exc.reason)
+                self.reviewer_provider_diversity = None
+                raise LiveGateError(cloudflare_exc.reason) from cloudflare_exc
+
+            self.semantic_reviewer_final = CLOUDFLARE_PROVIDER
+            self.semantic_reviewer_final_model = CLOUDFLARE_MODEL
+            self._record_attempt(call_class, CLOUDFLARE_PROVIDER, CLOUDFLARE_MODEL, result)
+            self.reviewer_provider_diversity = self._reviewer_provider_diversity()
+            return result
+
+        self.semantic_reviewer_final = MINIMAX_PROVIDER
+        self.semantic_reviewer_final_model = MINIMAX_MODEL
+        self.semantic_reviewer_fallback_used = False
+        self.semantic_reviewer_fallback_reason = FALLBACK_NONE
+        self.semantic_reviewer_fallback_blocked_reason = ""
+        self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
+        self.reviewer_provider_diversity = self._reviewer_provider_diversity()
+        return result
+
+    def _record_reviewer_attempt_failure(
+        self,
+        call_class: str,
+        provider: str,
+        model: str,
+        *,
+        error_class: str,
+        result: str,
+        fallback_reason: str = FALLBACK_NONE,
+        latency_ms: int = 0,
+    ) -> None:
+        self.attempts.append(
+            {
+                "call_class": call_class,
+                "provider": provider,
+                "model": model,
+                "result": result,
+                "fallback_reason": fallback_reason,
+                "error_class": error_class,
+                "latency_ms": latency_ms,
+                "network_attempt": 1,
+            }
+        )
+
     def _record_cloudflare_failure(self, error_class: str) -> None:
+        self._record_cloudflare_state_failure(error_class)
         self.fallback_used = True
         self.closure_provider_final = MINIMAX_PROVIDER
         if error_class == "CLOUDFLARE_DAILY_QUOTA_EXHAUSTED_3036":
             self.fallback_reason = FALLBACK_CLOUDFLARE_DAILY_QUOTA
-            self.state.record_daily_quota_exhausted(error_class)
         elif error_class in {"CLOUDFLARE_PAID_PLAN_ONLY_5035", "CLOUDFLARE_AUTH_OR_CONFIG"}:
             self.fallback_reason = FALLBACK_CLOUDFLARE_CONFIGURATION
-            self.state.record_disabled_configuration(error_class)
         else:
             self.fallback_reason = FALLBACK_CLOUDFLARE_TRANSIENT
-            self.state.record_transient(error_class)
         self.attempts.append(
             {
                 "call_class": "closure",
@@ -433,6 +583,14 @@ class ProviderRoutingClient:
                 "error_class": error_class,
             }
         )
+
+    def _record_cloudflare_state_failure(self, error_class: str) -> None:
+        if error_class == "CLOUDFLARE_DAILY_QUOTA_EXHAUSTED_3036":
+            self.state.record_daily_quota_exhausted(error_class)
+        elif error_class in {"CLOUDFLARE_PAID_PLAN_ONLY_5035", "CLOUDFLARE_AUTH_OR_CONFIG"}:
+            self.state.record_disabled_configuration(error_class)
+        else:
+            self.state.record_transient(error_class)
 
     def _record_attempt(
         self,

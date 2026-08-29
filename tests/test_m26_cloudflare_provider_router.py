@@ -11,20 +11,29 @@ import pytest
 from knowledge_engine import m26_ask_api
 from knowledge_engine.m26_cloudflare_provider_router import (
     CLOUDFLARE_MODEL,
+    CLOUDFLARE_PROVIDER,
     FALLBACK_CLOUDFLARE_DAILY_QUOTA,
     FALLBACK_CLOUDFLARE_TRANSIENT,
     FALLBACK_HARD_EXHAUSTED,
     FALLBACK_SOFT_EXHAUSTED,
     FALLBACK_TEMP_COOLDOWN,
     MINIMAX_MODEL,
+    MINIMAX_PROVIDER,
+    MINIMAX_REVIEWER_HTTP_5XX,
+    MINIMAX_REVIEWER_RATE_LIMIT_429,
+    MINIMAX_REVIEWER_RETRY_EXHAUSTION,
     SEMANTIC_REVIEW_CALL_CLASS,
     STATE_AVAILABLE,
+    STATE_DISABLED_CONFIGURATION,
     STATE_HARD_EXHAUSTED_UNTIL_RESET,
     STATE_SOFT_EXHAUSTED_UNTIL_RESET,
+    STATE_TEMP_COOLDOWN,
     CloudflareFallbackRequired,
     CloudflareRouterState,
+    LiveGateError,
     ProviderRoutingClient,
     build_provider_routing_client,
+    classify_semantic_reviewer_failure,
     cloudflare_gpt_oss_120b_neurons,
     provider_status_dto,
 )
@@ -35,14 +44,23 @@ OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf63
 
 
 class FakeProvider:
-    def __init__(self, *, text: str = "{}", failure: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        text: str = "{}",
+        failure: str = "",
+        live_failure: str = "",
+    ) -> None:
         self.text = text
         self.failure = failure
+        self.live_failure = live_failure
         self.calls: list[tuple[dict[str, Any], str]] = []
         self.cost = Decimal("0")
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls.append((payload, call_class))
+        if self.live_failure:
+            raise LiveGateError(self.live_failure)
         if self.failure:
             raise CloudflareFallbackRequired(self.failure)
         self.cost += Decimal("0.00001")
@@ -56,6 +74,36 @@ class FakeProvider:
             "stop_reason": "stop",
             "content_block_types": ["text"],
         }
+
+
+class SequenceProvider:
+    def __init__(
+        self,
+        *,
+        responses: dict[str, list[Any]] | None = None,
+        live_failures: dict[str, list[str]] | None = None,
+    ) -> None:
+        self.responses = {key: list(value) for key, value in (responses or {}).items()}
+        self.live_failures = {
+            key: list(value) for key, value in (live_failures or {}).items()
+        }
+        self.calls: list[tuple[dict[str, Any], str]] = []
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append((payload, call_class))
+        failures = self.live_failures.get(call_class, [])
+        if failures:
+            self.live_failures[call_class] = failures[1:]
+            raise LiveGateError(failures[0])
+        responses = self.responses.get(call_class, [])
+        if not responses:
+            raise AssertionError(f"unexpected call_class: {call_class}")
+        self.responses[call_class] = responses[1:]
+        response = responses[0]
+        if callable(response):
+            response = response(payload, call_class)
+        return dict(response)
 
 
 def _payload(secret: str = "do not persist this prompt") -> dict[str, Any]:
@@ -103,9 +151,12 @@ def test_available_routes_closure_to_cloudflare_and_review_to_minimax() -> None:
     assert len(reviewer.calls) == 1
     telemetry = router.telemetry()
     assert telemetry["closure_provider_final"] == "cloudflare"
+    assert telemetry["semantic_reviewer_final"] == MINIMAX_PROVIDER
+    assert telemetry["semantic_reviewer_fallback_used"] is False
     assert telemetry["fallback_used"] is False
     assert telemetry["provider_attempts"][0]["model"] == CLOUDFLARE_MODEL
     assert telemetry["provider_attempts"][1]["model"] == MINIMAX_MODEL
+    assert telemetry["reviewer_provider_diversity"] is True
 
 
 def test_valid_cloudflare_safe_abstention_does_not_fallback() -> None:
@@ -202,10 +253,229 @@ def test_provider_status_is_cached_observability_only() -> None:
     assert status["closure_primary"] == "cloudflare"
     assert status["closure_fallback"] == "minimax-m3"
     assert status["semantic_reviewer"] == "minimax-m3"
+    assert status["semantic_reviewer_primary"] == "minimax-m3"
+    assert status["semantic_reviewer_availability_fallback"] == "cloudflare"
     assert status["live_model_request"] is False
     assert "api" not in json.dumps(status).casefold()
 
 
+def test_semantic_reviewer_classifier_accepts_only_authorized_failures() -> None:
+    assert (
+        classify_semantic_reviewer_failure(LiveGateError("provider HTTP 429"))
+        == MINIMAX_REVIEWER_RATE_LIMIT_429
+    )
+    assert (
+        classify_semantic_reviewer_failure(LiveGateError("provider HTTP 500"))
+        == MINIMAX_REVIEWER_HTTP_5XX
+    )
+    assert (
+        classify_semantic_reviewer_failure(LiveGateError("provider HTTP 599"))
+        == MINIMAX_REVIEWER_HTTP_5XX
+    )
+    assert (
+        classify_semantic_reviewer_failure(LiveGateError("provider retry exhaustion"))
+        == MINIMAX_REVIEWER_RETRY_EXHAUSTION
+    )
+    for message in (
+        "provider HTTP 400",
+        "provider HTTP 401",
+        "provider HTTP 403",
+        "provider HTTP 404",
+        "provider HTTP 499",
+        "provider HTTP 600",
+        "provider-call budget exhausted",
+        "PAYG-equivalent cost budget exceeded",
+        "MINIMAX_API_KEY missing",
+        "provider model identity drift",
+        "provider usage missing",
+        "required provider usage missing",
+        "provider returned non-JSON",
+    ):
+        assert classify_semantic_reviewer_failure(LiveGateError(message)) is None
+
+
+@pytest.mark.parametrize(
+    "message,expected_reason",
+    [
+        ("provider HTTP 429", MINIMAX_REVIEWER_RATE_LIMIT_429),
+        ("provider HTTP 500", MINIMAX_REVIEWER_HTTP_5XX),
+        ("provider HTTP 503", MINIMAX_REVIEWER_HTTP_5XX),
+        ("provider HTTP 599", MINIMAX_REVIEWER_HTTP_5XX),
+        ("provider retry exhaustion", MINIMAX_REVIEWER_RETRY_EXHAUSTION),
+    ],
+)
+def test_semantic_reviewer_authorized_failover_routes_to_cloudflare_once(
+    message: str,
+    expected_reason: str,
+) -> None:
+    state = CloudflareRouterState()
+    cloudflare = FakeProvider(text='{"verdict":"pass","reason_codes":[]}')
+    fallback = FakeProvider()
+    reviewer = FakeProvider(live_failure=message)
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=state,
+    )
+
+    router.call(_payload(), "aq_semantic_closure")
+    result = router.call(_payload(), SEMANTIC_REVIEW_CALL_CLASS)
+
+    assert result["text"] == '{"verdict":"pass","reason_codes":[]}'
+    assert len(reviewer.calls) == 1
+    assert len(cloudflare.calls) == 2
+    assert len(fallback.calls) == 0
+    telemetry = router.telemetry()
+    assert telemetry["semantic_reviewer_fallback_used"] is True
+    assert telemetry["semantic_reviewer_fallback_reason"] == expected_reason
+    assert telemetry["semantic_reviewer_fallback_blocked_reason"] == ""
+    assert telemetry["semantic_reviewer_final"] == CLOUDFLARE_PROVIDER
+    assert telemetry["reviewer_provider_diversity"] is False
+    assert telemetry["fallback_used"] is False
+    assert telemetry["closure_provider_final"] == "cloudflare"
+    assert telemetry["provider_attempts"][1]["result"] == "fallback_required"
+    assert telemetry["provider_attempts"][2]["provider"] == "cloudflare"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "provider HTTP 400",
+        "provider HTTP 401",
+        "provider HTTP 403",
+        "provider HTTP 404",
+        "provider HTTP 499",
+        "provider HTTP 600",
+        "provider-call budget exhausted",
+        "PAYG-equivalent cost budget exceeded",
+        "MINIMAX_API_KEY missing",
+        "provider model identity drift",
+        "provider usage missing",
+        "required provider usage missing",
+        "provider returned non-JSON",
+    ],
+)
+def test_semantic_reviewer_non_authorized_failures_do_not_fallback(
+    message: str,
+) -> None:
+    state = CloudflareRouterState()
+    cloudflare = FakeProvider(text='{"verdict":"pass","reason_codes":[]}')
+    fallback = FakeProvider()
+    reviewer = FakeProvider(live_failure=message)
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=state,
+    )
+
+    with pytest.raises(LiveGateError, match=message):
+        router.call(_payload(), SEMANTIC_REVIEW_CALL_CLASS)
+
+    assert len(reviewer.calls) == 1
+    assert len(cloudflare.calls) == 0
+    assert len(fallback.calls) == 0
+    telemetry = router.telemetry()
+    assert telemetry["semantic_reviewer_fallback_used"] is False
+    assert telemetry["semantic_reviewer_fallback_reason"] == "NONE"
+    assert telemetry["semantic_reviewer_final"] == ""
+    assert telemetry["reviewer_provider_diversity"] is None
+
+
+def test_semantic_reviewer_authorized_failure_blocks_when_cloudflare_missing() -> None:
+    state = CloudflareRouterState()
+    fallback = FakeProvider()
+    reviewer = FakeProvider(live_failure="provider HTTP 429")
+    router = ProviderRoutingClient(
+        cloudflare=None,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=state,
+    )
+
+    with pytest.raises(LiveGateError, match="provider HTTP 429"):
+        router.call(_payload(), SEMANTIC_REVIEW_CALL_CLASS)
+
+    telemetry = router.telemetry()
+    assert len(reviewer.calls) == 1
+    assert len(fallback.calls) == 0
+    assert telemetry["semantic_reviewer_fallback_used"] is False
+    assert telemetry["semantic_reviewer_fallback_reason"] == MINIMAX_REVIEWER_RATE_LIMIT_429
+    assert telemetry["semantic_reviewer_fallback_blocked_reason"] == "CLOUDFLARE_UNAVAILABLE"
+    assert telemetry["semantic_reviewer_final"] == ""
+    assert telemetry["reviewer_provider_diversity"] is None
+
+
+@pytest.mark.parametrize(
+    "cloudflare_state,expected_blocked_reason",
+    [
+        (STATE_SOFT_EXHAUSTED_UNTIL_RESET, STATE_SOFT_EXHAUSTED_UNTIL_RESET),
+        (STATE_HARD_EXHAUSTED_UNTIL_RESET, STATE_HARD_EXHAUSTED_UNTIL_RESET),
+        (STATE_TEMP_COOLDOWN, STATE_TEMP_COOLDOWN),
+        (STATE_DISABLED_CONFIGURATION, STATE_DISABLED_CONFIGURATION),
+    ],
+)
+def test_semantic_reviewer_authorized_failures_block_when_cloudflare_ineligible(
+    cloudflare_state: str,
+    expected_blocked_reason: str,
+) -> None:
+    state = CloudflareRouterState()
+    state.force_state(cloudflare_state)
+    cloudflare = FakeProvider(text='{"verdict":"pass","reason_codes":[]}')
+    fallback = FakeProvider()
+    reviewer = FakeProvider(live_failure="provider HTTP 429")
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=state,
+    )
+
+    with pytest.raises(LiveGateError, match="provider HTTP 429"):
+        router.call(_payload(), SEMANTIC_REVIEW_CALL_CLASS)
+
+    telemetry = router.telemetry()
+    assert len(reviewer.calls) == 1
+    assert len(cloudflare.calls) == 0
+    assert len(fallback.calls) == 0
+    assert telemetry["semantic_reviewer_fallback_used"] is False
+    assert telemetry["semantic_reviewer_fallback_reason"] == MINIMAX_REVIEWER_RATE_LIMIT_429
+    assert telemetry["semantic_reviewer_fallback_blocked_reason"] == expected_blocked_reason
+    assert telemetry["semantic_reviewer_final"] == ""
+    assert telemetry["reviewer_provider_diversity"] is None
+
+
+def test_semantic_reviewer_cloudflare_failure_updates_state_without_closure_pollution() -> None:
+    state = CloudflareRouterState()
+    cloudflare = FakeProvider(failure="CLOUDFLARE_TRANSIENT_CAPACITY_3040")
+    fallback = FakeProvider()
+    reviewer = FakeProvider(live_failure="provider HTTP 429")
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=state,
+    )
+
+    with pytest.raises(LiveGateError, match="CLOUDFLARE_TRANSIENT_CAPACITY_3040"):
+        router.call(_payload(), SEMANTIC_REVIEW_CALL_CLASS)
+
+    telemetry = router.telemetry()
+    assert len(reviewer.calls) == 1
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 0
+    assert telemetry["semantic_reviewer_fallback_used"] is True
+    assert telemetry["semantic_reviewer_fallback_reason"] == MINIMAX_REVIEWER_RATE_LIMIT_429
+    assert telemetry["semantic_reviewer_fallback_blocked_reason"] == ""
+    assert telemetry["closure_provider_final"] == "cloudflare"
+    assert telemetry["fallback_used"] is False
+    assert telemetry["fallback_reason"] == "NONE"
+    assert state.snapshot()["cloudflare_state"] == STATE_TEMP_COOLDOWN
+    assert (
+        state.snapshot()["cloudflare_last_infra_error_class"]
+        == "CLOUDFLARE_TRANSIENT_CAPACITY_3040"
+    )
 def test_closure_uses_explicit_worker_key_before_ai_token_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

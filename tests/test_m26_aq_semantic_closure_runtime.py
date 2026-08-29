@@ -18,6 +18,15 @@ from knowledge_engine.m26_aq_semantic_contract import (
     derive_semantic_requirements,
     evaluate_visible_semantics,
 )
+from knowledge_engine.m26_cloudflare_provider_router import (
+    CLOUDFLARE_PROVIDER,
+    MINIMAX_PROVIDER,
+    MINIMAX_REVIEWER_RATE_LIMIT_429,
+    SEMANTIC_REVIEW_CALL_CLASS,
+    CloudflareRouterState,
+    ProviderRoutingClient,
+)
+from knowledge_engine.m26_pa5_v8_live import LiveGateError
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     SemanticRequirement,
     _bounded_publication_candidate,
@@ -289,6 +298,17 @@ class _ScriptedSemanticClosureProvider:
             "cost_usd": "0.001",
             "call_class": call_class,
         }
+
+
+class _LiveGateFailureProvider:
+    def __init__(self, message: str) -> None:
+        self.message = message
+        self.calls: list[tuple[dict[str, Any], str]] = []
+        self.cost = 0
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls.append((payload, call_class))
+        raise LiveGateError(self.message)
 
 
 def _failures(
@@ -1937,6 +1957,257 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     assert answer["multi_evidence_verification"]["dropped_claim_ids"] == ["claim_2"]
     assert closure["partial_answer"] is True
     assert closure["failures"] == []
+
+
+def test_semantic_review_429_falls_back_to_cloudflare_in_real_synthesize_flow() -> None:
+    question = "Explain router snapshots and monitor events."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+        _rich_passage(
+            "ev_monitor",
+            "The monitor accepts events.",
+            "monitor-note",
+        ),
+    ]
+    requirements = [
+        SemanticRequirement(
+            requirement_id="router_snapshots",
+            instruction="Explain router graph snapshots.",
+            evidence_terms=("router", "graph", "snapshots"),
+            visible_patterns=(r"\brouter.{0,80}(?:stores|keeps).{0,80}snapshots",),
+        ),
+        SemanticRequirement(
+            requirement_id="monitor_events",
+            instruction="Explain monitor events.",
+            evidence_terms=("monitor", "events"),
+            visible_patterns=(r"\bmonitor.{0,80}(?:accepts|rejects).{0,80}events",),
+        ),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = {
+            "router": next(
+                str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+            ),
+            "monitor": next(
+                str(item["id"]) for item in task["evidence"] if "monitor" in item["text"]
+            ),
+        }
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots. The monitor accepts events.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [labels["router"]],
+                    "covers": ["router_snapshots"],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The monitor accepts events.",
+                    "evidence_labels": [labels["monitor"]],
+                    "covers": ["monitor_events"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    def review(task: dict[str, Any]) -> dict[str, Any]:
+        judgments = []
+        for case in task["claim_cases"]:
+            judgments.append(
+                {
+                    "claim_id": str(case["claim_id"]),
+                    "verdict": "ENTAILED",
+                    "evidence_ids": [str(item["evidence_id"]) for item in case["evidence"]],
+                }
+            )
+        return {
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": judgments,
+            "visible_coverage": {
+                "verdict": "COVERED",
+                "uncovered_assertions": [],
+            },
+        }
+
+    cloudflare = _ScriptedSemanticClosureProvider([synthesis], review_result=review)
+    reviewer = _LiveGateFailureProvider("provider HTTP 429")
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=_AbstainingProvider(),  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-semantic-review-failover",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=router,
+        requirements=requirements,
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in cloudflare.calls] == [
+        "aq_semantic_closure",
+        SEMANTIC_REVIEW_CALL_CLASS,
+    ]
+    assert [call_class for _, call_class in reviewer.calls] == [
+        SEMANTIC_REVIEW_CALL_CLASS,
+    ]
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert "router keeps graph snapshots" in answer["answer_text"].casefold()
+    assert "monitor accepts events" in answer["answer_text"].casefold()
+    assert closure["failures"] == []
+    telemetry = router.telemetry()
+    assert telemetry["semantic_reviewer_primary"] == MINIMAX_PROVIDER
+    assert telemetry["semantic_reviewer_fallback_used"] is True
+    assert telemetry["semantic_reviewer_fallback_reason"] == MINIMAX_REVIEWER_RATE_LIMIT_429
+    assert telemetry["semantic_reviewer_final"] == CLOUDFLARE_PROVIDER
+    assert telemetry["reviewer_provider_diversity"] is False
+    assert telemetry["fallback_used"] is False
+    assert telemetry["closure_provider_final"] == CLOUDFLARE_PROVIDER
+
+
+def test_semantic_review_invalid_cloudflare_fallback_fails_closed_without_second_fallback() -> None:
+    question = "Explain router snapshots and monitor events."
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "The router stores graph snapshots.",
+            "router-note",
+        ),
+        _rich_passage(
+            "ev_monitor",
+            "The monitor accepts events.",
+            "monitor-note",
+        ),
+    ]
+    requirements = [
+        SemanticRequirement(
+            requirement_id="router_snapshots",
+            instruction="Explain router graph snapshots.",
+            evidence_terms=("router", "graph", "snapshots"),
+            visible_patterns=(r"\brouter.{0,80}(?:stores|keeps).{0,80}snapshots",),
+        ),
+        SemanticRequirement(
+            requirement_id="monitor_events",
+            instruction="Explain monitor events.",
+            evidence_terms=("monitor", "events"),
+            visible_patterns=(r"\bmonitor.{0,80}(?:accepts|rejects).{0,80}events",),
+        ),
+    ]
+
+    def synthesis(task: dict[str, Any]) -> dict[str, Any]:
+        labels = {
+            "router": next(
+                str(item["id"]) for item in task["evidence"] if "router" in item["text"]
+            ),
+            "monitor": next(
+                str(item["id"]) for item in task["evidence"] if "monitor" in item["text"]
+            ),
+        }
+        body = {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "answer",
+            "answer_text": "The router keeps graph snapshots. The monitor accepts events.",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The router keeps graph snapshots.",
+                    "evidence_labels": [labels["router"]],
+                    "covers": ["router_snapshots"],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": "The monitor accepts events.",
+                    "evidence_labels": [labels["monitor"]],
+                    "covers": ["monitor_events"],
+                },
+            ],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+        return body
+
+    def abstain(task: dict[str, Any]) -> dict[str, Any]:
+        del task
+        return {
+            "schema_version": "m26-fas-synthesis/v1",
+            "status": "abstain",
+            "answer_text": "",
+            "claims": [],
+            "unanswered_dimensions": [],
+            "abstention_reason": None,
+        }
+
+    cloudflare = _ScriptedSemanticClosureProvider(
+        [synthesis, abstain],
+        review_result={
+            "schema_version": "m26-claim-entailment-review/v1",
+            "claim_judgments": [
+                {
+                    "claim_id": "claim_1",
+                    "verdict": "INSUFFICIENT",
+                    "evidence_ids": [],
+                }
+            ],
+            "visible_coverage": {
+                "verdict": "UNCOVERED",
+                "uncovered_assertions": ["monitor events"],
+            },
+        },
+    )
+    reviewer = _LiveGateFailureProvider("provider HTTP 429")
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=_AbstainingProvider(),  # type: ignore[arg-type]
+        reviewer=reviewer,  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-semantic-review-invalid-failover",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=router,
+        requirements=requirements,
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in reviewer.calls] == [
+        SEMANTIC_REVIEW_CALL_CLASS,
+    ]
+    assert [call_class for _, call_class in cloudflare.calls] == [
+        "aq_semantic_closure",
+        SEMANTIC_REVIEW_CALL_CLASS,
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["answer_source"] == "safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert closure["broad_deterministic_fallback_used"] is False
+    telemetry = router.telemetry()
+    assert telemetry["semantic_reviewer_primary"] == MINIMAX_PROVIDER
+    assert telemetry["semantic_reviewer_fallback_used"] is True
+    assert telemetry["semantic_reviewer_fallback_reason"] == MINIMAX_REVIEWER_RATE_LIMIT_429
+    assert telemetry["semantic_reviewer_final"] == CLOUDFLARE_PROVIDER
+    assert telemetry["semantic_reviewer_fallback_blocked_reason"] == ""
 
 
 def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
