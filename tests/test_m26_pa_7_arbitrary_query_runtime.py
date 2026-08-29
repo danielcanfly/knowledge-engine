@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import subprocess
@@ -2697,3 +2698,220 @@ def test_tesc_semantic_review_missing_or_malformed_claim_ids_fail_closed() -> No
         )
 
     assert exc.value.code == "M26-PA7-ME-066"
+
+
+def test_r2a_query_context_signal_prefers_broad_context_over_ambiguous_term() -> None:
+    broad = runtime_module._query_context_signal(
+        question="What kind of skill does a Product Manager need?",
+        text="Product Manager discovery skill planning covers customer interviews.",
+    )
+    ambiguous = runtime_module._query_context_signal(
+        question="What kind of skill does a Product Manager need?",
+        text="A skill object defines invocation metadata for an automated system.",
+    )
+
+    assert broad["query_context_score"] > ambiguous["query_context_score"]
+    assert broad["query_context_coverage_terms"] == ["manager", "product", "skill"]
+    assert ambiguous["query_context_coverage_terms"] == ["skill"]
+
+
+def test_r2a_query_context_repair_has_no_topic_or_source_literal() -> None:
+    source = "\n".join(
+        inspect.getsource(item)
+        for item in (
+            runtime_module._query_context_signal,
+            runtime_module._query_context_terms,
+            runtime_module._candidate_weak_query_context_penalty,
+            runtime_module._ensure_query_coverage_passages,
+        )
+    ).casefold()
+
+    for forbidden in (
+        "product manager",
+        "pm-user",
+        "building-ai-skills",
+        "retention",
+        "user research",
+        "daniel_blog_en",
+    ):
+        assert forbidden not in source
+
+
+def test_r2a_candidate_pool_keeps_ai_skill_control_on_ai_context() -> None:
+    documents = {
+        "ai": {
+            "section_id": "ai",
+            "concept_id": "concept-ai",
+            "source_id": "source-ai",
+            "title": "AI Agent Architecture",
+            "section_title": "Skill Interface",
+            "body": "An AI agent architecture uses skills as callable tools with schemas.",
+        },
+        "human": {
+            "section_id": "human",
+            "concept_id": "concept-human",
+            "source_id": "source-human",
+            "title": "Human Team Skill",
+            "section_title": "Overview",
+            "body": "A skill can describe a learned workplace behavior.",
+        },
+    }
+    bundle = type("Bundle", (), {"graph_v2": {"edges": []}})()
+
+    pool = runtime_module._build_candidate_pool(
+        bundle=bundle,
+        documents=documents,
+        lexical_results=[
+            {"section_id": "human", "score": 8.0},
+            {"section_id": "ai", "score": 1.0},
+        ],
+        dense_candidates=[],
+        question="What is a skill in an AI agent architecture?",
+        intent_class="direct_grounded_knowledge",
+    )
+    ordered = runtime_module._rerank_candidates(pool, budget=2)
+
+    assert ordered[0]["section_id"] == "ai"
+
+
+def test_r2a_candidate_pool_favors_context_rich_match_over_skill_only_match() -> None:
+    documents = {
+        "context_rich": {
+            "section_id": "context_rich",
+            "concept_id": "concept-context",
+            "source_id": "source-context",
+            "title": "Product Manager Discovery Skill",
+            "section_title": "Overview",
+            "body": "A Product Manager needs interviewing and synthesis skills.",
+        },
+        "skill_only": {
+            "section_id": "skill_only",
+            "concept_id": "concept-skill",
+            "source_id": "source-skill",
+            "title": "Skill Object",
+            "section_title": "Overview",
+            "body": "A skill object defines metadata, input, and output.",
+        },
+    }
+    bundle = type("Bundle", (), {"graph_v2": {"edges": []}})()
+
+    pool = runtime_module._build_candidate_pool(
+        bundle=bundle,
+        documents=documents,
+        lexical_results=[
+            {"section_id": "skill_only", "score": 8.0},
+            {"section_id": "context_rich", "score": 1.0},
+        ],
+        dense_candidates=[],
+        question="What kind of skill does a Product Manager need?",
+        intent_class="direct_grounded_knowledge",
+    )
+    ordered = runtime_module._rerank_candidates(pool, budget=2)
+
+    assert ordered[0]["section_id"] == "context_rich"
+
+
+def test_r2a_weak_graph_context_cannot_outrank_stronger_direct_context() -> None:
+    candidates = [
+        {
+            "section_id": "weak_graph",
+            "channels": {"graph_1hop"},
+            "score": 20.0,
+            "seed_rank": 1,
+            "graph_hop": 1,
+            "relation_types": {"precedes"},
+            "graph_relevance_scores": [0.1],
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 1,
+            "query_context_phrase_match_count": 0,
+            "query_context_score": 1.0,
+        },
+        {
+            "section_id": "strong_direct",
+            "channels": {"lexical"},
+            "score": 18.0,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+            "query_context_term_count": 4,
+            "query_context_coverage_count": 3,
+            "query_context_phrase_match_count": 1,
+            "query_context_score": 10.0,
+        },
+    ]
+
+    ordered = runtime_module._rerank_candidates(candidates, budget=2)
+
+    assert ordered[0]["section_id"] == "strong_direct"
+
+
+def test_r2a_source_diversity_uses_source_identity_without_forcing_weak_graph() -> None:
+    candidates = [
+        {
+            "section_id": "a1",
+            "source_key": "source-a",
+            "concept_key": "concept-a1",
+            "channels": {"lexical"},
+            "query_context_term_count": 3,
+            "query_context_coverage_count": 3,
+            "query_context_phrase_match_count": 1,
+        },
+        {
+            "section_id": "a2",
+            "source_key": "source-a",
+            "concept_key": "concept-a2",
+            "channels": {"dense"},
+            "query_context_term_count": 3,
+            "query_context_coverage_count": 2,
+            "query_context_phrase_match_count": 0,
+        },
+        {
+            "section_id": "a3",
+            "source_key": "source-a",
+            "concept_key": "concept-a3",
+            "channels": {"lexical"},
+            "query_context_term_count": 3,
+            "query_context_coverage_count": 3,
+            "query_context_phrase_match_count": 0,
+        },
+        {
+            "section_id": "b1",
+            "source_key": "source-b",
+            "concept_key": "concept-b1",
+            "channels": {"graph_1hop"},
+            "graph_hop": 1,
+            "query_context_term_count": 3,
+            "query_context_coverage_count": 1,
+            "query_context_phrase_match_count": 0,
+        },
+        {
+            "section_id": "c1",
+            "source_key": "source-c",
+            "concept_key": "concept-c1",
+            "channels": {"lexical"},
+            "query_context_term_count": 3,
+            "query_context_coverage_count": 2,
+            "query_context_phrase_match_count": 0,
+        },
+    ]
+
+    selected = runtime_module._select_diverse_candidates(candidates, budget=3)
+
+    assert [item["section_id"] for item in selected] == ["a1", "a2", "c1"]
+
+
+def test_r2a_evidence_item_preserves_original_passage_text() -> None:
+    bundle = synthetic_full_production_answer_bundle()
+    document = runtime_module._release_documents(bundle)[0]
+
+    item = runtime_module._evidence_item(
+        bundle=bundle,
+        document=document,
+        lexical_result={},
+        trace_id="r2a-preserve-text",
+        ordinal=1,
+        channels=["lexical"],
+    )
+
+    assert item["passage_text"] == runtime_module._bounded_text(document["body"])

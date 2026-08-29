@@ -15,7 +15,6 @@ from knowledge_engine import (
 )
 from knowledge_engine.m26_public_api import PublicQuotaLedger, create_app
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

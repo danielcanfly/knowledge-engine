@@ -144,6 +144,22 @@ GENERIC_RELATIONAL_TERMS = {
     "support",
     "supports",
 }
+QUERY_CONTEXT_UTILITY_TERMS = {
+    "does",
+    "should",
+    "would",
+    "could",
+    "kind",
+    "need",
+    "needs",
+    "learn",
+    "conduct",
+    "well",
+    "help",
+    "helps",
+    "understand",
+    "role",
+}
 CLAIM_ANCHOR_RE = re.compile(r"\[\[([A-Za-z0-9_:-]+)\]\]")
 LEGACY_CITATION_RE = re.compile(r"\[([A-Za-z0-9_]+_ref_\d+)\]")
 DEPENDENCY_TERMS = {
@@ -4504,6 +4520,16 @@ def _build_candidate_pool(
         question=question,
         intent_class=intent_class,
     )
+    for candidate in candidates.values():
+        document = documents.get(str(candidate.get("section_id", "")), {})
+        signal = _query_context_signal(
+            question=question,
+            text=_candidate_context_text(candidate, document),
+        )
+        candidate.update(signal)
+        candidate["source_key"] = str(document.get("source_id") or candidate["section_id"])
+        candidate["concept_key"] = str(document.get("concept_id") or candidate["source_key"])
+        candidate["score"] += float(signal.get("query_context_score", 0.0)) * 0.75
     return sorted(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),
@@ -4722,7 +4748,9 @@ def _rerank_candidates(
             float(item.get("score", 0.0))
             + channel_count * 0.35
             + graph_bonus
+            + float(item.get("query_context_score", 0.0))
             - _candidate_structural_relation_penalty(item)
+            - _candidate_weak_query_context_penalty(item)
         )
         ordered.append(item)
     return sorted(
@@ -4744,10 +4772,27 @@ def _select_diverse_candidates(
     selected: list[dict[str, Any]] = []
     source_counts: Counter[str] = Counter()
     concept_counts: Counter[str] = Counter()
+    query_term_count = max(
+        (int(candidate.get("query_context_term_count") or 0) for candidate in candidates),
+        default=0,
+    )
+    has_context_rich_candidate = any(
+        int(candidate.get("query_context_coverage_count") or 0) >= 2
+        or int(candidate.get("query_context_phrase_match_count") or 0) > 0
+        for candidate in candidates
+    )
     for candidate in candidates:
         section_id = str(candidate["section_id"])
-        source_key = section_id.split("#", 1)[0]
-        concept_key = source_key
+        if (
+            query_term_count >= 3
+            and has_context_rich_candidate
+            and int(candidate.get("graph_hop") or 0) > 0
+            and int(candidate.get("query_context_coverage_count") or 0) <= 1
+            and int(candidate.get("query_context_phrase_match_count") or 0) == 0
+        ):
+            continue
+        source_key = str(candidate.get("source_key") or section_id.split("#", 1)[0])
+        concept_key = str(candidate.get("concept_key") or source_key)
         if source_counts[source_key] >= 2 or concept_counts[concept_key] >= 3:
             continue
         selected.append(dict(candidate))
@@ -4790,6 +4835,19 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         )[:6],
         "graph_relevance_scores": list(candidate.get("graph_relevance_scores", []))[:4],
         "structural_relation_only": _candidate_structural_relation_penalty(candidate) > 0,
+        "query_context_terms": list(candidate.get("query_context_terms", []))[:12],
+        "query_context_coverage_terms": list(
+            candidate.get("query_context_coverage_terms", [])
+        )[:12],
+        "query_context_coverage_count": int(candidate.get("query_context_coverage_count") or 0),
+        "query_context_coverage_ratio": round(
+            float(candidate.get("query_context_coverage_ratio") or 0.0),
+            6,
+        ),
+        "query_context_phrase_matches": list(
+            candidate.get("query_context_phrase_matches", [])
+        )[:8],
+        "query_context_score": round(float(candidate.get("query_context_score") or 0.0), 6),
     }
 
 
@@ -4807,6 +4865,22 @@ def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> floa
     if relation_types == {"precedes"}:
         return 0.45
     return 0.15
+
+
+def _candidate_weak_query_context_penalty(candidate: Mapping[str, Any]) -> float:
+    query_term_count = int(candidate.get("query_context_term_count") or 0)
+    coverage_count = int(candidate.get("query_context_coverage_count") or 0)
+    phrase_count = int(candidate.get("query_context_phrase_match_count") or 0)
+    graph_hop = int(candidate.get("graph_hop") or 0)
+    if query_term_count < 3:
+        return 0.0
+    if coverage_count <= 0:
+        return 3.0
+    if graph_hop > 0 and coverage_count <= 1 and phrase_count <= 0:
+        return 2.5
+    if query_term_count >= 4 and coverage_count == 1 and phrase_count <= 0:
+        return 1.0
+    return 0.0
 
 
 def _augment_evidence_for_intent(
@@ -5015,19 +5089,30 @@ def _ensure_required_facet_coverage_passages(
     for facet in _question_contract(question=question, intent_class=intent_class)[
         "required_facets"
     ]:
+        if str(facet.get("facet_id", "")) == "direct_answer":
+            continue
         facet_terms = _facet_terms(facet)
         if not facet_terms:
             continue
-        existing = next(
-            (
-                item
-                for item in selected
-                if item.get("evidence_type") == "passage"
-                and str(item.get("section_id", "")) not in prepend_sections
-                and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
-            ),
-            None,
-        )
+        existing_matches = [
+            (index, item)
+            for index, item in enumerate(selected)
+            if item.get("evidence_type") == "passage"
+            and str(item.get("section_id", "")) not in prepend_sections
+            and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+        ]
+        existing = None
+        if existing_matches:
+            existing = sorted(
+                existing_matches,
+                key=lambda indexed_item: (
+                    -_query_context_signal(
+                        question=question,
+                        text=_evidence_context_text(indexed_item[1]),
+                    )["query_context_score"],
+                    indexed_item[0],
+                ),
+            )[0][1]
         if existing is not None:
             prepend.append(dict(existing))
             prepend_sections.add(str(existing.get("section_id", "")))
@@ -5164,17 +5249,42 @@ def _ensure_query_coverage_passages(
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
-    query_terms = _coverage_terms(question)
+    query_terms = _query_context_terms(question)
     if not query_terms:
         return selected
     covered_terms: set[str] = set()
+    for item in selected:
+        evidence_text = " ".join(
+            str(item.get(key, ""))
+            for key in (
+                "title",
+                "section_title",
+                "passage_text",
+                "concept_id",
+                "section_id",
+                "source_id",
+                "source_identity",
+            )
+        )
+        covered_terms |= query_terms & _meaningful_terms(evidence_text)
+    if query_terms.issubset(covered_terms):
+        return selected
     ordinal = len(selected) + 1
     coverage_items: list[dict[str, Any]] = []
     documents = sorted(
         _release_documents(bundle),
         key=lambda document: (
-            -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
-            -_text_term_overlap_score(query_terms, _document_text(document)),
+            -int(
+                bool(
+                    _query_context_signal(question=question, text=_document_context_text(document))[
+                        "query_context_phrase_match_count"
+                    ]
+                )
+            ),
+            -len((query_terms - covered_terms) & _meaningful_terms(_document_context_text(document))),
+            -_query_context_signal(question=question, text=_document_context_text(document))[
+                "query_context_score"
+            ],
             _is_article_root_document(document),
             str(document.get("section_id", "")),
         ),
@@ -5185,9 +5295,17 @@ def _ensure_query_coverage_passages(
         section_id = str(document.get("section_id", ""))
         if section_id in selected_sections:
             continue
-        document_terms = _meaningful_terms(_document_text(document))
+        document_text = _document_context_text(document)
+        signal = _query_context_signal(question=question, text=document_text)
+        document_terms = _meaningful_terms(document_text)
         gained = (query_terms - covered_terms) & document_terms
         if not gained:
+            continue
+        if (
+            len(query_terms) >= 3
+            and int(signal.get("query_context_coverage_count") or 0) <= 1
+            and int(signal.get("query_context_phrase_match_count") or 0) == 0
+        ):
             continue
         item = _evidence_item(
             bundle=bundle,
@@ -5197,11 +5315,12 @@ def _ensure_query_coverage_passages(
             ordinal=ordinal,
             channels=["query_coverage"],
             retrieval_metadata={
-                "query_overlap_score": _text_term_overlap_score(
-                    query_terms,
-                    _document_text(document),
-                ),
+                "query_overlap_score": signal["query_context_coverage_ratio"],
                 "coverage_terms": sorted(gained),
+                "query_context_terms": signal["query_context_terms"],
+                "query_context_coverage_terms": signal["query_context_coverage_terms"],
+                "query_context_phrase_matches": signal["query_context_phrase_matches"],
+                "query_context_score": signal["query_context_score"],
             },
         )
         coverage_items.append(item)
@@ -5210,7 +5329,41 @@ def _ensure_query_coverage_passages(
         ordinal += 1
         if query_terms.issubset(covered_terms):
             break
-    return [*coverage_items, *selected]
+    if not coverage_items:
+        return selected
+    first_selected_metadata = (
+        selected[0].get("retrieval_metadata", {}) if selected and isinstance(selected[0], Mapping) else {}
+    )
+    first_selected_context_ratio = 0.0
+    first_selected_context_score = 0.0
+    if isinstance(first_selected_metadata, Mapping):
+        try:
+            first_selected_context_ratio = float(
+                first_selected_metadata.get("query_context_coverage_ratio", 0.0)
+            )
+        except (TypeError, ValueError):
+            first_selected_context_ratio = 0.0
+        try:
+            first_selected_context_score = float(
+                first_selected_metadata.get("query_context_score", 0.0)
+            )
+        except (TypeError, ValueError):
+            first_selected_context_score = 0.0
+    first_supplement_metadata = coverage_items[0].get("retrieval_metadata", {})
+    first_supplement_context_score = 0.0
+    if isinstance(first_supplement_metadata, Mapping):
+        try:
+            first_supplement_context_score = float(
+                first_supplement_metadata.get("query_context_score", 0.0)
+            )
+        except (TypeError, ValueError):
+            first_supplement_context_score = 0.0
+    if (
+        first_selected_context_ratio < 0.5
+        and first_supplement_context_score > first_selected_context_score
+    ):
+        return [coverage_items[0], *selected, *coverage_items[1:]]
+    return [*selected, *coverage_items]
 
 
 def _graph_evidence_bundle(
@@ -6229,11 +6382,126 @@ def _meaningful_terms(text: str) -> set[str]:
     return terms | singulars
 
 
+def _query_context_terms(text: str) -> set[str]:
+    terms = _coverage_terms(text) - QUERY_CONTEXT_UTILITY_TERMS
+    return terms or _coverage_terms(text)
+
+
+def _query_context_token_sequence(text: str) -> list[str]:
+    terms = _query_context_terms(text)
+    sequence: list[str] = []
+    for token in TOKEN_RE.findall(text):
+        normalized = token.casefold()
+        if normalized in terms:
+            sequence.append(normalized)
+        elif (
+            len(normalized) > 4
+            and normalized.endswith("s")
+            and not normalized.endswith("ss")
+            and normalized[:-1] in terms
+        ):
+            sequence.append(normalized[:-1])
+    return sequence
+
+
+def _query_context_phrases(text: str) -> list[str]:
+    sequence = _query_context_token_sequence(text)
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for size in (4, 3, 2):
+        for index in range(0, max(len(sequence) - size + 1, 0)):
+            phrase = " ".join(sequence[index : index + size])
+            if phrase and phrase not in seen:
+                phrases.append(phrase)
+                seen.add(phrase)
+    return phrases
+
+
+def _normalized_context_text(text: str) -> str:
+    return " ".join(token.casefold() for token in TOKEN_RE.findall(text))
+
+
 def _document_text(document: Mapping[str, Any]) -> str:
     return " ".join(
         str(document.get(key, ""))
         for key in ("title", "section_title", "description", "body", "excerpt", "concept_id")
     )
+
+
+def _document_context_text(document: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(document.get(key, ""))
+        for key in (
+            "source_id",
+            "section_id",
+            "concept_id",
+            "title",
+            "section_title",
+            "description",
+            "body",
+            "excerpt",
+        )
+    )
+
+
+def _evidence_context_text(item: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key, ""))
+        for key in (
+            "source_id",
+            "source_identity",
+            "section_id",
+            "concept_id",
+            "title",
+            "section_title",
+            "passage_text",
+        )
+    )
+
+
+def _candidate_context_text(
+    candidate: Mapping[str, Any],
+    document: Mapping[str, Any],
+) -> str:
+    dense = candidate.get("dense") if isinstance(candidate.get("dense"), Mapping) else {}
+    lexical = candidate.get("lexical") if isinstance(candidate.get("lexical"), Mapping) else {}
+    return " ".join(
+        [
+            _document_context_text(document),
+            str(lexical.get("snippet", "")),
+            str(lexical.get("title", "")),
+            str(dense.get("snippet", "")),
+            str(dense.get("source_id", "")),
+        ]
+    )
+
+
+def _query_context_signal(*, question: str, text: str) -> dict[str, Any]:
+    query_terms = _query_context_terms(question)
+    text_terms = _meaningful_terms(text)
+    coverage_terms = sorted(query_terms & text_terms)
+    normalized_text = _normalized_context_text(text)
+    phrase_matches = [
+        phrase for phrase in _query_context_phrases(question) if phrase in normalized_text
+    ]
+    coverage_count = len(coverage_terms)
+    coverage_ratio = coverage_count / max(len(query_terms), 1)
+    score = coverage_ratio * 8.0 + min(coverage_count, 5) * 0.8
+    score += min(len(phrase_matches), 4) * 4.0
+    if coverage_count <= 0:
+        score -= 2.0
+    elif len(query_terms) >= 3 and coverage_count == 1 and not phrase_matches:
+        score -= 1.5
+    return {
+        "query_context_terms": sorted(query_terms),
+        "query_context_term_count": len(query_terms),
+        "query_context_coverage_terms": coverage_terms,
+        "query_context_coverage_count": coverage_count,
+        "query_context_coverage_ratio": coverage_ratio,
+        "query_context_phrase_matches": phrase_matches,
+        "query_context_phrase_match_count": len(phrase_matches),
+        "query_context_score": score,
+    }
 
 
 def _coverage_terms(text: str) -> set[str]:
