@@ -3016,6 +3016,11 @@ def _verify_multi_evidence_provider_output(
             for item in (claim.get("facet_ids") or [])
             if isinstance(item, (str, int)) and str(item)
         }
+        if is_model_explanation and not support_refs and requested_facets & required_facets:
+            raise _verification_failure(
+                "M26-PA7-ME-029",
+                "model explanation cannot cover material required facets",
+            )
         ref_records: list[dict[str, Any]] = []
         for ref in support_refs:
             support = _object(ref, "claim support ref")
@@ -3073,39 +3078,33 @@ def _verify_multi_evidence_provider_output(
             )
             < 2
             and not is_model_explanation
-            and not semantic_review_enabled
         ):
             raise _verification_failure("M26-PA7-ME-021", "relational claim lacks two sources")
         if not surface_text:
             surface_text = " ".join(str(ref["exact_quote"]) for ref in ref_records)
-        if not semantic_review_enabled:
-            _verify_claim_surface_semantics(
+        _verify_claim_surface_semantics(
+            question=question,
+            intent_class=intent_class,
+            relation=str(parsed.get("relation") or ""),
+            claim_role=claim_role,
+            claim_type=claim_type,
+            surface_text=surface_text,
+            support_refs=ref_records,
+            evidence_by_id=evidence_by_id,
+        )
+        claim_facets = set(
+            _validated_claim_facets(
                 question=question,
                 intent_class=intent_class,
-                relation=str(parsed.get("relation") or ""),
                 claim_role=claim_role,
                 claim_type=claim_type,
                 surface_text=surface_text,
                 support_refs=ref_records,
                 evidence_by_id=evidence_by_id,
+                requested_facet_ids=requested_facets,
+                answer_text=str(parsed.get("answer_text") or ""),
             )
-            claim_facets = set(
-                _validated_claim_facets(
-                    question=question,
-                    intent_class=intent_class,
-                    claim_role=claim_role,
-                    claim_type=claim_type,
-                    surface_text=surface_text,
-                    support_refs=ref_records,
-                    evidence_by_id=evidence_by_id,
-                    requested_facet_ids=requested_facets,
-                    answer_text=str(parsed.get("answer_text") or ""),
-                )
-            )
-        else:
-            claim_facets = requested_facets & required_facets
-            if not claim_facets and is_model_explanation:
-                claim_facets = requested_facets
+        )
         covered_facets |= claim_facets & required_facets
         claim_records.append(
             {
@@ -3142,14 +3141,10 @@ def _verify_multi_evidence_provider_output(
                 ),
             }
         )
-    if not semantic_review_enabled or intent_class in {
-        "graph_relationship",
-        "provenance_source_trace",
-    }:
-        _enforce_intent_minimums(
-            intent_class=intent_class,
-            evidence=[evidence_by_id[item] for item in used_evidence_ids],
-        )
+    _enforce_intent_minimums(
+        intent_class=intent_class,
+        evidence=[evidence_by_id[item] for item in used_evidence_ids],
+    )
     selected_or_used = selected_ids or sorted(used_evidence_ids)
     if not set(used_evidence_ids).issubset(set(selected_or_used)):
         raise _verification_failure("M26-PA7-ME-022", "claim used evidence outside selection")
@@ -3378,18 +3373,7 @@ def _validated_claim_facets(
         )
     )
     if claim_type == "MODEL_EXPLANATION" and not support_refs:
-        visible_text = _strip_runtime_markers(f"{answer_text} {surface_text}")
-        visible_terms = _coverage_terms(visible_text)
-        if not visible_terms:
-            return []
-        return sorted(
-            str(facet["facet_id"])
-            for facet in _question_contract(question=question, intent_class=intent_class)[
-                "required_facets"
-            ]
-            if str(facet.get("facet_id", "")) in requested_facet_ids
-            and _facet_terms(facet) & visible_terms
-        )
+        return []
     if intent_class != "direct_grounded_knowledge":
         return sorted(inferred)
 
@@ -4350,6 +4334,8 @@ def _enforce_intent_minimums(
 
 
 def _claim_requires_multi_source(intent_class: str, claim_role: str) -> bool:
+    if intent_class in {"graph_relationship", "provenance_source_trace"}:
+        return False
     if claim_role in {"relationship", "temporal"}:
         return True
     return intent_class in {

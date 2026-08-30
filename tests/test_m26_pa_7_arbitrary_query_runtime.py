@@ -1442,7 +1442,7 @@ def test_unsupported_multi_source_synthesis_without_relation_marker_is_rejected(
     assert exc.value.code in {"M26-PA7-ME-048", "M26-PA7-ME-049"}
 
 
-def test_generic_model_explanation_without_support_refs_is_accepted() -> None:
+def test_generic_model_explanation_without_support_refs_cannot_cover_material_facet() -> None:
     evidence = [_direct_semantic_evidence()]
     provider_text = json.dumps(
         {
@@ -1473,17 +1473,16 @@ def test_generic_model_explanation_without_support_refs_is_accepted() -> None:
         }
     )
 
-    verified = runtime_module._verify_multi_evidence_provider_output(
-        trace_id="case_model_explanation",
-        question="Why is an explanation different from a direct factual claim?",
-        intent_class="direct_grounded_knowledge",
-        evidence=evidence,
-        provider_text=provider_text,
-    )
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="case_model_explanation",
+            question="Why is an explanation different from a direct factual claim?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+        )
 
-    assert verified["terminal_status"] == "verified_answer_ready_candidate"
-    assert verified["material_claims"][0]["claim_type"] == "MODEL_EXPLANATION"
-    assert verified["material_claims"][0]["support_refs"] == []
+    assert exc.value.code == "M26-PA7-ME-029"
 
 
 def test_fas5_direct_fact_with_correct_support_passes() -> None:
@@ -2400,8 +2399,11 @@ def _tesc_provider_text(
     *,
     surface_text: str,
     claim_role: str = "direct",
+    claim_type: str | None = None,
+    facet_ids: list[str] | None = None,
     relation: str | None = None,
     support_refs: list[dict[str, str]] | None = None,
+    selected_evidence_ids: list[str] | None = None,
 ) -> str:
     refs = support_refs or [
         {
@@ -2415,16 +2417,18 @@ def _tesc_provider_text(
             "schema_version": "aq3-provider-candidate/v3",
             "status": "answer_candidate",
             "relation": relation,
-            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "selected_evidence_ids": selected_evidence_ids
+            or [item["evidence_id"] for item in evidence],
             "answer_text": f"{surface_text} [[claim_1]].",
             "claims": [
                 {
                     "claim_id": "claim_1",
                     "surface_text": surface_text,
                     "claim_role": claim_role,
-                    "facet_ids": ["direct_answer"],
+                    "facet_ids": facet_ids or ["direct_answer"],
                     "support_mode": "exact_quote",
                     "support_refs": refs,
+                    **({"claim_type": claim_type} if claim_type else {}),
                 }
             ],
             "missing_facets": [],
@@ -2680,21 +2684,11 @@ def test_tesc_generic_explanation_accepts_generic_but_rejects_kb_fact() -> None:
         ),
     ],
 )
-def test_tesc_semantic_review_accepts_entailed_meaning_without_surface_parser(
-    monkeypatch: pytest.MonkeyPatch,
+def test_tesc_semantic_review_accepts_entailed_meaning_after_deterministic_gates(
     family: str,
     support_text: str,
     surface_text: str,
 ) -> None:
-    def fail_if_legacy_surface_parser_controls_publication(**_: Any) -> None:
-        raise AssertionError(f"{family} used legacy lexical semantics as oracle")
-
-    monkeypatch.setattr(
-        runtime_module,
-        "_verify_claim_surface_semantics",
-        fail_if_legacy_surface_parser_controls_publication,
-    )
-
     verified = _verify_semantic_reviewed_tesc_claim(
         support_text=support_text,
         surface_text=surface_text,
@@ -2702,6 +2696,7 @@ def test_tesc_semantic_review_accepts_entailed_meaning_without_surface_parser(
 
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
     assert verified["semantic_review_verified"] is True
+    assert family
 
 
 def test_tesc_semantic_review_accepts_supported_synthesis_from_local_evidence() -> None:
@@ -2758,33 +2753,34 @@ def test_tesc_semantic_review_allows_generic_model_explanation_boundary() -> Non
         }
     )
 
-    verified = runtime_module._verify_multi_evidence_provider_output(
-        trace_id="tesc_generic_model_explanation",
-        question="Why is a general explanation different from a corpus claim?",
-        intent_class="direct_grounded_knowledge",
-        evidence=[],
-        provider_text=provider_text,
-        semantic_review=_tesc_semantic_review(
-            verdict="GENERIC_EXPLANATION",
-            evidence_ids=[],
-        ),
-    )
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="tesc_generic_model_explanation",
+            question="Why is a general explanation different from a corpus claim?",
+            intent_class="direct_grounded_knowledge",
+            evidence=[],
+            provider_text=provider_text,
+            semantic_review=_tesc_semantic_review(
+                verdict="GENERIC_EXPLANATION",
+                evidence_ids=[],
+            ),
+        )
 
-    assert verified["material_claims"][0]["support_verdict"] == "generic_model_explanation"
+    assert exc.value.code == "M26-PA7-ME-029"
 
 
 @pytest.mark.parametrize(
-    ("family", "support_text", "surface_text", "question"),
+    ("family", "support_text", "surface_text", "question", "expected_code"),
     [
-        ("N1_predicate_contradiction", "The router stores graph snapshots.", "The router deletes graph snapshots.", "What does the router do?"),
-        ("N2_identity_mutation", "The router stores graph snapshots.", "The pipeline stores graph snapshots.", "What does the router do?"),
-        ("N3_polarity", "The router supports graph snapshots.", "The router does not support graph snapshots.", "What does the router support?"),
-        ("N4_modality", "The router may store graph snapshots.", "The router must store graph snapshots.", "What may the router do?"),
-        ("N5_causality", "The router is associated with graph snapshots.", "The router causes graph snapshots.", "What is associated?"),
-        ("N6_quantity_scalar", "The router stores about 20 snapshots.", "The router stores exactly 20 snapshots.", "How many snapshots?"),
-        ("N7_temporal", "The router stores snapshots in May.", "The router stores snapshots in June.", "What happened in June?"),
-        ("N9_question_false_premise", "The router stores graph snapshots.", "The router deletes graph snapshots in June.", "Why did the router delete snapshots in June?"),
-        ("N10_unrelated_source_count_rescue", "The router stores graph snapshots.", "The router deletes graph snapshots.", "What do multiple sources prove?"),
+        ("N1_predicate_contradiction", "The router stores graph snapshots.", "The router deletes graph snapshots.", "What does the router do?", "M26-PA7-ME-068"),
+        ("N2_identity_mutation", "The router stores graph snapshots.", "The pipeline stores graph snapshots.", "What does the router do?", "M26-PA7-ME-068"),
+        ("N3_polarity", "The router supports graph snapshots.", "The router does not support graph snapshots.", "What does the router support?", "M26-PA7-ME-056"),
+        ("N4_modality", "The router may store graph snapshots.", "The router must store graph snapshots.", "What may the router do?", "M26-PA7-ME-034"),
+        ("N5_causality", "The router is associated with graph snapshots.", "The router causes graph snapshots.", "What is associated?", "M26-PA7-ME-053"),
+        ("N6_quantity_scalar", "The router stores about 20 snapshots.", "The router stores exactly 20 snapshots.", "How many snapshots?", "M26-PA7-ME-033"),
+        ("N7_temporal", "The router stores snapshots in May.", "The router stores snapshots in June.", "What happened in June?", "M26-PA7-ME-068"),
+        ("N9_question_false_premise", "The router stores graph snapshots.", "The router deletes graph snapshots in June.", "Why did the router delete snapshots in June?", "M26-PA7-ME-068"),
+        ("N10_unrelated_source_count_rescue", "The router stores graph snapshots.", "The router deletes graph snapshots.", "What do multiple sources prove?", "M26-PA7-ME-068"),
     ],
 )
 def test_tesc_semantic_review_rejects_unsupported_meaning_even_with_overlap(
@@ -2792,6 +2788,7 @@ def test_tesc_semantic_review_rejects_unsupported_meaning_even_with_overlap(
     support_text: str,
     surface_text: str,
     question: str,
+    expected_code: str,
 ) -> None:
     with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
         _verify_semantic_reviewed_tesc_claim(
@@ -2803,7 +2800,7 @@ def test_tesc_semantic_review_rejects_unsupported_meaning_even_with_overlap(
             ),
         )
 
-    assert exc.value.code == "M26-PA7-ME-068"
+    assert exc.value.code == expected_code
 
 
 def test_tesc_semantic_review_rejects_graph_direction_mutation() -> None:
@@ -2849,7 +2846,7 @@ def test_tesc_semantic_review_rejects_graph_direction_mutation() -> None:
             ),
         )
 
-    assert exc.value.code == "M26-PA7-ME-068"
+    assert exc.value.code == "M26-PA7-ME-057"
 
 
 def test_tesc_semantic_review_rejects_cross_claim_evidence_bleed() -> None:
@@ -2935,6 +2932,153 @@ def test_tesc_semantic_review_missing_or_malformed_claim_ids_fail_closed() -> No
         )
 
     assert exc.value.code == "M26-PA7-ME-066"
+
+
+@pytest.mark.parametrize(
+    "surface_text",
+    [
+        "A skill is a method in an AI agent architecture.",
+        "A skill is a role in an AI agent architecture.",
+        "A skill is a mechanism in an AI agent architecture.",
+        "Routing is a skill.",
+    ],
+)
+def test_repair2_context_only_definition_negatives_fail_with_entailed_review(
+    surface_text: str,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            evidence_id="ev_context",
+            concept_id="architecture",
+        )
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_definition_false_reviewer",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=surface_text,
+                facet_ids=["definition_head"],
+            ),
+            semantic_review=_tesc_semantic_review(evidence_ids=["ev_context"]),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-071"
+
+
+def test_repair2_one_source_comparison_fails_with_entailed_review() -> None:
+    evidence = [_tesc_evidence("Entity A stores graph data.")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_comparison_false_reviewer",
+            question="Compare Entity A and Entity B.",
+            intent_class="cross_document_comparison",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="Entity A and Entity B both store graph data.",
+                claim_role="comparison",
+                relation="contrasts_with",
+                facet_ids=["compare_left", "compare_right", "comparison_relation"],
+            ),
+            semantic_review=_tesc_semantic_review(),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-021"
+
+
+def test_repair2_missing_provenance_record_fails_with_entailed_review() -> None:
+    evidence = [_tesc_evidence("Entity A stores graph data.")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_provenance_false_reviewer",
+            question="Which source record supports Entity A storing graph data?",
+            intent_class="provenance_source_trace",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="The source record supports that Entity A stores graph data.",
+                facet_ids=["passage_claim", "provenance_record"],
+            ),
+            semantic_review=_tesc_semantic_review(),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-026"
+
+
+def test_repair2_missing_graph_edge_fails_with_entailed_review() -> None:
+    evidence = [_tesc_evidence("Entity A appears before Entity B in the notes.")]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_graph_false_reviewer",
+            question="What graph relationship connects Entity A and Entity B?",
+            intent_class="graph_relationship",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text="A graph relationship connects Entity A to Entity B.",
+                claim_role="relationship",
+                relation="precedes",
+                facet_ids=[
+                    "graph_edge",
+                    "source_endpoint",
+                    "target_endpoint",
+                    "relation_semantics",
+                ],
+            ),
+            semantic_review=_tesc_semantic_review(),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-024"
+
+
+def test_repair2_model_explanation_declared_facet_fails_with_generic_review() -> None:
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [],
+            "answer_text": "In general, explanations provide framing [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "model_explanation",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "surface_text": "In general, explanations provide framing.",
+                    "facet_ids": ["direct_answer"],
+                    "support_mode": "model_explanation",
+                    "support_refs": [],
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_model_explanation_false_reviewer",
+            question="What does Entity A establish?",
+            intent_class="direct_grounded_knowledge",
+            evidence=[],
+            provider_text=provider_text,
+            semantic_review=_tesc_semantic_review(
+                verdict="GENERIC_EXPLANATION",
+                evidence_ids=[],
+            ),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-029"
 
 
 def test_repair1_high_raw_score_cannot_retain_severe_context_mismatch() -> None:
