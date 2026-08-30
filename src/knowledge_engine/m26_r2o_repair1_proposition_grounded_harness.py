@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -23,6 +24,8 @@ PLACEHOLDER_PHRASES = {
     "stay within the proposition supported by the exact snippet",
     "generic placeholder",
 }
+GOLD_MODES = {"extractive", "structural", "sentinel_synthesis", "context_only"}
+CONTEXT_SUPPORT_ROLES = {"context", "negative_distractor"}
 
 
 def load_bank(bank_dir: Path = BANK_DIR) -> list[dict[str, Any]]:
@@ -77,6 +80,152 @@ def _certificate_keys_present(certificate: Mapping[str, Any], keys: set[str]) ->
     return keys <= set(certificate)
 
 
+def _canonical_text(text: str) -> str:
+    cleaned = re.sub(r"[`*_#>\-|:.(),;]+", " ", text.lower())
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _support_by_id(case: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(item["support_id"]): item
+        for item in case.get("gold_support", [])
+        if str(item.get("support_id", "")).strip()
+    }
+
+
+def _render_provenance_proposition(certificate: Mapping[str, Any]) -> str:
+    return (
+        f"{certificate['primary_concept_id']} is bound to provenance record "
+        f"{certificate['provenance_record_id']} whose subject is "
+        f"{certificate['provenance_subject_concept_id']}."
+    )
+
+
+def _render_graph_proposition(graph_support: Mapping[str, Any]) -> str:
+    certificate = graph_support["graph_certificate"]
+    return (
+        f"{certificate['source_node_id']} {certificate['relation_type']} "
+        f"{certificate['target_node_id']}."
+    )
+
+
+def _render_temporal_proposition(certificate: Mapping[str, Any]) -> str:
+    count = int(certificate["observed_temporal_record_count"])
+    noun = "record" if count == 1 else "records"
+    return f"Only {count} {noun} is available; a newer-version ordering cannot be established."
+
+
+def _prop_text_is_in_support(prop: Mapping[str, Any], supports: Sequence[Mapping[str, Any]]) -> bool:
+    proposition_text = str(prop.get("proposition_text", "")).strip()
+    source_text = "\n\n".join(str(s.get("exact_support_snippet", "")).strip() for s in supports)
+    if not proposition_text or not source_text:
+        return False
+    if proposition_text in source_text:
+        return True
+    normalized_prop = _canonical_text(proposition_text)
+    normalized_source = _canonical_text(source_text)
+    return bool(normalized_prop) and normalized_prop in normalized_source
+
+
+def validate_gold_authority(case: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    supports = _support_by_id(case)
+    for prop in case.get("required_propositions", []):
+        prop_id = str(prop.get("proposition_id", ""))
+        gold_mode = str(prop.get("gold_mode", ""))
+        if gold_mode not in GOLD_MODES:
+            errors.append("GOLD_MODE_INVALID")
+        refs = [str(ref) for ref in prop.get("support_refs", [])]
+        ref_supports = [supports[ref] for ref in refs if ref in supports]
+        for support in ref_supports:
+            support_role = str(support.get("support_role", ""))
+            if support_role == "context":
+                errors.append("CONTEXT_SUPPORT_USED_AS_REQUIRED_AUTHORITY")
+            if support_role == "negative_distractor":
+                errors.append("NEGATIVE_DISTRACTOR_USED_AS_AUTHORITY")
+            if prop_id not in support.get("authority_for", []):
+                errors.append("AUTHORITY_FOR_MISMATCH")
+
+        if gold_mode in {"extractive", "context_only", "sentinel_synthesis"}:
+            if not _prop_text_is_in_support(prop, ref_supports):
+                errors.append("EXTRACTIVE_PROP_NOT_IN_SUPPORT")
+        if gold_mode == "sentinel_synthesis":
+            if prop.get("hostile_semantic_review_required") is not True:
+                errors.append("SENTINEL_HOSTILE_REVIEW_NOT_REQUIRED")
+            if not prop.get("sentinel_atomic_mapping"):
+                errors.append("SENTINEL_ATOMIC_MAPPING_MISSING")
+
+        if gold_mode == "structural":
+            certificate_type = str(prop.get("structural_certificate_type", ""))
+            expected: str | None = None
+            if certificate_type == "provenance":
+                certificate = case.get("provenance_certificate") or {}
+                if _certificate_keys_present(
+                    certificate,
+                    {
+                        "primary_concept_id",
+                        "provenance_record_id",
+                        "provenance_subject_concept_id",
+                    },
+                ):
+                    expected = _render_provenance_proposition(certificate)
+                if expected != prop.get("proposition_text"):
+                    errors.append("PROVENANCE_PROP_CERT_MISMATCH")
+                    errors.append("STRUCTURAL_PROP_CERT_MISMATCH")
+            elif certificate_type == "graph":
+                graph_supports = [
+                    support
+                    for support in ref_supports
+                    if str(support.get("support_role")) == "graph_edge"
+                    and support.get("graph_certificate")
+                ]
+                expected = _render_graph_proposition(graph_supports[0]) if graph_supports else None
+                if expected != prop.get("proposition_text"):
+                    errors.append("GRAPH_PROP_CERT_MISMATCH")
+                    errors.append("STRUCTURAL_PROP_CERT_MISMATCH")
+            elif certificate_type == "temporal":
+                certificate = case.get("temporal_certificate") or {}
+                if _certificate_keys_present(
+                    certificate,
+                    {"observed_temporal_record_count"},
+                ):
+                    expected = _render_temporal_proposition(certificate)
+                if expected != prop.get("proposition_text"):
+                    errors.append("TEMPORAL_PROP_CERT_MISMATCH")
+                    errors.append("STRUCTURAL_PROP_CERT_MISMATCH")
+            else:
+                errors.append("STRUCTURAL_PROP_CERT_MISMATCH")
+
+    question = str(case.get("question", ""))
+    if question == "What kind of skill does a Product Manager need?":
+        for support in [
+            supports[ref]
+            for prop in case.get("required_propositions", [])
+            for ref in prop.get("support_refs", [])
+            if ref in supports
+        ]:
+            source = str(support.get("source_identity", "")).lower()
+            if (
+                "pm-" not in source
+                or "atlas-of-agent" in source
+                or "harness-theory" in source
+                or "founder" in source
+                or "venture" in source
+            ):
+                errors.append("SENTINEL_UNRELATED_AUTHORITY")
+    if question == "What is a skill in an AI agent architecture?":
+        for prop in case.get("required_propositions", []):
+            refs = [str(ref) for ref in prop.get("support_refs", [])]
+            if refs != [f"{case['case_id']}-SUP01"]:
+                errors.append("SENTINEL_UNRELATED_AUTHORITY")
+    if question == "What is the role of user research in product management?":
+        for prop in case.get("required_propositions", []):
+            refs = [str(ref) for ref in prop.get("support_refs", [])]
+            if refs != ["SENTINEL-Q3-CONTROL-SUP01"]:
+                errors.append("SENTINEL_UNRELATED_AUTHORITY")
+    return errors
+
+
 def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     required = {
@@ -128,6 +277,8 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
             errors.append("empty_support_id")
         if not str(support.get("exact_support_snippet", "")).strip():
             errors.append("empty_support_snippet")
+        if "authority_for" not in support:
+            errors.append("missing_authority_for")
     for prop in case.get("required_propositions", []):
         if not set(prop.get("support_refs", [])) <= support_ids:
             errors.append(f"bad_support_refs:{case['case_id']}")
@@ -137,6 +288,8 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
             errors.append("empty_entailment_note")
         if not str(prop.get("relation_type", "")).strip():
             errors.append("empty_relation_type")
+        if str(prop.get("gold_mode", "")) not in GOLD_MODES:
+            errors.append("GOLD_MODE_INVALID")
     for item in case.get("forbidden_inferences", []):
         if not {
             "inference_id",
@@ -207,6 +360,7 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
                 errors.append("temporal_certificate_mode_invalid")
             if int(case.get("temporal_versions_required", 0)) != 0:
                 errors.append("temporal_versions_required_nonzero")
+    errors.extend(validate_gold_authority(case))
     return errors
 
 
