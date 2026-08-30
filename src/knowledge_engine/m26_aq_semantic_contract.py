@@ -426,6 +426,7 @@ def derive_semantic_requirements(
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
     lifecycle_requested = _requested_lifecycle_requirements(question)
+    definition_parts = legacy._contextual_definition_query_parts(question)
     lifecycle_ids = {
         "admission_policy",
         "durable_state",
@@ -477,6 +478,46 @@ def derive_semantic_requirements(
                 exact_phrase=exact_phrase,
             )
         )
+    if definition_parts is not None:
+        head = str(definition_parts.get("definition_head", "")).strip()
+        context = str(definition_parts.get("context_modifier", "")).strip()
+        if head and "definition_head" not in seen:
+            seen.add("definition_head")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="definition_head",
+                    instruction=(
+                        f"State {head} with a source-backed definitional predicate "
+                        "instead of an invented category."
+                    ),
+                    evidence_terms=(
+                        head,
+                        *tuple(str(term) for term in legacy._coverage_terms(head)),
+                        *tuple(
+                            sorted(
+                                legacy._coverage_terms(head)
+                                & legacy._coverage_terms(question)
+                            )
+                        ),
+                    ),
+                    visible_patterns=(
+                        rf"\b{re.escape(head)}\b.{{0,120}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b",
+                        rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b.{{0,120}}\b{re.escape(head)}\b",
+                    ),
+                    exact_phrase=head,
+                )
+            )
+        if context and "context_modifier" not in seen:
+            seen.add("context_modifier")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="context_modifier",
+                    instruction=f"Keep the contextual modifier {context} explicit.",
+                    evidence_terms=tuple(legacy._coverage_terms(context)),
+                    visible_patterns=(rf"\b{re.escape(context)}\b",),
+                    exact_phrase=context,
+                )
+            )
     if _state_machine_replanner_question(question):
         requirements.append(_authority_boundary_requirement())
     if _route_replan_question(question):

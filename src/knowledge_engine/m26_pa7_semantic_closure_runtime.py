@@ -435,6 +435,25 @@ def _synthesize_and_verify(
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
+            if _candidate_lacks_material_requirement_coverage(
+                candidate,
+                requirements=requirements,
+            ):
+                failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                break
+            if _provider_partial_has_unresolved_material_gap(
+                candidate,
+                requirements=requirements,
+                unanswered_dimensions=unanswered_dimensions,
+            ):
+                failures.append("PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS")
+                if attempt == 1:
+                    repair_attempted = True
+                    continue
+                break
             semantic_review, review_raw = _call_semantic_entailment_review(
                 provider_client=provider_client,
                 question=question,
@@ -699,6 +718,92 @@ def _verified_supported_review_partial(
         "dropped_claim_ids": dropped_claim_ids,
     }
     return answer, closure
+
+
+def _provider_partial_has_unresolved_material_gap(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+    unanswered_dimensions: Sequence[str],
+) -> bool:
+    if str(candidate.get("status", "")) != "partial_candidate":
+        return False
+    unresolved = {str(item).strip() for item in unanswered_dimensions if str(item).strip()}
+    if not requirements:
+        return bool(unresolved)
+    requirement_ids = {item.requirement_id for item in requirements}
+    unresolved_requirement_ids = {
+        item for item in unresolved if item in requirement_ids
+    }
+    covered_ids = _material_claim_requirement_coverage(
+        candidate,
+        requirements=requirements,
+    )
+    return not bool(covered_ids & (requirement_ids - unresolved_requirement_ids))
+
+
+def _candidate_lacks_material_requirement_coverage(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+) -> bool:
+    if not requirements:
+        return False
+    requirement_ids = {item.requirement_id for item in requirements}
+    return not bool(
+        _material_claim_requirement_coverage(
+            candidate,
+            requirements=requirements,
+        )
+        & requirement_ids
+    )
+
+
+def _material_claim_requirement_coverage(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+) -> set[str]:
+    covered_ids: set[str] = set()
+    for raw_claim in legacy._list(candidate.get("claims"), "partial material claims"):
+        claim = legacy._object(raw_claim, "partial material claim")
+        claim_type = str(claim.get("claim_type", ""))
+        if claim_type != "MODEL_EXPLANATION" and not claim.get("support_refs"):
+            continue
+        claim_text = str(claim.get("surface_text", "")).strip()
+        covered_ids.update(
+            str(item)
+            for item in legacy._list(claim.get("facet_ids"), "partial claim facets")
+            if str(item)
+        )
+        covered_ids.update(
+            str(item)
+            for item in legacy._list(claim.get("covers"), "partial claim covers")
+            if str(item)
+        )
+        for requirement in requirements:
+            if _claim_text_covers_requirement(claim_text, requirement):
+                covered_ids.add(requirement.requirement_id)
+    return covered_ids
+
+
+def _claim_text_covers_requirement(
+    claim_text: str,
+    requirement: SemanticRequirement,
+) -> bool:
+    normalized = re.sub(r"\s+", " ", str(claim_text)).strip()
+    if not normalized:
+        return False
+    folded = normalized.casefold()
+    if requirement.exact_phrase:
+        return requirement.exact_phrase.casefold() in folded
+    return bool(
+        requirement.visible_patterns
+        and any(
+            re.search(pattern, normalized, flags=re.I)
+            for pattern in requirement.visible_patterns
+        )
+    )
 
 
 def _supported_review_partial_candidate(
@@ -1928,6 +2033,7 @@ def _semantic_requirements(
     q = question.casefold()
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
+    definition_parts = legacy._contextual_definition_query_parts(question)
 
     def add(
         requirement_id: str,
@@ -1959,6 +2065,46 @@ def _semantic_requirements(
             [re.escape(entity)],
             exact_phrase=entity,
         )
+
+    if definition_parts is not None:
+        head = str(definition_parts.get("definition_head", "")).strip()
+        context = str(definition_parts.get("context_modifier", "")).strip()
+        if head and "definition_head" not in seen:
+            add(
+                "definition_head",
+                (
+                    f"State {head} with a source-backed definitional predicate "
+                    "rather than an invented category."
+                ),
+                (
+                    head,
+                    *legacy._coverage_terms(head),
+                    *legacy._coverage_terms(question),
+                    "method",
+                    "means",
+                    "follow",
+                    "sop",
+                    "tool",
+                    "decision",
+                    "rules",
+                    "acceptance",
+                    "criteria",
+                    "task",
+                ),
+                (
+                    rf"\b{re.escape(head)}\b.{{0,120}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b",
+                    rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b.{{0,120}}\b{re.escape(head)}\b",
+                ),
+                exact_phrase=head,
+            )
+        if context and "context_modifier" not in seen:
+            add(
+                "context_modifier",
+                f"Keep the contextual modifier {context} explicit.",
+                tuple(legacy._coverage_terms(context)),
+                (rf"\b{re.escape(context)}\b",),
+                exact_phrase=context,
+            )
 
     if "production router" in q or (
         "router" in q
@@ -3053,9 +3199,83 @@ def _provider_evidence_order(
     question: str,
 ) -> list[Mapping[str, Any]]:
     qterms = legacy._meaningful_terms(question)
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_head_terms = (
+        legacy._coverage_terms(definition_parts["definition_head"])
+        if definition_parts
+        else set()
+    )
+    definition_predicate_terms = {
+        "acceptance",
+        "behavior",
+        "capability",
+        "criteria",
+        "decision",
+        "follow",
+        "follows",
+        "method",
+        "means",
+        "order",
+        "practice",
+        "procedure",
+        "role",
+        "rules",
+        "sop",
+        "task",
+        "tool",
+        "uses",
+    }
     return sorted(
         evidence,
         key=lambda item: (
+            -int(
+                bool(
+                    (
+                        definition_head_terms
+                        & legacy._meaningful_terms(
+                            " ".join(
+                                str(item.get(key, ""))
+                                for key in (
+                                    "title",
+                                    "section_title",
+                                    "passage_text",
+                                    "concept_id",
+                                )
+                            )
+                        )
+                    )
+                    and (
+                        legacy._meaningful_terms(
+                            " ".join(
+                                str(item.get(key, ""))
+                                for key in (
+                                    "title",
+                                    "section_title",
+                                    "passage_text",
+                                    "concept_id",
+                                )
+                            )
+                        )
+                        & definition_predicate_terms
+                    )
+                )
+            ),
+            -int(
+                bool(
+                    definition_head_terms
+                    & legacy._meaningful_terms(
+                        " ".join(
+                            str(item.get(key, ""))
+                            for key in (
+                                "title",
+                                "section_title",
+                                "passage_text",
+                                "concept_id",
+                            )
+                        )
+                    )
+                )
+            ),
             -max(
                 [
                     _requirement_evidence_score(req, item)
@@ -3085,6 +3305,36 @@ def _provider_snippet(
     if item.get("evidence_type") == "graph_edge":
         return text[:MAX_PROVIDER_SNIPPET_CHARS]
     target_terms = set(legacy._meaningful_terms(question))
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_head_terms = (
+        legacy._coverage_terms(definition_parts["definition_head"])
+        if definition_parts
+        else set()
+    )
+    definition_predicate_terms = {
+        "acceptance",
+        "behavior",
+        "capability",
+        "criteria",
+        "decision",
+        "follow",
+        "follows",
+        "method",
+        "means",
+        "order",
+        "practice",
+        "procedure",
+        "role",
+        "rules",
+        "sop",
+        "task",
+        "tool",
+        "uses",
+    }
+    if definition_parts:
+        target_terms |= definition_head_terms
+        if definition_parts["context_modifier"]:
+            target_terms |= legacy._coverage_terms(definition_parts["context_modifier"])
     for requirement in requirements:
         target_terms |= legacy._meaningful_terms(
             " ".join(requirement.evidence_terms)
@@ -3093,6 +3343,13 @@ def _provider_snippet(
     ranked = sorted(
         segments,
         key=lambda segment: (
+            -int(
+                bool(
+                    definition_head_terms & legacy._meaningful_terms(segment)
+                    and legacy._meaningful_terms(segment) & definition_predicate_terms
+                )
+            ),
+            -int(bool(definition_head_terms & legacy._meaningful_terms(segment))),
             -legacy._text_term_overlap_score(target_terms, segment),
             legacy._segment_noise_penalty(segment),
             legacy._thin_heading(segment),
