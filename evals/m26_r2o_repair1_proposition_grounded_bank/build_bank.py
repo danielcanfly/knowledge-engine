@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,12 @@ R2F_EVIDENCE = REPO / "M26_R2F_INTERNAL_VERIFIER_FAILURE_DECOMPOSITION_CODEX_RET
 R2K_CITATION = REPO / "r2l_refs_20260830" / "R2K" / "raw" / "citation_support_sources.json"
 
 RUNTIME_CANDIDATE_SHA = "8942859bbe3491de084dda09326fe03fec82989f"
+REQUIRED_PROP_ID = "{case_id}-PROP01"
+GOLD_MODE_EXTRACTIVE = "extractive"
+GOLD_MODE_STRUCTURAL = "structural"
+GOLD_MODE_SENTINEL_SYNTHESIS = "sentinel_synthesis"
+GOLD_MODE_CONTEXT_ONLY = "context_only"
+CONTEXT_SUPPORT_ROLES = {"context", "negative_distractor"}
 
 PRIMARY_ONLY_NEW = [
     ("BROAD-0001", "R2O-PG-P063"),
@@ -85,7 +92,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "A Product Manager needs data-analysis, experimentation, retention, and user-research skills grounded in exposure rules, sessionisation, and interpreting user behavior.",
-        "support_roles": ["primary", "primary", "primary", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -119,7 +125,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "A Product Manager needs modeling judgment about sessions, exposure, cohorts, and research-based decision logic.",
-        "support_roles": ["primary", "primary", "primary", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -153,7 +158,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "A Product Manager needs to read metrics critically, separate signal from noise, and use research to recover context and decision logic.",
-        "support_roles": ["primary", "primary", "primary", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -181,7 +185,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria.",
-        "support_roles": ["primary", "context", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -209,7 +212,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria.",
-        "support_roles": ["primary", "context", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -231,7 +233,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria.",
-        "support_roles": ["primary", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
     {
@@ -253,7 +254,6 @@ SENTINELS = [
             ),
         ],
         "proposition_text": "User research helps product management recover meaning, context, and decision logic that analytics alone cannot provide.",
-        "support_roles": ["primary", "context"],
         "terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"],
     },
 ]
@@ -302,8 +302,35 @@ def section_locator(section_id: str) -> str:
     return section_id.rsplit("#", 1)[-1].replace("-", " ").title()
 
 
-def support_refs_for_required_props(supports: list[dict[str, Any]]) -> list[str]:
-    return [support["support_id"] for support in supports if support.get("support_role") != "context"]
+def prop_id_for_case(case_id: str) -> str:
+    return REQUIRED_PROP_ID.format(case_id=case_id)
+
+
+def direct_authority_refs(supports: list[dict[str, Any]], proposition_id: str) -> list[str]:
+    return [
+        support["support_id"]
+        for support in supports
+        if proposition_id in support.get("authority_for", [])
+    ]
+
+
+def add_authority(
+    support: dict[str, Any],
+    proposition_id: str,
+    *,
+    is_authority: bool = True,
+) -> dict[str, Any]:
+    support["authority_for"] = [proposition_id] if is_authority else []
+    return support
+
+
+def extractive_certificate(supports: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "extractive_support_ids": [support["support_id"] for support in supports],
+        "canonical_source_text": "\n\n".join(
+            support["exact_support_snippet"].strip() for support in supports
+        ),
+    }
 
 
 def make_forbidden(case_id: str, family: str, question: str, behavior: str) -> list[dict[str, str]]:
@@ -344,12 +371,67 @@ def build_optional_propositions(case_id: str, supports: list[dict[str, Any]]) ->
             {
                 "proposition_id": f"{case_id}-CTX{index:02d}",
                 "proposition_text": support["exact_support_snippet"].strip(),
+                "gold_mode": GOLD_MODE_CONTEXT_ONLY,
+                "hostile_semantic_review_required": False,
+                "extractive_certificate": extractive_certificate([support]),
                 "relation_type": "context_support",
                 "support_refs": [support["support_id"]],
                 "entailment_note": "Context only; not required for the main claim.",
             }
         )
     return optional
+
+
+def sentinel_proposition_text(case_id: str, support: dict[str, Any]) -> str:
+    snippet = support["exact_support_snippet"].strip()
+    if case_id.startswith("SENTINEL-Q2"):
+        return (
+            "Skill | What method should the agent follow for this class of task? | "
+            "SOP, tool order, decision rules, acceptance criteria"
+        )
+    if case_id.startswith("SENTINEL-Q3"):
+        return "Research should help you recover meaning, context, and decision logic."
+    return snippet
+
+
+def build_sentinel_required_propositions(
+    case_id: str,
+    supports: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    required: list[dict[str, Any]] = []
+    authority_supports = [
+        support
+        for support in supports
+        if support.get("support_role") not in CONTEXT_SUPPORT_ROLES
+    ]
+    if case_id.startswith("SENTINEL-Q2"):
+        authority_supports = authority_supports[:1]
+    if case_id.startswith("SENTINEL-Q3"):
+        authority_supports = authority_supports[:1]
+
+    for index, support in enumerate(authority_supports, start=1):
+        proposition_id = f"{case_id}-PROP{index:02d}"
+        support["authority_for"] = [proposition_id]
+        required.append(
+            {
+                "proposition_id": proposition_id,
+                "proposition_text": sentinel_proposition_text(case_id, support),
+                "gold_mode": GOLD_MODE_SENTINEL_SYNTHESIS,
+                "hostile_semantic_review_required": True,
+                "extractive_certificate": extractive_certificate([support]),
+                "sentinel_atomic_mapping": {
+                    "support_id": support["support_id"],
+                    "source_identity": support["source_identity"],
+                    "section_id": support["section_id"],
+                },
+                "relation_type": "direct_support",
+                "support_refs": [support["support_id"]],
+                "entailment_note": (
+                    "Sentinel synthesis is bounded to this atomic source-backed assertion."
+                ),
+            }
+        )
+    return required
 
 
 def make_provenance_support(
@@ -367,6 +449,7 @@ def make_provenance_support(
         "locator": str(record.get("review_decision_id") or record.get("synthesis_id") or record.get("resolution_id") or concept_id.rsplit("/", 1)[-1]),
         "exact_support_snippet": json.dumps(record, ensure_ascii=False, sort_keys=True),
         "support_role": "provenance_record",
+        "authority_for": [],
         "provenance_certificate": {
             "record_id": str(record.get("review_decision_id") or record.get("synthesis_id") or record.get("resolution_id") or ""),
             "subject_concept_id": concept_id,
@@ -397,6 +480,7 @@ def make_graph_support(
         "locator": str(edge["edge_id"]),
         "exact_support_snippet": json.dumps(certificate, ensure_ascii=False, sort_keys=True),
         "support_role": "graph_edge",
+        "authority_for": [],
         "graph_certificate": certificate,
     }
 
@@ -437,13 +521,35 @@ def build_certificate_bundle(
     return bundle
 
 
+def render_provenance_proposition(certificate: dict[str, Any]) -> str:
+    return (
+        f"{certificate['primary_concept_id']} is bound to provenance record "
+        f"{certificate['provenance_record_id']} whose subject is "
+        f"{certificate['provenance_subject_concept_id']}."
+    )
+
+
+def render_graph_proposition(graph_support: dict[str, Any]) -> str:
+    certificate = graph_support["graph_certificate"]
+    return (
+        f"{certificate['source_node_id']} {certificate['relation_type']} "
+        f"{certificate['target_node_id']}."
+    )
+
+
+def render_temporal_proposition(certificate: dict[str, Any]) -> str:
+    count = int(certificate["observed_temporal_record_count"])
+    noun = "record" if count == 1 else "records"
+    return f"Only {count} {noun} is available; a newer-version ordering cannot be established."
+
+
 def proposition_text_from_support(supports: list[dict[str, Any]]) -> str:
     snippets = [s["exact_support_snippet"].strip() for s in supports]
     if not snippets:
         return "No proposition text available."
     if len(snippets) == 1:
-        return snippets[0].rstrip(".") + "."
-    return " ".join(snippets)
+        return snippets[0]
+    return "\n\n".join(snippets)
 
 
 def relation_type_for_behavior(behavior: str) -> str:
@@ -461,11 +567,16 @@ def build_required_propositions(
     supports: list[dict[str, Any]],
     proposition_text: str | None = None,
 ) -> list[dict[str, Any]]:
-    refs = support_refs_for_required_props(supports)
+    proposition_id = prop_id_for_case(case_id)
+    refs = direct_authority_refs(supports, proposition_id)
+    gold_mode = GOLD_MODE_CONTEXT_ONLY if behavior == "abstain" else GOLD_MODE_EXTRACTIVE
     return [
         {
-            "proposition_id": f"{case_id}-PROP01",
+            "proposition_id": proposition_id,
             "proposition_text": proposition_text or proposition_text_from_support(supports),
+            "gold_mode": gold_mode,
+            "hostile_semantic_review_required": False,
+            "extractive_certificate": extractive_certificate(supports),
             "relation_type": relation_type_for_behavior(behavior),
             "support_refs": refs,
             "entailment_note": (
@@ -496,7 +607,9 @@ def build_case_from_source(
 ) -> dict[str, Any]:
     behavior = expected_behavior or source_case["expected_behavior"]
     supports: list[dict[str, Any]] = []
+    proposition_id = prop_id_for_case(case_id)
     for index, support in enumerate(source_case["gold_support"], start=1):
+        support_role = support["support_role"]
         supports.append(
             {
                 "support_id": make_support_id(case_id, index),
@@ -504,10 +617,15 @@ def build_case_from_source(
                 "section_id": support["section_id"],
                 "locator": support["locator"],
                 "exact_support_snippet": support["exact_support_snippet"],
-                "support_role": support["support_role"],
+                "support_role": support_role,
+                "authority_for": []
+                if support_role in CONTEXT_SUPPORT_ROLES
+                else [proposition_id],
             }
         )
-    direct_supports = [support for support in supports if support["support_role"] != "context"]
+    direct_supports = [
+        support for support in supports if proposition_id in support.get("authority_for", [])
+    ]
     optional = build_optional_propositions(case_id, supports)
     record = {
         "case_id": case_id,
@@ -547,6 +665,7 @@ def build_case_from_source(
 
 
 def build_holdout_replacement(case_id: str, family: str, question: str, source_identity: str, section_id: str, snippet: str, proposition_text: str, support_role: str = "primary") -> dict[str, Any]:
+    proposition_id = prop_id_for_case(case_id)
     support = {
         "support_id": f"{case_id}-SUP01",
         "source_identity": source_identity,
@@ -554,6 +673,7 @@ def build_holdout_replacement(case_id: str, family: str, question: str, source_i
         "locator": section_id.rsplit("#", 1)[-1].replace("-", " ").title(),
         "exact_support_snippet": snippet,
         "support_role": support_role,
+        "authority_for": [] if support_role in CONTEXT_SUPPORT_ROLES else [proposition_id],
     }
     return {
         "case_id": case_id,
@@ -568,14 +688,19 @@ def build_holdout_replacement(case_id: str, family: str, question: str, source_i
         "maximum_unsupported_claims": 0,
         "required_propositions": [
             {
-                "proposition_id": f"{case_id}-PROP01",
+                "proposition_id": proposition_id,
                 "proposition_text": proposition_text,
+                "gold_mode": GOLD_MODE_CONTEXT_ONLY
+                if family == "temporal_version"
+                else GOLD_MODE_EXTRACTIVE,
+                "hostile_semantic_review_required": False,
+                "extractive_certificate": extractive_certificate([support]),
                 "relation_type": "direct_support"
                 if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"}
                 else "context_only"
                 if family == "temporal_version"
                 else "partial_support",
-                "support_refs": [support["support_id"]],
+                "support_refs": direct_authority_refs([support], proposition_id),
                 "entailment_note": "Directly supported by the reconstructed source passage."
                 if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"}
                 else "Context only; one source record is insufficient for a newer-version comparison."
@@ -614,6 +739,10 @@ def build_sentinel_records() -> list[dict[str, Any]]:
     for spec in SENTINELS:
         supports = []
         for index, (source_identity, section_id, snippet, role) in enumerate(spec["support_specs"], start=1):
+            if spec["case_id"].startswith("SENTINEL-Q2") and source_identity != "daniel_blog_en__harness-theory-part-5":
+                role = "context"
+            if spec["case_id"].startswith("SENTINEL-Q1") and "atlas-of-agent" in source_identity:
+                role = "negative_distractor"
             supports.append(
                 {
                     "support_id": make_support_id(spec["case_id"], index),
@@ -622,8 +751,10 @@ def build_sentinel_records() -> list[dict[str, Any]]:
                     "locator": section_id.rsplit("#", 1)[-1].replace("-", " ").title(),
                     "exact_support_snippet": snippet,
                     "support_role": role,
+                    "authority_for": [],
                 }
             )
+        required_propositions = build_sentinel_required_propositions(spec["case_id"], supports)
         records.append(
             {
                 "case_id": spec["case_id"],
@@ -636,16 +767,8 @@ def build_sentinel_records() -> list[dict[str, Any]]:
                 "expected_terminal_set": spec["terminal_set"],
                 "minimum_material_claims": 1,
                 "maximum_unsupported_claims": 0,
-                "required_propositions": [
-                    {
-                        "proposition_id": f"{spec['case_id']}-PROP01",
-                        "proposition_text": spec["proposition_text"],
-                        "relation_type": "direct_support",
-                        "support_refs": [support["support_id"] for support in supports],
-                        "entailment_note": "Sentinel exactness is restored from the accepted-corpus evidence set.",
-                    }
-                ],
-                "optional_propositions": [],
+                "required_propositions": required_propositions,
+                "optional_propositions": build_optional_propositions(spec["case_id"], supports),
                 "forbidden_inferences": make_forbidden(spec["case_id"], spec["family"], spec["question"], "answer"),
                 "gold_support": supports,
                 "unanswered_dimensions_expected": [],
@@ -692,14 +815,7 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         "BROAD-0029": ["safe_abstention", "owner_only_safe_abstention"],
         "BROAD-0061": ["safe_abstention", "owner_only_safe_abstention"],
     }
-    proposition_overrides = {
-        "BROAD-0004": "Validation strength should match task risk rather than claiming an unstated production-system effect.",
-        "BROAD-0005": "A bounded executor should receive a step objective, allowed tools, expected output, completion criteria, prohibitions, budgets, and escalation policy.",
-        "BROAD-0010": "Goal drift is controlled by re-contracting the task, recording a new decision, or stopping.",
-        "BROAD-0011": "The source does not enumerate architecture components; it instead defines the harness boundary.",
-        "BROAD-0029": "A direct path uses one bounded operation when the information, tools, and output contract are already known.",
-        "BROAD-0061": "A pipeline divides work into a predetermined sequence of stages.",
-    }
+    proposition_overrides: dict[str, str] = {}
 
     for src_case_id, new_case_id in PRIMARY_ONLY_NEW:
         source = primary_by_id[src_case_id]
@@ -749,39 +865,11 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
             )
         ]
         doc = lex[section_id]
-        if section_id == "concepts/goal-drift#control":
-            proposition_text = "Drift should be handled by re-contracting the task, recording a new decision, or stopping."
-        elif section_id == "concepts/completion-gate#gate-behavior":
-            proposition_text = "The gate may accept, reject, request repair, defer for human decision, or mark the task blocked, and it should rely on durable evidence."
-        elif section_id == "concepts/agent-execution-paths#controls-shared-by-every-structure":
-            proposition_text = "Every execution structure should define trace IDs, persisted state, typed errors, timeouts, retries, idempotency, fallback, and escalation."
-        elif section_id == "concepts/harnessability#assessment":
-            proposition_text = "A highly harnessable workflow has stable inputs, explicit authority, deterministic or inspectable effects, typed failures, replayable evidence, and clear completion gates."
-        elif section_id == "concepts/agent-planning-strategies#selection-sequence":
-            proposition_text = "Use the least flexible mechanism that can reliably complete the task: deterministic logic first, then bounded ReAct, then Plan-and-Execute, then adaptive replanning."
-        elif section_id == "concepts/item-turn-thread-protocol#item-turn-thread-protocol":
-            proposition_text = "The item turn thread protocol separates typed interaction items, pausable work turns, and durable threads."
-        elif section_id == "concepts/six-dimensional-map-of-llm-agent-architectures#reviewed-synthesis-dec-1f9025c488e9c83356e402ec4f859d11":
-            proposition_text = "LLM agent architectures should be reviewed across separate engineering dimensions because multiple patterns can coexist at different layers of one production system."
-        elif section_id == "concepts/durable-thread-state#durable-thread-state":
-            proposition_text = "Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects."
-        elif section_id == "concepts/harnessability#narrowed-scope":
-            proposition_text = "Harnessability is specifically about bounding work by a task contract, observing durable state, verifying with evidence, stopping safely, and resuming without hidden chat memory."
-        elif section_id == "concepts/request-boundary#security-role":
-            proposition_text = "The request boundary is the first point where ACLs, tenant isolation, secret redaction, and mutation authority can be enforced before any model or tool observes the task."
-        elif section_id == "concepts/harness#operational-role":
-            proposition_text = "A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible as governed state."
-        elif section_id == "concepts/agent-planning-strategies#plan-and-execute":
-            proposition_text = "Plan-and-Execute creates a global task structure before carrying out individual steps and exposes requirements, ordering, dependencies, delegation, outputs, and completion state."
-        elif section_id == "concepts/goal-drift#source-adoption":
-            proposition_text = "This canonical concept accounts for Source PR #19 review item m23review_0df0b6cb698712b98425cc2b05265565 with Daniel's approve_new decision, and Source PR #19 remains a draft review surface that was not merged as-is."
-        else:
-            proposition_text = doc["body"].strip()
+        proposition_text = doc["body"].strip()
         if new_case_id == "R2O-PG-H044":
             # Use the current holdout source-adoption pair, not the primary one, to preserve disjointness.
             source_case = holdout_by_id["BROAD-0072"]
-        holdout_new.append(
-            build_case_from_source(
+        rec = build_case_from_source(
                 source_case,
                 case_id=new_case_id,
                 family=family,
@@ -811,8 +899,17 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
                         )
                     )
                 ),
-            )
         )
+        primary_support = rec["gold_support"][0]
+        primary_support["source_identity"] = section_id.split("#")[0] + ".md"
+        primary_support["section_id"] = section_id
+        primary_support["locator"] = section_locator(section_id)
+        primary_support["exact_support_snippet"] = doc["body"].strip()
+        rec["required_propositions"][0]["extractive_certificate"] = extractive_certificate(
+            [primary_support]
+        )
+        rec["required_propositions"][0]["proposition_text"] = proposition_text
+        holdout_new.append(rec)
 
     holdout_transformed = []
     for index, case in enumerate(holdout, start=1):
@@ -936,19 +1033,28 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         primary_support = rec["gold_support"][0]
         provenance_record = prov[provenance_concept_id]
         provenance_support = make_provenance_support(case_id, 2, provenance_record)
+        proposition_id = rec["required_propositions"][0]["proposition_id"]
+        provenance_support["authority_for"] = [proposition_id]
         rec["gold_support"] = [primary_support, provenance_support]
-        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"], provenance_support["support_id"]]
-        rec["required_propositions"][0]["relation_type"] = "direct_support"
-        rec["required_propositions"][0]["entailment_note"] = "Directly supported by the quoted source passage and the matching provenance record."
         rec["provenance_certificate"] = build_certificate_bundle(
             primary_support=primary_support,
             provenance_support=provenance_support,
             explicit_mapping_note=mapping_note,
         )
+        rec["required_propositions"][0]["support_refs"] = [provenance_support["support_id"]]
+        rec["required_propositions"][0]["relation_type"] = "structural_provenance"
+        rec["required_propositions"][0]["gold_mode"] = GOLD_MODE_STRUCTURAL
+        rec["required_propositions"][0]["hostile_semantic_review_required"] = False
+        rec["required_propositions"][0]["structural_certificate_type"] = "provenance"
+        rec["required_propositions"][0]["proposition_text"] = render_provenance_proposition(
+            rec["provenance_certificate"]
+        )
+        rec["required_propositions"][0]["entailment_note"] = (
+            "Mechanically rendered from the matching provenance certificate."
+        )
+        rec["required_propositions"][0].pop("extractive_certificate", None)
         rec["graph_certificate"] = {}
         rec["temporal_certificate"] = {}
-        if case_id == "R2O-PG-P062":
-            rec["required_propositions"][0]["proposition_text"] = "Selection sequence is supported by the same agent-planning-strategies provenance record."
         record_by_id[case_id].clear()
         record_by_id[case_id].update(rec)
 
@@ -992,14 +1098,23 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         )
         primary_support = rec["gold_support"][0]
         graph_support = make_graph_support(case_id, 2, graph[edge_id])
+        proposition_id = rec["required_propositions"][0]["proposition_id"]
+        graph_support["authority_for"] = [proposition_id]
         rec["gold_support"] = [primary_support, graph_support]
-        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"], graph_support["support_id"]]
-        rec["required_propositions"][0]["relation_type"] = "direct_support"
-        rec["required_propositions"][0]["entailment_note"] = "Directly supported by the quoted source passage and the structured graph edge certificate."
         rec["graph_certificate"] = build_certificate_bundle(
             primary_support=primary_support,
             graph_support=graph_support,
         )
+        rec["required_propositions"][0]["support_refs"] = [graph_support["support_id"]]
+        rec["required_propositions"][0]["relation_type"] = "structural_graph"
+        rec["required_propositions"][0]["gold_mode"] = GOLD_MODE_STRUCTURAL
+        rec["required_propositions"][0]["hostile_semantic_review_required"] = False
+        rec["required_propositions"][0]["structural_certificate_type"] = "graph"
+        rec["required_propositions"][0]["proposition_text"] = render_graph_proposition(graph_support)
+        rec["required_propositions"][0]["entailment_note"] = (
+            "Mechanically rendered from the structured graph edge certificate."
+        )
+        rec["required_propositions"][0].pop("extractive_certificate", None)
         rec["provenance_certificate"] = {}
         rec["temporal_certificate"] = {}
         record_by_id[case_id].clear()
@@ -1032,6 +1147,12 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
             minimum_required_for_positive=2,
             observed_temporal_record_count=1,
         )
+        rec["required_propositions"][0]["gold_mode"] = GOLD_MODE_STRUCTURAL
+        rec["required_propositions"][0]["structural_certificate_type"] = "temporal"
+        rec["required_propositions"][0]["proposition_text"] = render_temporal_proposition(
+            rec["temporal_certificate"]
+        )
+        rec["required_propositions"][0].pop("extractive_certificate", None)
         if case_id == "R2O-PG-H044":
             rec["gold_support"] = [primary_support]
         rec["forbidden_inferences"] = make_forbidden(case_id, "temporal_version", question, "abstain")
@@ -1040,16 +1161,17 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         (
             "R2O-PG-H013",
             "Does Source adoption prove a finance or medical claim?",
-            "Source adoption is a harness-specific edited concept, so finance or medical claims are out of scope.",
         ),
     ]
-    for case_id, question, proposition_text in negative_context_specs:
+    for case_id, question in negative_context_specs:
         rec = record_by_id[case_id]
         primary_support = rec["gold_support"][0]
         rec["question"] = question
         rec["required_propositions"][0]["relation_type"] = "context_only"
         rec["required_propositions"][0]["entailment_note"] = "Context only; the source passage cannot justify the requested mixed-domain bridge."
-        rec["required_propositions"][0]["proposition_text"] = proposition_text
+        rec["required_propositions"][0]["proposition_text"] = primary_support[
+            "exact_support_snippet"
+        ].strip()
         rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
         rec["provenance_required"] = False
         rec["provenance_certificate"] = {}
@@ -1104,6 +1226,82 @@ def behavior_counts(rows: list[dict[str, Any]]) -> Counter[str]:
     for row in rows:
         counts[row["expected_behavior"]] += 1
     return counts
+
+
+def normalize_text(text: str) -> str:
+    cleaned = re.sub(r"[`*_#>\-|:.(),;]+", " ", text.lower())
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def audit_extractiveness(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    audit_rows: list[list[Any]] = []
+    for row in rows:
+        supports = {support["support_id"]: support for support in row["gold_support"]}
+        for prop in row["required_propositions"]:
+            refs = list(prop.get("support_refs", []))
+            if not refs:
+                refs = [""]
+            ref_supports = [supports[ref] for ref in refs if ref in supports]
+            combined_source = "\n\n".join(
+                str(support.get("exact_support_snippet", "")) for support in ref_supports
+            )
+            prop_text = str(prop.get("proposition_text", ""))
+            prop_exact_match = bool(prop_text and prop_text in combined_source)
+            prop_normalized_match = bool(
+                prop_text and normalize_text(prop_text) in normalize_text(combined_source)
+            )
+            gold_mode = str(prop.get("gold_mode", ""))
+            prop_context_authority = any(
+                str(support.get("support_role")) in CONTEXT_SUPPORT_ROLES
+                for support in ref_supports
+            )
+            pass_fail = "PASS"
+            reason = "ok"
+            if prop_context_authority:
+                pass_fail = "FAIL"
+                reason = "context_or_distractor_used_as_authority"
+            elif gold_mode in {
+                GOLD_MODE_EXTRACTIVE,
+                GOLD_MODE_CONTEXT_ONLY,
+                GOLD_MODE_SENTINEL_SYNTHESIS,
+            } and not (prop_exact_match or prop_normalized_match):
+                pass_fail = "FAIL"
+                reason = "extractive_prop_not_in_support"
+            for ref in refs:
+                support = supports.get(ref, {})
+                structural_match = ""
+                if gold_mode == GOLD_MODE_STRUCTURAL:
+                    structural_match = "PASS"
+                sentinel_mapping = (
+                    "PASS"
+                    if gold_mode == GOLD_MODE_SENTINEL_SYNTHESIS
+                    and prop.get("sentinel_atomic_mapping")
+                    and prop.get("hostile_semantic_review_required") is True
+                    else ""
+                )
+                context_authority = str(support.get("support_role")) in CONTEXT_SUPPORT_ROLES
+                audit_rows.append(
+                    [
+                        row["case_id"],
+                        row["pool"],
+                        row["family"],
+                        row["expected_behavior"],
+                        gold_mode,
+                        prop["proposition_id"],
+                        prop_text,
+                        ref,
+                        support.get("support_role", ""),
+                        prop_exact_match,
+                        prop_normalized_match,
+                        structural_match,
+                        sentinel_mapping,
+                        context_authority,
+                        prop.get("hostile_semantic_review_required", False),
+                        pass_fail,
+                        reason,
+                    ]
+                )
+    return audit_rows
 
 
 def source_census(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1276,6 +1474,29 @@ def main() -> None:
     )
     write_csv(ROOT / "07_FAMILY_COUNTS.csv", ["family", "count"], [[k, v] for k, v in sorted(families.items())])
     write_csv(ROOT / "08_EXPECTED_BEHAVIOR_COUNTS.csv", ["expected_behavior", "count"], [[k, v] for k, v in sorted(behavior.items())])
+    write_csv(
+        ROOT / "FULL_EXTRACTIVE_AUDIT.csv",
+        [
+            "case_id",
+            "pool",
+            "family",
+            "expected_behavior",
+            "gold_mode",
+            "required_prop_id",
+            "required_prop_text",
+            "support_ref",
+            "support_role",
+            "extractive_exact_match",
+            "deterministic_normalized_match",
+            "structural_certificate_match",
+            "sentinel_atomic_mapping_pass",
+            "context_or_distractor_used_as_authority",
+            "hostile_semantic_review_required",
+            "PASS_FAIL",
+            "reason",
+        ],
+        audit_extractiveness(rows),
+    )
 
     primary_matrix = build_matrix(rows=rows, runtime_candidate_sha=RUNTIME_CANDIDATE_SHA, bank_sha=bank_sha, limit=48, sentinel_rows=sentinels)
     holdout_matrix = build_holdout_matrix(rows=rows, runtime_candidate_sha=RUNTIME_CANDIDATE_SHA, bank_sha=bank_sha, limit=24)

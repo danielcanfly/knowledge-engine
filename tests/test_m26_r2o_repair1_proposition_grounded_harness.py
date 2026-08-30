@@ -14,6 +14,7 @@ from knowledge_engine.m26_r2o_repair1_proposition_grounded_harness import (
     pool_id_sha,
     select_holdout_live_matrix,
     select_primary_live_matrix,
+    validate_case_structure,
     validate_bank,
 )
 
@@ -75,11 +76,18 @@ def test_support_refs_and_gold_supports_are_structured() -> None:
             assert support["exact_support_snippet"].strip()
             assert support["source_identity"].strip()
             assert support["section_id"].strip()
+            assert "authority_for" in support
         for proposition in row["required_propositions"]:
             assert set(proposition["support_refs"]) <= gold_ids
             assert proposition["proposition_text"].strip()
             assert proposition["entailment_note"].strip()
             assert proposition["relation_type"].strip()
+            assert proposition["gold_mode"] in {
+                "extractive",
+                "structural",
+                "sentinel_synthesis",
+                "context_only",
+            }
         for forbidden in row["forbidden_inferences"]:
             assert forbidden["inference_id"].strip()
             assert forbidden["forbidden_text_or_relation"].strip()
@@ -162,19 +170,100 @@ def test_known_sentinels_are_exact_and_repeated_as_required() -> None:
         "SENTINEL-Q3-CONTROL",
     }
     q2 = next(row for row in sentinels if row["case_id"] == "SENTINEL-Q2-A")
+    assert q2["required_propositions"][0]["gold_mode"] == "sentinel_synthesis"
     assert (
         "Skill | What method should the agent follow for this class of task?"
         in q2["required_propositions"][0]["proposition_text"]
+    )
+    assert q2["required_propositions"][0]["support_refs"] == ["SENTINEL-Q2-A-SUP01"]
+    assert all(
+        "atlas-of-agent" not in ref.lower()
+        for prop in q2["required_propositions"]
+        for ref in prop["support_refs"]
     )
     q1 = next(row for row in sentinels if row["case_id"] == "SENTINEL-Q1-A")
     assert (
         q1["gold_support"][0]["source_identity"]
         == "daniel_blog_en__pm-product-data-and-experimentation-07"
     )
-    assert (
-        q1["gold_support"][-1]["source_identity"]
-        == "daniel_blog_en__the-atlas-of-agent-design-patterns-part-8"
+    q1_required_refs = {
+        ref for prop in q1["required_propositions"] for ref in prop["support_refs"]
+    }
+    q1_required_sources = {
+        support["source_identity"]
+        for support in q1["gold_support"]
+        if support["support_id"] in q1_required_refs
+    }
+    assert all("pm-" in source for source in q1_required_sources)
+    assert all("atlas-of-agent" not in source for source in q1_required_sources)
+    assert any(
+        support["support_role"] == "negative_distractor"
+        for support in q1["gold_support"]
     )
+    q3 = next(row for row in sentinels if row["case_id"] == "SENTINEL-Q3-CONTROL")
+    assert q3["required_propositions"][0]["support_refs"] == ["SENTINEL-Q3-CONTROL-SUP01"]
+
+
+def test_known_broad_defects_are_extractively_grounded() -> None:
+    rows = load_bank()
+    h043 = next(row for row in rows if row["case_id"] == "R2O-PG-H043")
+    h043_text = h043["required_propositions"][0]["proposition_text"]
+    assert "expected outputs" in h043_text
+    assert "delegation, outputs" not in h043_text
+    assert h043_text in h043["gold_support"][0]["exact_support_snippet"]
+
+    h036 = next(row for row in rows if row["case_id"] == "R2O-PG-H036")
+    assert "1. keep deterministic work in fixed logic" in h036["required_propositions"][0]["proposition_text"]
+    assert h036["required_propositions"][0]["proposition_text"] in h036["gold_support"][0]["exact_support_snippet"]
+
+    h032 = next(row for row in rows if row["case_id"] == "R2O-PG-H032")
+    assert "durable evidence rather than a model claim" in h032["required_propositions"][0]["proposition_text"]
+    assert h032["required_propositions"][0]["proposition_text"] in h032["gold_support"][0]["exact_support_snippet"]
+
+    p062 = next(row for row in rows if row["case_id"] == "R2O-PG-P062")
+    assert p062["required_propositions"][0]["gold_mode"] == "structural"
+    assert "concepts/agent-execution-paths" in p062["required_propositions"][0]["proposition_text"]
+    assert "agent-planning-strategies provenance record" not in p062["required_propositions"][0]["proposition_text"]
+
+
+def test_harness_rejects_corrupted_authority_and_structural_fixtures() -> None:
+    q1 = next(row for row in load_bank() if row["case_id"] == "SENTINEL-Q1-A")
+    corrupt_q1 = json.loads(json.dumps(q1))
+    corrupt_q1["required_propositions"][0]["support_refs"].append("SENTINEL-Q1-A-SUP04")
+    corrupt_q1["gold_support"][3]["authority_for"] = [
+        corrupt_q1["required_propositions"][0]["proposition_id"]
+    ]
+    errors = validate_case_structure(corrupt_q1)
+    assert "NEGATIVE_DISTRACTOR_USED_AS_AUTHORITY" in errors
+    assert "SENTINEL_UNRELATED_AUTHORITY" in errors
+
+    q2 = next(row for row in load_bank() if row["case_id"] == "SENTINEL-Q2-A")
+    corrupt_q2 = json.loads(json.dumps(q2))
+    corrupt_q2["required_propositions"][0]["support_refs"].append("SENTINEL-Q2-A-SUP02")
+    corrupt_q2["gold_support"][1]["authority_for"] = [
+        corrupt_q2["required_propositions"][0]["proposition_id"]
+    ]
+    assert "CONTEXT_SUPPORT_USED_AS_REQUIRED_AUTHORITY" in validate_case_structure(corrupt_q2)
+
+    h043 = next(row for row in load_bank() if row["case_id"] == "R2O-PG-H043")
+    corrupt_h043 = json.loads(json.dumps(h043))
+    corrupt_h043["required_propositions"][0]["proposition_text"] = (
+        "Plan-and-Execute creates a global task structure before carrying out individual "
+        "steps and exposes requirements, ordering, dependencies, delegation, outputs, "
+        "and completion state."
+    )
+    assert "EXTRACTIVE_PROP_NOT_IN_SUPPORT" in validate_case_structure(corrupt_h043)
+
+    p062 = next(row for row in load_bank() if row["case_id"] == "R2O-PG-P062")
+    corrupt_p062 = json.loads(json.dumps(p062))
+    corrupt_p062["required_propositions"][0]["proposition_text"] = (
+        "concepts/agent-planning-strategies is bound to provenance record "
+        f"{corrupt_p062['provenance_certificate']['provenance_record_id']} whose subject is "
+        "concepts/agent-planning-strategies."
+    )
+    errors = validate_case_structure(corrupt_p062)
+    assert "PROVENANCE_PROP_CERT_MISMATCH" in errors
+    assert "STRUCTURAL_PROP_CERT_MISMATCH" in errors
 
 
 def test_matrix_freeze_is_deterministic_and_runtime_sha_bound() -> None:
