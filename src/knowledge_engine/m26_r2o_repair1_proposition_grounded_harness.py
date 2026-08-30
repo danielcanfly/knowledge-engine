@@ -115,7 +115,10 @@ def _render_temporal_proposition(certificate: Mapping[str, Any]) -> str:
     return f"Only {count} {noun} is available; a newer-version ordering cannot be established."
 
 
-def _prop_text_is_in_support(prop: Mapping[str, Any], supports: Sequence[Mapping[str, Any]]) -> bool:
+def _prop_text_is_in_support(
+    prop: Mapping[str, Any],
+    supports: Sequence[Mapping[str, Any]],
+) -> bool:
     proposition_text = str(prop.get("proposition_text", "")).strip()
     source_text = "\n\n".join(str(s.get("exact_support_snippet", "")).strip() for s in supports)
     if not proposition_text or not source_text:
@@ -146,9 +149,12 @@ def validate_gold_authority(case: Mapping[str, Any]) -> list[str]:
             if prop_id not in support.get("authority_for", []):
                 errors.append("AUTHORITY_FOR_MISMATCH")
 
-        if gold_mode in {"extractive", "context_only", "sentinel_synthesis"}:
-            if not _prop_text_is_in_support(prop, ref_supports):
-                errors.append("EXTRACTIVE_PROP_NOT_IN_SUPPORT")
+        if gold_mode in {
+            "extractive",
+            "context_only",
+            "sentinel_synthesis",
+        } and not _prop_text_is_in_support(prop, ref_supports):
+            errors.append("EXTRACTIVE_PROP_NOT_IN_SUPPORT")
         if gold_mode == "sentinel_synthesis":
             if prop.get("hostile_semantic_review_required") is not True:
                 errors.append("SENTINEL_HOSTILE_REVIEW_NOT_REQUIRED")

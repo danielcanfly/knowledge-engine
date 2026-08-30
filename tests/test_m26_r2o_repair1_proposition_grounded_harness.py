@@ -14,8 +14,8 @@ from knowledge_engine.m26_r2o_repair1_proposition_grounded_harness import (
     pool_id_sha,
     select_holdout_live_matrix,
     select_primary_live_matrix,
-    validate_case_structure,
     validate_bank,
+    validate_case_structure,
 )
 
 RUNTIME_SHA = "8942859bbe3491de084dda09326fe03fec82989f"
@@ -213,17 +213,20 @@ def test_known_broad_defects_are_extractively_grounded() -> None:
     assert h043_text in h043["gold_support"][0]["exact_support_snippet"]
 
     h036 = next(row for row in rows if row["case_id"] == "R2O-PG-H036")
-    assert "1. keep deterministic work in fixed logic" in h036["required_propositions"][0]["proposition_text"]
-    assert h036["required_propositions"][0]["proposition_text"] in h036["gold_support"][0]["exact_support_snippet"]
+    h036_text = h036["required_propositions"][0]["proposition_text"]
+    assert "1. keep deterministic work in fixed logic" in h036_text
+    assert h036_text in h036["gold_support"][0]["exact_support_snippet"]
 
     h032 = next(row for row in rows if row["case_id"] == "R2O-PG-H032")
-    assert "durable evidence rather than a model claim" in h032["required_propositions"][0]["proposition_text"]
-    assert h032["required_propositions"][0]["proposition_text"] in h032["gold_support"][0]["exact_support_snippet"]
+    h032_text = h032["required_propositions"][0]["proposition_text"]
+    assert "durable evidence rather than a model claim" in h032_text
+    assert h032_text in h032["gold_support"][0]["exact_support_snippet"]
 
     p062 = next(row for row in rows if row["case_id"] == "R2O-PG-P062")
+    p062_text = p062["required_propositions"][0]["proposition_text"]
     assert p062["required_propositions"][0]["gold_mode"] == "structural"
-    assert "concepts/agent-execution-paths" in p062["required_propositions"][0]["proposition_text"]
-    assert "agent-planning-strategies provenance record" not in p062["required_propositions"][0]["proposition_text"]
+    assert "concepts/agent-execution-paths" in p062_text
+    assert "agent-planning-strategies provenance record" not in p062_text
 
 
 def test_harness_rejects_corrupted_authority_and_structural_fixtures() -> None:
