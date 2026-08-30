@@ -1,0 +1,48 @@
+{
+  "accepted_corpus_artifacts": [
+    "pilot/m24/canonical-release/artifacts/lexical-index.json",
+    "pilot/m24/canonical-release/artifacts/graph-v2.json",
+    "pilot/m24/canonical-release/artifacts/provenance.json"
+  ],
+  "counts": {
+    "holdout": 28,
+    "primary": 62,
+    "sentinel": 7,
+    "total": 97
+  },
+  "required_families": [
+    "simple_definition",
+    "contextual_definition",
+    "role_responsibility",
+    "impact_effect",
+    "causal_why",
+    "how_process",
+    "comparison",
+    "relationship",
+    "examples",
+    "trade_offs",
+    "architecture_components",
+    "capability_skill_requirement",
+    "enumerative_list",
+    "multi_part",
+    "broad_synthesis",
+    "narrow_factual",
+    "ambiguous_clarification",
+    "insufficient_evidence",
+    "partially_sufficient_evidence",
+    "conflicting_evidence",
+    "lexical_similarity_low_relevance",
+    "short_query",
+    "long_compositional_query",
+    "paraphrase_equivalence",
+    "adversarial_category_mutation",
+    "causal_strengthening_negative",
+    "universalization_negative",
+    "modality_necessity_strengthening_negative",
+    "temporal_version",
+    "provenance_source_trace",
+    "graph_relationship",
+    "mixed_domain_distractor"
+  ],
+  "schema_version": "m26-r2o-broad-bank/v1"
+}

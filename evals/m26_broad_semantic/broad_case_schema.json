@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "family",
+    "risk_tags",
+    "pool",
+    "question",
+    "expected_behavior",
+    "expected_terminal_set",
+    "minimum_material_claims",
+    "maximum_unsupported_claims",
+    "gold_support",
+    "required_propositions",
+    "forbidden_inferences",
+    "unanswered_dimensions_expected",
+    "distinct_source_minimum",
+    "graph_edge_required",
+    "provenance_required",
+    "temporal_versions_required",
+    "paraphrase_group",
+    "negative_control_of",
+    "derivation_notes"
+  ],
+  "properties": {
+    "case_id": {"type": "string", "minLength": 1},
+    "family": {"type": "string", "minLength": 1},
+    "risk_tags": {"type": "array", "items": {"type": "string"}},
+    "pool": {"enum": ["primary", "holdout", "sentinel"]},
+    "question": {"type": "string", "minLength": 1},
+    "expected_behavior": {
+      "enum": ["answer", "partial", "abstain", "clarify-compatible"]
+    },
+    "expected_terminal_set": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1
+    },
+    "minimum_material_claims": {"type": "integer", "minimum": 0},
+    "maximum_unsupported_claims": {"const": 0},
+    "gold_support": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_identity",
+          "section_id",
+          "locator",
+          "exact_support_snippet",
+          "support_role"
+        ],
+        "properties": {
+          "source_identity": {"type": "string", "minLength": 1},
+          "section_id": {"type": "string", "minLength": 1},
+          "locator": {"type": "string"},
+          "exact_support_snippet": {"type": "string", "minLength": 1},
+          "support_role": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "required_propositions": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "forbidden_inferences": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "unanswered_dimensions_expected": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "distinct_source_minimum": {"type": "integer", "minimum": 1},
+    "graph_edge_required": {"type": "boolean"},
+    "provenance_required": {"type": "boolean"},
+    "temporal_versions_required": {"type": "integer", "minimum": 0},
+    "paraphrase_group": {"type": "string"},
+    "negative_control_of": {"type": "string"},
+    "derivation_notes": {"type": "string", "minLength": 1}
+  },
+  "type": "object"
+}
