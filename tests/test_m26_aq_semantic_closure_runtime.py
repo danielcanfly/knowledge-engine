@@ -1842,6 +1842,185 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     assert closure["failures"] == []
 
 
+def test_provider_partial_without_requirement_coverage_abstains_deterministically() -> None:
+    question = (
+        "The ingestion service writes records to the datastore, but the datastore "
+        "does not initiate callbacks to the ingestion service."
+    )
+    evidence = [
+        _rich_passage(
+            "ev_datastore",
+            (
+                "The datastore persists indexed records. Operational failures usually "
+                "come from client behaviour rather than the datastore itself."
+            ),
+            "datastore-note",
+        )
+    ]
+    partial = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "partial",
+        "answer_text": (
+            "The supplied evidence mentions the datastore, but it does not verify a "
+            "callback direction."
+        ),
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": (
+                    "The supplied evidence mentions the datastore, but it does not "
+                    "verify a callback direction."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": ["direct_answer"],
+            }
+        ],
+        "unanswered_dimensions": [
+            "Whether the ingestion service writes records to the datastore",
+            "Whether the datastore initiates callbacks to the ingestion service",
+        ],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([partial, partial])
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-partial-unresolved-material-gap",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_provider_partial_without_material_requirement_coverage_abstains() -> None:
+    question = (
+        "How should observability distinguish a translation failure from a sealed-M26 "
+        "downstream failure without exposing secrets?"
+    )
+    evidence = [
+        _rich_passage(
+            "ev_observability",
+            (
+                "Observability records trust-boundary metadata and omits secret-bearing "
+                "payload content."
+            ),
+            "observability-note",
+        )
+    ]
+    partial = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "partial",
+        "answer_text": (
+            "Observability should avoid logging secret-bearing payloads."
+        ),
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": (
+                    "Observability should avoid logging secret-bearing payloads."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": [],
+            }
+        ],
+        "unanswered_dimensions": [],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([partial, partial])
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-partial-no-requirement-facet",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="observability_failure_boundary",
+                instruction="Distinguish the failure boundary.",
+                evidence_terms=("observability", "boundary", "failure"),
+                visible_patterns=(r"\bobservability.{0,80}boundary",),
+            )
+        ],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_answer_candidate_without_material_requirement_facet_abstains() -> None:
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "Server-side routing inspects request metadata and policy constraints.",
+            "router-note",
+        )
+    ]
+    answer_candidate = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "answer",
+        "answer_text": "Server-side policy metadata is inspected.",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "Server-side policy metadata is inspected.",
+                "evidence_labels": ["e1"],
+                "covers": [],
+            }
+        ],
+        "unanswered_dimensions": [],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([answer_candidate, answer_candidate])
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain how the router chooses a downstream provider.",
+        trace_id="trace-answer-no-requirement-facet",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="router_decision",
+                instruction="Explain what the router inspects.",
+                evidence_terms=("router", "request", "metadata"),
+                visible_patterns=(r"\brouter.{0,80}request",),
+            )
+        ],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
 def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     question = "Explain router snapshots."
     evidence = [
@@ -2661,6 +2840,52 @@ def test_bb01_provider_abstention_recovers_to_visible_cited_route_replan_answer(
     assert "initial" in answer_text.casefold()
     assert "remaining" in answer_text.casefold()
     assert len(candidate["claims"][0]["support_refs"]) >= 2
+
+
+def test_contextual_definition_query_derives_head_and_context_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = [item.requirement_id for item in requirements]
+
+    assert {"definition_head", "context_modifier"}.issubset(ids)
+    assert ids[0] == "definition_head"
+    assert ids[1] == "context_modifier"
+
+
+def test_contextual_definition_query_prioritizes_head_definition_in_compact_projection() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+        _passage(
+            "skill",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
+            "skill-note",
+        ),
+    ]
+    payload, label_map, snippet_map = _compact_provider_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        repair=False,
+        previous_failures=[],
+    )
+    task = json.loads(payload["messages"][0]["content"])
+    first_item = task["evidence"][0]
+
+    assert "skill" in first_item["text"].casefold()
+    assert "method" in first_item["text"].casefold()
+    assert label_map[first_item["id"]]["passage_text"].casefold().startswith("skill")
+    assert snippet_map[label_map[first_item["id"]]["evidence_id"]]
 
 
 def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
