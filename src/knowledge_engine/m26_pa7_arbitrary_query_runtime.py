@@ -3166,7 +3166,6 @@ def _verify_multi_evidence_provider_output(
             semantic_review=semantic_review,
             claim_records=claim_records,
         )
-        covered_facets |= required_facets
     missing_facets = sorted(required_facets - covered_facets)
     hard_missing_facets = set(missing_facets)
     if (
@@ -3175,7 +3174,16 @@ def _verify_multi_evidence_provider_output(
     ):
         hard_missing_facets.discard("context_modifier")
     if hard_missing_facets:
-        raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
+        explicitly_unanswered = _explicitly_unanswered_facets(
+            parsed=parsed,
+            claims=claim_records,
+        )
+        if not (
+            status in {"partial", "partial_candidate"}
+            and covered_facets & required_facets
+            and hard_missing_facets <= explicitly_unanswered
+        ):
+            raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
     _verify_question_evidence_relevance(
         question=question,
         intent_class=intent_class,
@@ -3217,6 +3225,25 @@ def _required_facet_ids(*, question: str, intent_class: str) -> list[str]:
             intent_class=intent_class,
         )["required_facets"]
     ]
+
+
+def _explicitly_unanswered_facets(
+    *,
+    parsed: Mapping[str, Any],
+    claims: Sequence[Mapping[str, Any]],
+) -> set[str]:
+    unanswered = {
+        str(item)
+        for item in _list(parsed.get("missing_facets", []), "provider missing facets")
+        if isinstance(item, (str, int)) and str(item)
+    }
+    for claim in claims:
+        unanswered.update(
+            str(item)
+            for item in claim.get("unanswered_dimensions", [])
+            if isinstance(item, (str, int)) and str(item)
+        )
+    return unanswered
 
 
 SEMANTIC_REVIEW_SCHEMA_VERSION = "m26-claim-entailment-review/v1"

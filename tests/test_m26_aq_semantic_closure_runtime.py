@@ -1461,32 +1461,24 @@ def test_candidate2_unseen_precedes_paraphrase_reaches_semantic_review(
             "schema_version": "m26-fas-synthesis/v1",
             "status": "answer",
             "answer_text": (
-                "Harness Theory Part 1 precedes Harness Theory Part 2: it establishes "
-                "chronology, while dependency remains unresolved."
+                "Harness Theory Part 1 precedes Harness Theory Part 2, and the "
+                "precedes edge does not prove dependency."
             ),
             "claims": [
                 {
                     "claim_id": "claim_1",
                     "claim_type": "EVIDENCE_FACT",
                     "surface_text": (
-                        "Harness Theory Part 1 precedes Harness Theory Part 2."
+                        "Harness Theory Part 1 precedes Harness Theory Part 2, and "
+                        "the precedes edge does not prove dependency."
                     ),
                     "evidence_labels": graph_labels,
                     "covers": [
                         "entity_harness_theory_part_1",
                         "entity_harness_theory_part_2",
                         "ordering_semantics",
+                        "non_entailment",
                     ],
-                },
-                {
-                    "claim_id": "claim_2",
-                    "claim_type": "EVIDENCE_SYNTHESIS",
-                    "surface_text": (
-                        "The precedes edge establishes chronology, while dependency "
-                        "remains unresolved."
-                    ),
-                    "evidence_labels": graph_labels,
-                    "covers": ["non_entailment"],
                 },
             ],
             "unanswered_dimensions": [],
@@ -2643,18 +2635,20 @@ def test_runtime_bound_structured_candidate_compacts_before_legacy_verification(
 
     def synthesis(task: dict[str, Any]) -> dict[str, Any]:
         labels = [str(item["id"]) for item in task["evidence"]]
+        surfaces = [
+            "Several supplied notes jointly describe grounded production behavior.",
+            "The supplied notes include specific words for verification.",
+            "The supplied notes serve as exact support quotes for verification.",
+        ]
         claims = [
             {
                 "claim_id": f"claim_{index}",
                 "claim_type": "EVIDENCE_SYNTHESIS",
-                "surface_text": (
-                    f"Several supplied notes jointly describe grounded production "
-                    f"behavior {index}."
-                ),
+                "surface_text": surface_text,
                 "evidence_labels": labels,
                 "covers": required_facets,
             }
-            for index in range(1, 4)
+            for index, surface_text in enumerate(surfaces, start=1)
         ]
         return {
             "schema_version": "m26-fas-synthesis/v1",

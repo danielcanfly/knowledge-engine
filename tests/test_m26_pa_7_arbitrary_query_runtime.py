@@ -2398,12 +2398,15 @@ def _tesc_provider_text(
     evidence: list[dict[str, Any]],
     *,
     surface_text: str,
+    status: str = "answer_candidate",
     claim_role: str = "direct",
     claim_type: str | None = None,
     facet_ids: list[str] | None = None,
     relation: str | None = None,
     support_refs: list[dict[str, str]] | None = None,
     selected_evidence_ids: list[str] | None = None,
+    missing_facets: list[str] | None = None,
+    unanswered_dimensions: list[str] | None = None,
 ) -> str:
     refs = support_refs or [
         {
@@ -2415,7 +2418,7 @@ def _tesc_provider_text(
     return json.dumps(
         {
             "schema_version": "aq3-provider-candidate/v3",
-            "status": "answer_candidate",
+            "status": status,
             "relation": relation,
             "selected_evidence_ids": selected_evidence_ids
             or [item["evidence_id"] for item in evidence],
@@ -2428,10 +2431,11 @@ def _tesc_provider_text(
                     "facet_ids": facet_ids or ["direct_answer"],
                     "support_mode": "exact_quote",
                     "support_refs": refs,
+                    "unanswered_dimensions": unanswered_dimensions or [],
                     **({"claim_type": claim_type} if claim_type else {}),
                 }
             ],
-            "missing_facets": [],
+            "missing_facets": missing_facets or [],
             "abstention_reason": None,
         }
     )
@@ -3079,6 +3083,74 @@ def test_repair2_model_explanation_declared_facet_fails_with_generic_review() ->
         )
 
     assert exc.value.code == "M26-PA7-ME-029"
+
+
+def test_repair2_reviewer_success_cannot_cover_missing_required_facet() -> None:
+    evidence = [
+        _tesc_evidence(
+            "The router uses the query feature path to decide the downstream path.",
+        )
+    ]
+    all_facets = [
+        "router_selection",
+        "router_inputs",
+        "routing_constraints",
+        "downstream_selection",
+    ]
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="repair2_missing_facet_false_reviewer",
+            question="How does the router decide where to route a request?",
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=_tesc_provider_text(
+                evidence,
+                surface_text=(
+                    "The router uses the query feature path to decide the downstream path."
+                ),
+                facet_ids=all_facets,
+            ),
+            semantic_review=_tesc_semantic_review(),
+        )
+
+    assert exc.value.code == "M26-PA7-ME-029"
+
+
+def test_repair2_partial_preserves_missing_facet_after_entailed_review() -> None:
+    evidence = [
+        _tesc_evidence(
+            "The router uses the query feature path to decide the downstream path.",
+        )
+    ]
+    all_facets = [
+        "router_selection",
+        "router_inputs",
+        "routing_constraints",
+        "downstream_selection",
+    ]
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="repair2_partial_keeps_gap",
+        question="How does the router decide where to route a request?",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=_tesc_provider_text(
+            evidence,
+            surface_text=(
+                "The router uses the query feature path to decide the downstream path."
+            ),
+            status="partial_candidate",
+            facet_ids=all_facets,
+            missing_facets=["routing_constraints"],
+            unanswered_dimensions=["routing_constraints"],
+        ),
+        semantic_review=_tesc_semantic_review(),
+    )
+
+    assert "routing_constraints" not in verified["covered_facets"]
+    assert verified["missing_facets"] == ["routing_constraints"]
+    assert verified["provider_status"] == "partial_candidate"
 
 
 def test_repair1_high_raw_score_cannot_retain_severe_context_mismatch() -> None:
