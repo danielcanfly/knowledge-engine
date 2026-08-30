@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 from collections import Counter
 
 from knowledge_engine.m26_r2o_repair1_proposition_grounded_harness import (
     BANK_DIR,
+    EVALUATOR_NATIVE_PHRASES,
     HOSTILE_SEMANTIC_REVIEW_REQUIRED,
     audit_captured_result,
     canonical_bank_sha,
@@ -88,6 +90,12 @@ def test_support_refs_and_gold_supports_are_structured() -> None:
                 "sentinel_synthesis",
                 "context_only",
             }
+            certificate = proposition["relation_certificate"]
+            assert certificate["relation_kind"]
+            assert certificate["subject"]
+            assert certificate["predicate"]
+            assert "source_support_ids" in certificate
+            assert set(proposition["support_refs"]) <= set(certificate["source_support_ids"])
         for forbidden in row["forbidden_inferences"]:
             assert forbidden["inference_id"].strip()
             assert forbidden["forbidden_text_or_relation"].strip()
@@ -267,6 +275,103 @@ def test_harness_rejects_corrupted_authority_and_structural_fixtures() -> None:
     errors = validate_case_structure(corrupt_p062)
     assert "PROVENANCE_PROP_CERT_MISMATCH" in errors
     assert "STRUCTURAL_PROP_CERT_MISMATCH" in errors
+
+
+def test_relation_alignment_audit_and_natural_questions_pass() -> None:
+    rows = load_bank()
+    positive = [row for row in rows if row["expected_behavior"] in {"answer", "partial"}]
+    assert positive
+    for row in positive:
+        if row["family"] != "provenance_source_trace":
+            question = row["question"].lower()
+            assert not any(phrase in question for phrase in EVALUATOR_NATIVE_PHRASES)
+        eligibility = {
+            family
+            for prop in row["required_propositions"]
+            for family in prop["relation_certificate"]["positive_family_eligibility"]
+        }
+        assert row["family"] in eligibility
+
+    with (BANK_DIR / "RELATION_ALIGNMENT_AUDIT.csv").open() as fh:
+        relation_audit = list(csv.DictReader(fh))
+    assert relation_audit
+    assert {row["PASS_FAIL"] for row in relation_audit} == {"PASS"}
+
+
+def test_harness_rejects_repair3_relation_corruption_fixtures() -> None:
+    rows = load_bank()
+
+    causal = next(row for row in rows if row["family"] == "causal_why")
+    corrupt_causal = json.loads(json.dumps(causal))
+    corrupt_causal["expected_behavior"] = "answer"
+    corrupt_causal["expected_behavior_set"] = ["answer"]
+    corrupt_causal["required_propositions"][0]["relation_certificate"][
+        "relation_kind"
+    ] = "factual"
+    corrupt_causal["required_propositions"][0]["relation_certificate"][
+        "positive_family_eligibility"
+    ] = ["narrow_factual"]
+    errors = validate_case_structure(corrupt_causal)
+    assert "POSITIVE_CAUSAL_WITHOUT_CAUSAL_CERT" in errors
+
+    tradeoff = next(
+        row
+        for row in rows
+        if row["family"] == "trade_offs" and row["expected_behavior"] == "answer"
+    )
+    corrupt_tradeoff = json.loads(json.dumps(tradeoff))
+    corrupt_tradeoff["required_propositions"][0]["relation_certificate"][
+        "relation_kind"
+    ] = "definition"
+    corrupt_tradeoff["required_propositions"][0]["relation_certificate"][
+        "positive_family_eligibility"
+    ] = ["simple_definition"]
+    errors = validate_case_structure(corrupt_tradeoff)
+    assert "POSITIVE_TRADEOFF_WITHOUT_TRADEOFF_CERT" in errors
+
+    capability = next(row for row in rows if row["family"] == "capability_skill_requirement")
+    corrupt_capability = json.loads(json.dumps(capability))
+    corrupt_capability["required_propositions"][0]["relation_certificate"][
+        "relation_kind"
+    ] = "factual"
+    corrupt_capability["required_propositions"][0]["relation_certificate"][
+        "positive_family_eligibility"
+    ] = ["narrow_factual"]
+    errors = validate_case_structure(corrupt_capability)
+    assert "POSITIVE_CAPABILITY_WITHOUT_CAPABILITY_CERT" in errors
+
+    comparison = next(row for row in rows if row["family"] == "comparison")
+    corrupt_comparison = json.loads(json.dumps(comparison))
+    corrupt_comparison["question"] = "Compare the two cited sections for Authority."
+    errors = validate_case_structure(corrupt_comparison)
+    assert "EVALUATOR_NATIVE_POSITIVE_QUESTION" in errors
+
+    relationship = next(row for row in rows if row["family"] == "relationship")
+    corrupt_relationship = json.loads(json.dumps(relationship))
+    corrupt_relationship["required_propositions"][0]["relation_certificate"][
+        "relation_kind"
+    ] = "definition"
+    corrupt_relationship["required_propositions"][0]["relation_certificate"][
+        "positive_family_eligibility"
+    ] = ["simple_definition"]
+    errors = validate_case_structure(corrupt_relationship)
+    assert "POSITIVE_RELATIONSHIP_WITHOUT_RELATION_CERT" in errors
+
+    components = next(
+        row
+        for row in rows
+        if row["family"] == "architecture_components"
+        and row["expected_behavior"] == "answer"
+    )
+    corrupt_components = json.loads(json.dumps(components))
+    corrupt_components["required_propositions"][0]["relation_certificate"][
+        "relation_kind"
+    ] = "definition"
+    corrupt_components["required_propositions"][0]["relation_certificate"][
+        "positive_family_eligibility"
+    ] = ["simple_definition"]
+    errors = validate_case_structure(corrupt_components)
+    assert "POSITIVE_COMPONENT_WITHOUT_COMPONENT_CERT" in errors
 
 
 def test_matrix_freeze_is_deterministic_and_runtime_sha_bound() -> None:

@@ -26,6 +26,51 @@ PLACEHOLDER_PHRASES = {
 }
 GOLD_MODES = {"extractive", "structural", "sentinel_synthesis", "context_only"}
 CONTEXT_SUPPORT_ROLES = {"context", "negative_distractor"}
+RELATION_KINDS = {
+    "definition",
+    "role",
+    "effect",
+    "causal",
+    "purpose",
+    "process",
+    "comparison_dimension",
+    "relationship",
+    "example",
+    "tradeoff",
+    "component",
+    "capability",
+    "requirement",
+    "enumeration",
+    "factual",
+    "context_only",
+    "provenance",
+    "graph",
+    "temporal",
+    "conflict",
+}
+RELATION_CERTIFICATE_KEYS = {
+    "relation_kind",
+    "subject",
+    "predicate",
+    "object_or_complement",
+    "source_support_ids",
+    "positive_family_eligibility",
+    "negative_family_eligibility",
+    "certificate_mode",
+}
+EVALUATOR_NATIVE_PHRASES = (
+    "compare the two cited sections",
+    "synthesize the two cited sections",
+    "what relationship does the source state for",
+    "how would you restate the supported point",
+    "what exact factual point is stated in",
+    "using only the cited source",
+    "cited source",
+    "cited sections",
+    "supported point",
+    "gold",
+    "evidence",
+)
 
 
 def load_bank(bank_dir: Path = BANK_DIR) -> list[dict[str, Any]]:
@@ -232,6 +277,96 @@ def validate_gold_authority(case: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+def _is_positive(case: Mapping[str, Any]) -> bool:
+    return str(case.get("expected_behavior")) in {"answer", "partial"}
+
+
+def _natural_question_pass(case: Mapping[str, Any]) -> bool:
+    if str(case.get("family")) == "provenance_source_trace":
+        return True
+    if not _is_positive(case):
+        return True
+    question = str(case.get("question", "")).lower()
+    return not any(phrase in question for phrase in EVALUATOR_NATIVE_PHRASES)
+
+
+def validate_relation_alignment(case: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    family = str(case.get("family", ""))
+    positive = _is_positive(case)
+    if not _natural_question_pass(case):
+        errors.append("EVALUATOR_NATIVE_POSITIVE_QUESTION")
+
+    relation_kinds: set[str] = set()
+    positive_eligibility: set[str] = set()
+    for prop in case.get("required_propositions", []):
+        certificate = prop.get("relation_certificate") or {}
+        if set(certificate) < RELATION_CERTIFICATE_KEYS:
+            errors.append("RELATION_CERTIFICATE_INCOMPLETE")
+            continue
+        relation_kind = str(certificate.get("relation_kind"))
+        if relation_kind not in RELATION_KINDS:
+            errors.append("RELATION_KIND_INVALID")
+        relation_kinds.add(relation_kind)
+        positive_eligibility.update(
+            str(item) for item in certificate.get("positive_family_eligibility", [])
+        )
+        support_refs = {str(ref) for ref in prop.get("support_refs", [])}
+        source_support_ids = {
+            str(ref) for ref in certificate.get("source_support_ids", [])
+        }
+        if not support_refs <= source_support_ids:
+            errors.append("RELATION_CERT_SUPPORT_MISMATCH")
+
+    if positive and family not in positive_eligibility:
+        errors.append("QUESTION_FAMILY_RELATION_MISMATCH")
+    if not positive and family in positive_eligibility:
+        errors.append("NEGATIVE_ACCIDENTALLY_POSITIVE_RELATION")
+
+    if positive and family == "causal_why" and relation_kinds.isdisjoint(
+        {"causal", "effect", "purpose"}
+    ):
+        errors.append("POSITIVE_CAUSAL_WITHOUT_CAUSAL_CERT")
+    if positive and family == "trade_offs" and "tradeoff" not in relation_kinds:
+        errors.append("POSITIVE_TRADEOFF_WITHOUT_TRADEOFF_CERT")
+    if positive and family == "impact_effect" and relation_kinds.isdisjoint(
+        {"effect", "causal"}
+    ):
+        errors.append("POSITIVE_EFFECT_WITHOUT_EFFECT_CERT")
+    if positive and family == "architecture_components" and relation_kinds.isdisjoint(
+        {"component", "enumeration"}
+    ):
+        errors.append("POSITIVE_COMPONENT_WITHOUT_COMPONENT_CERT")
+    if positive and family == "capability_skill_requirement" and relation_kinds.isdisjoint(
+        {"capability", "requirement", "definition"}
+    ):
+        errors.append("POSITIVE_CAPABILITY_WITHOUT_CAPABILITY_CERT")
+    if positive and family == "comparison":
+        comparison = case.get("comparison_certificate") or {}
+        if not (
+            comparison.get("left_subject")
+            and comparison.get("right_subject")
+            and comparison.get("dimension")
+            and "comparison_dimension" in relation_kinds
+        ):
+            errors.append("POSITIVE_COMPARISON_WITHOUT_DIMENSION_CERT")
+    if positive and family == "relationship" and "relationship" not in relation_kinds:
+        errors.append("POSITIVE_RELATIONSHIP_WITHOUT_RELATION_CERT")
+    if positive and family == "multi_part" and not (
+        (case.get("multipart_clause_certificate") or {}).get("supported_prop_ids")
+    ):
+        errors.append("MULTIPART_CLAUSE_COVERAGE_FAIL")
+    if str(case.get("expected_behavior")) == "partial" and not case.get(
+        "unanswered_dimensions_expected"
+    ):
+        errors.append("PARTIAL_UNANSWERED_COVERAGE_FAIL")
+    if positive and family == "broad_synthesis" and not (
+        (case.get("broad_synthesis_certificate") or {}).get("atomic_prop_ids")
+    ):
+        errors.append("BROAD_SYNTHESIS_ATOMIC_SUPPORT_FAIL")
+    return errors
+
+
 def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     required = {
@@ -296,6 +431,8 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
             errors.append("empty_relation_type")
         if str(prop.get("gold_mode", "")) not in GOLD_MODES:
             errors.append("GOLD_MODE_INVALID")
+        if not isinstance(prop.get("relation_certificate"), Mapping):
+            errors.append("RELATION_CERTIFICATE_INCOMPLETE")
     for item in case.get("forbidden_inferences", []):
         if not {
             "inference_id",
@@ -367,6 +504,7 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
             if int(case.get("temporal_versions_required", 0)) != 0:
                 errors.append("temporal_versions_required_nonzero")
     errors.extend(validate_gold_authority(case))
+    errors.extend(validate_relation_alignment(case))
     return errors
 
 
