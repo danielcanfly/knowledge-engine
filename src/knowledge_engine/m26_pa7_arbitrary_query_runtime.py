@@ -243,6 +243,118 @@ MODALITY_STRENGTHENING_TERMS = {
     "requires",
     "will",
 }
+DEFINITION_PREDICATE_TERMS = {
+    "acceptance",
+    "behavior",
+    "capability",
+    "criteria",
+    "decision",
+    "follow",
+    "followed",
+    "follows",
+    "guide",
+    "means",
+    "method",
+    "order",
+    "practice",
+    "procedure",
+    "role",
+    "rules",
+    "sop",
+    "task",
+    "tool",
+    "uses",
+}
+DEFINITION_CATEGORY_TERMS = {
+    "behavior",
+    "component",
+    "function",
+    "framework",
+    "mechanism",
+    "module",
+    "pattern",
+    "practice",
+    "process",
+    "procedure",
+    "system",
+    "tool",
+    "capability",
+}
+DEFINITION_NON_NOUN_TERMS = {
+    "associated",
+    "available",
+    "capable",
+    "causal",
+    "different",
+    "equivalent",
+    "identical",
+    "necessary",
+    "opposite",
+    "related",
+    "responsible",
+    "similar",
+}
+def _strip_leading_articles(text: str) -> str:
+    return re.sub(r"^(?:a|an|the)\s+", "", str(text).strip(), flags=re.I)
+
+
+def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
+    normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    if not normalized:
+        return None
+    prefixes = (
+        "what is ",
+        "what are ",
+        "what was ",
+        "what were ",
+        "what does ",
+        "what do ",
+        "what's ",
+        "define ",
+    )
+    for prefix in prefixes:
+        if not normalized.startswith(prefix):
+            continue
+        body = normalized[len(prefix) :].strip(" ?.")
+        if not body:
+            return None
+        if (prefix.startswith("what does") or prefix.startswith("what do")) and (
+            " mean " not in f" {body} "
+        ):
+            return None
+        if " which " in f" {body} " or ("," in body and " mean " not in f" {body} "):
+            return None
+        head = body
+        context_modifier = ""
+        if prefix.startswith("what does") or prefix.startswith("what do"):
+            for marker in (" mean in ", " mean within ", " mean for ", " mean under "):
+                if marker in body:
+                    head, context_modifier = body.split(marker, 1)
+                    break
+            else:
+                if " mean " in f" {body} ":
+                    head = body.split(" mean ", 1)[0]
+        if not context_modifier:
+            for marker in (" in ", " within ", " for ", " under "):
+                if marker in head:
+                    head, context_modifier = head.split(marker, 1)
+                    break
+        head = re.sub(r"\s+", " ", _strip_leading_articles(head)).strip(" ?.,;:")
+        context_modifier = re.sub(
+            r"\s+", " ", _strip_leading_articles(context_modifier)
+        ).strip(" ?.,;:")
+        head_terms = _coverage_terms(head)
+        if len(head_terms) == 1:
+            sole_term = next(iter(head_terms))
+            if sole_term in DEFINITION_NON_NOUN_TERMS or sole_term.endswith(("ed", "ing")):
+                return None
+        if head:
+            return {
+                "definition_head": head,
+                "context_modifier": context_modifier,
+                "question_prefix": prefix.strip(),
+            }
+    return None
 CAUSALITY_UPGRADE_TERMS = {
     "cause",
     "caused",
@@ -2259,8 +2371,38 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
+    definition_parts = _contextual_definition_query_parts(question)
     terms = sorted(_coverage_terms(question))
     facets: list[dict[str, Any]] = []
+    if definition_parts is not None:
+        facets = [
+            {
+                "facet_id": "definition_head",
+                "terms": sorted(_coverage_terms(definition_parts["definition_head"])),
+                "required": True,
+            },
+        ]
+        if definition_parts["context_modifier"]:
+            facets.append(
+                {
+                    "facet_id": "context_modifier",
+                    "terms": sorted(
+                        _coverage_terms(definition_parts["context_modifier"])
+                    ),
+                    "required": True,
+                }
+            )
+        return {
+            "required_facets": facets,
+            "material_claim_policy": (
+                "definition-head claims must keep the source-backed predicate explicit, "
+                "and the contextual anchor must remain separate from the head definition"
+            ),
+            "graph_relation_policy": (
+                "structural graph relations may identify navigation/order only unless "
+                "endpoint passage text supports stronger semantics"
+            ),
+        }
     if intent_class == "cross_document_comparison":
         facets = [
             {"facet_id": "compare_left", "terms": terms[:6], "required": True},
@@ -2334,6 +2476,13 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
             return
         facets.append({"facet_id": facet_id, "terms": list(terms), "required": True})
         seen.add(facet_id)
+
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is not None:
+        add("definition_head", [definition_parts["definition_head"]])
+        if definition_parts["context_modifier"]:
+            add("context_modifier", [definition_parts["context_modifier"]])
+        return facets
 
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
@@ -2805,6 +2954,16 @@ def _verify_multi_evidence_provider_output(
                 }
             )
         if (
+            _contextual_definition_query_parts(question) is not None
+            and not is_model_explanation
+        ):
+            _verify_definition_claim_surface(
+                question=question,
+                surface_text=surface_text or str(parsed.get("answer_text") or ""),
+                support_refs=ref_records,
+                evidence_by_id=evidence_by_id,
+            )
+        if (
             _claim_requires_multi_source(intent_class, claim_role)
             and _distinct_source_count(
                 evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
@@ -3140,8 +3299,13 @@ def _validated_claim_facets(
         evidence_text
     )
     evidence_casefold = evidence_text.casefold()
-    candidate_facets = inferred | (requested_facet_ids & set(_required_facet_ids(question=question, intent_class=intent_class)))
+    candidate_facets = inferred | (
+        requested_facet_ids
+        & set(_required_facet_ids(question=question, intent_class=intent_class))
+    )
     accepted: set[str] = set()
+    definition_parts = _contextual_definition_query_parts(question)
+    question_terms = _coverage_terms(question)
     for facet in _question_contract(question=question, intent_class=intent_class)[
         "required_facets"
     ]:
@@ -3157,8 +3321,40 @@ def _validated_claim_facets(
             support_terms=support_terms,
             evidence_text=evidence_casefold,
             evidence_terms=evidence_terms,
+            question_terms=question_terms,
         ):
             accepted.add(facet_id)
+    if definition_parts is not None and "definition_head" in candidate_facets:
+        head_terms = _coverage_terms(definition_parts["definition_head"])
+        context_terms = (
+            _coverage_terms(definition_parts["context_modifier"])
+            if definition_parts["context_modifier"]
+            else set()
+        )
+        if head_terms and not (visible_terms & head_terms and support_terms & head_terms):
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim is missing source-backed head terms",
+            )
+        supported_predicates = (visible_terms | support_terms | evidence_terms) & DEFINITION_PREDICATE_TERMS
+        if not supported_predicates:
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim lacks a source-backed predicate",
+            )
+        unsupported_category_terms = (
+            (visible_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
+        )
+        if unsupported_category_terms:
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim invents an unsupported category predicate",
+            )
+        if context_terms and not (visible_terms & context_terms):
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim omits the contextual modifier",
+            )
     return sorted(accepted)
 
 
@@ -3178,6 +3374,7 @@ def _direct_facet_signal_met(
     support_terms: set[str],
     evidence_text: str,
     evidence_terms: set[str],
+    question_terms: set[str],
 ) -> bool:
     visible_casefold = visible_text.casefold()
     exact_phrases = _direct_facet_required_phrases(facet_id)
@@ -3195,6 +3392,14 @@ def _direct_facet_signal_met(
     if facet_id == "ordering_boundary":
         return bool(visible_terms & ORDER_SURFACE_TERMS) and "precede" in (
             visible_terms | support_terms | evidence_terms
+        )
+    if facet_id == "definition_head":
+        return bool(visible_terms & facet_terms) and bool(
+            visible_terms & (support_terms | evidence_terms)
+        )
+    if facet_id == "context_modifier":
+        return bool(visible_terms & facet_terms) and bool(
+            visible_terms & (support_terms | evidence_terms | question_terms)
         )
     if facet_id == "direct_answer":
         return bool(visible_terms & (support_terms | evidence_terms))
@@ -3315,6 +3520,55 @@ def _verify_question_evidence_relevance(
                     f"{', '.join(group_labels)}"
                 ),
             )
+
+
+def _verify_definition_claim_surface(
+    *,
+    question: str,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+    evidence_by_id: Mapping[str, Mapping[str, Any]],
+) -> None:
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is None:
+        return
+    surface = _strip_runtime_markers(surface_text)
+    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+    support_terms = _coverage_terms(support_text)
+    question_terms = _coverage_terms(question)
+    surface_terms = _coverage_terms(surface)
+    head_terms = _coverage_terms(definition_parts["definition_head"])
+    if not head_terms:
+        return
+    if not (surface_terms & head_terms) or not (support_terms & head_terms):
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim is missing source-backed head terms",
+        )
+    supported_predicates = (surface_terms | support_terms) & DEFINITION_PREDICATE_TERMS
+    if not supported_predicates:
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim lacks a source-backed predicate",
+        )
+    unsupported_category_terms = (
+        (surface_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
+    )
+    if unsupported_category_terms:
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim invents an unsupported category predicate",
+        )
+    context_terms = (
+        _coverage_terms(definition_parts["context_modifier"])
+        if definition_parts["context_modifier"]
+        else set()
+    )
+    if context_terms and not (surface_terms & context_terms):
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim omits the contextual modifier",
+        )
 
 
 def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> bool:
