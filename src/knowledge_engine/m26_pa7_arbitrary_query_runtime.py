@@ -2261,6 +2261,7 @@ def _build_multi_evidence_provider_payload(
     budget = _object(policy.get("budget"), "policy budget")
     evidence_payload = [_provider_evidence_item(item) for item in evidence]
     question_contract = _question_contract(question=question, intent_class=intent_class)
+    definition_parts = _contextual_definition_query_parts(question)
     repair_directive = _repair_directive(previous_reason_codes or [], intent_class=intent_class)
     output_contract: dict[str, Any] = {
         "schema_version": "aq3-provider-candidate/v3",
@@ -2294,7 +2295,10 @@ def _build_multi_evidence_provider_payload(
             "claim_role, facet_ids, support_mode, and support_refs. answer_text must be "
             "natural prose with runtime claim anchors such as [[claim_1]], not final "
             "citation locators. Prefer one claim that covers all visible required facets "
-            "when possible, and keep answer_text to one or two short sentences. Each "
+            "when possible, but split definition_head and context_modifier into separate "
+            "claims when that keeps each claim source-local. If the context modifier is "
+            "not source-backed, leave it unanswered rather than inventing it. Keep "
+            "answer_text to one or two short sentences. Each "
             "support_ref must copy evidence_id, locator_id, and "
             "exact_support_snippet byte-for-byte from one supplied evidence text. Do not "
             "invent IDs, locators, graph edges, provenance fields, or quotations. A "
@@ -2379,7 +2383,10 @@ def _build_multi_evidence_provider_payload(
         "evidence_bundle": evidence_payload,
         "minimum_evidence_rule": _minimum_evidence_rule(intent_class),
         "claim_strategy": {
-            "prefer_single_claim": intent_class == "direct_grounded_knowledge",
+            "prefer_single_claim": (
+                intent_class == "direct_grounded_knowledge"
+                and definition_parts is None
+            ),
             "max_claim_count": 2,
             "max_support_refs_per_claim": 2,
             "concise_answer_text": True,
@@ -2491,7 +2498,8 @@ def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
             "required_facets": facets,
             "material_claim_policy": (
                 "definition-head claims must keep the source-backed predicate explicit, "
-                "and the contextual anchor must remain separate from the head definition"
+                "the contextual anchor may be stated in a separate claim, and bounded "
+                "partial is acceptable when that contextual relation is not source-backed"
             ),
             "graph_relation_policy": (
                 "structural graph relations may identify navigation/order only unless "
@@ -3165,7 +3173,13 @@ def _verify_multi_evidence_provider_output(
         )
         covered_facets |= required_facets
     missing_facets = sorted(required_facets - covered_facets)
-    if missing_facets:
+    hard_missing_facets = set(missing_facets)
+    if (
+        _contextual_definition_query_parts(question) is not None
+        and "definition_head" in covered_facets
+    ):
+        hard_missing_facets.discard("context_modifier")
+    if hard_missing_facets:
         raise _verification_failure("M26-PA7-ME-029", "answer candidate misses required facets")
     _verify_question_evidence_relevance(
         question=question,
@@ -3394,6 +3408,7 @@ def _validated_claim_facets(
         evidence_text
     )
     evidence_casefold = evidence_text.casefold()
+    support_quotes = [str(ref.get("exact_quote", "")) for ref in support_refs]
     candidate_facets = inferred | (
         requested_facet_ids
         & set(_required_facet_ids(question=question, intent_class=intent_class))
@@ -3401,6 +3416,38 @@ def _validated_claim_facets(
     accepted: set[str] = set()
     definition_parts = _contextual_definition_query_parts(question)
     question_terms = _coverage_terms(question)
+    if definition_parts is not None:
+        head = str(definition_parts.get("definition_head", "")).strip()
+        context = str(definition_parts.get("context_modifier", "")).strip()
+        context_terms = _coverage_terms(context) if context else set()
+        if "definition_head" in candidate_facets:
+            if not _definition_claim_supports_local_relation(
+                head=head,
+                surface_terms=visible_terms,
+                support_quotes=support_quotes,
+            ):
+                raise _verification_failure(
+                    "M26-PA7-ME-071",
+                    "definition claim is missing source-backed head terms",
+                )
+            unsupported_category_terms = (
+                (visible_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
+            )
+            if unsupported_category_terms:
+                raise _verification_failure(
+                    "M26-PA7-ME-071",
+                    "definition claim invents an unsupported category predicate",
+                )
+            accepted.add("definition_head")
+        if (
+            context
+            and context_terms
+            and "context_modifier" in candidate_facets
+            and context_terms <= visible_terms
+            and context_terms <= support_terms
+        ):
+            accepted.add("context_modifier")
+        return sorted(accepted)
     for facet in _question_contract(question=question, intent_class=intent_class)[
         "required_facets"
     ]:
@@ -3419,37 +3466,6 @@ def _validated_claim_facets(
             question_terms=question_terms,
         ):
             accepted.add(facet_id)
-    if definition_parts is not None and "definition_head" in candidate_facets:
-        head_terms = _coverage_terms(definition_parts["definition_head"])
-        context_terms = (
-            _coverage_terms(definition_parts["context_modifier"])
-            if definition_parts["context_modifier"]
-            else set()
-        )
-        if head_terms and not (visible_terms & head_terms and support_terms & head_terms):
-            raise _verification_failure(
-                "M26-PA7-ME-071",
-                "definition claim is missing source-backed head terms",
-            )
-        supported_predicates = (visible_terms | support_terms | evidence_terms) & DEFINITION_PREDICATE_TERMS
-        if not supported_predicates:
-            raise _verification_failure(
-                "M26-PA7-ME-071",
-                "definition claim lacks a source-backed predicate",
-            )
-        unsupported_category_terms = (
-            (visible_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
-        )
-        if unsupported_category_terms:
-            raise _verification_failure(
-                "M26-PA7-ME-071",
-                "definition claim invents an unsupported category predicate",
-            )
-        if context_terms and not (visible_terms & context_terms):
-            raise _verification_failure(
-                "M26-PA7-ME-071",
-                "definition claim omits the contextual modifier",
-            )
     return sorted(accepted)
 
 
@@ -3632,14 +3648,16 @@ def _verify_definition_claim_surface(
     support_terms = _coverage_terms(support_text)
     question_terms = _coverage_terms(question)
     surface_terms = _coverage_terms(surface)
-    head_terms = _coverage_terms(definition_parts["definition_head"])
-    if not head_terms:
+    if not _definition_claim_supports_local_relation(
+        head=definition_parts["definition_head"],
+        surface_terms=surface_terms,
+        support_quotes=[
+            str(ref.get("exact_quote", ""))
+            for ref in support_refs
+            if str(ref.get("exact_quote", ""))
+        ],
+    ):
         return
-    if not (surface_terms & head_terms) or not (support_terms & head_terms):
-        raise _verification_failure(
-            "M26-PA7-ME-071",
-            "definition claim is missing source-backed head terms",
-        )
     supported_predicates = (surface_terms | support_terms) & DEFINITION_PREDICATE_TERMS
     if not supported_predicates:
         raise _verification_failure(
@@ -3654,16 +3672,7 @@ def _verify_definition_claim_surface(
             "M26-PA7-ME-071",
             "definition claim invents an unsupported category predicate",
         )
-    context_terms = (
-        _coverage_terms(definition_parts["context_modifier"])
-        if definition_parts["context_modifier"]
-        else set()
-    )
-    if context_terms and not (surface_terms & context_terms):
-        raise _verification_failure(
-            "M26-PA7-ME-071",
-            "definition claim omits the contextual modifier",
-    )
+    return
 
 
 def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> bool:
@@ -3921,8 +3930,33 @@ def _infer_covered_facets(
         if not surface_text.strip():
             surface_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
         surface_terms = _coverage_terms(surface_text)
-        support_terms = _coverage_terms(" ".join(str(ref.get("exact_quote", "")) for ref in support_refs))
-        covered = []
+        covered: list[str] = []
+        support_quotes = [
+            str(ref.get("exact_quote", ""))
+            for ref in support_refs
+            if str(ref.get("exact_quote", ""))
+        ]
+        support_text = " ".join(support_quotes)
+        support_terms = _coverage_terms(support_text)
+        definition_parts = _contextual_definition_query_parts(question)
+        if definition_parts is not None:
+            head = str(definition_parts.get("definition_head", "")).strip()
+            context = str(definition_parts.get("context_modifier", "")).strip()
+            context_terms = _coverage_terms(context) if context else set()
+            if head and _definition_claim_supports_local_relation(
+                head=head,
+                surface_terms=surface_terms,
+                support_quotes=support_quotes,
+            ):
+                covered.append("definition_head")
+            if (
+                context
+                and context_terms
+                and context_terms <= surface_terms
+                and context_terms <= support_terms
+            ):
+                covered.append("context_modifier")
+            return list(dict.fromkeys(covered))
         for facet in _question_contract(question=question, intent_class=intent_class)[
             "required_facets"
         ]:

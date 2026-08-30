@@ -4,10 +4,10 @@ import hashlib
 import json
 import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Any, Iterator
+from typing import Any
 
 _TRACE_BUFFER: ContextVar[list[dict[str, Any]] | None] = ContextVar(
     "m26_sealed_kernel_trace_buffer",

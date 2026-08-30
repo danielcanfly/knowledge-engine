@@ -608,19 +608,30 @@ def test_contextual_definition_query_accepts_source_backed_predicate() -> None:
             "relation": None,
             "selected_evidence_ids": [item["evidence_id"] for item in evidence],
             "answer_text": (
-                "A skill is a method the agent follows for a class of task in an AI agent "
-                "architecture [[claim_1]]."
+                "A skill is a method the agent follows for a class of task. "
+                "In an AI agent architecture, that skill layer stays separate from routing "
+                "[[claim_1]] [[claim_2]]."
             ),
             "claims": [
                 {
                     "claim_id": "claim_1",
                     "claim_role": "direct",
-                    "facet_ids": [
-                        "definition_head",
-                        "context_modifier",
-                    ],
+                    "surface_text": (
+                        "A skill is a method the agent follows for a class of task."
+                    ),
+                    "facet_ids": ["definition_head"],
                     "support_mode": "exact_quote",
-                    "support_refs": support_refs,
+                    "support_refs": [support_refs[0]],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_role": "direct",
+                    "surface_text": (
+                        "In an AI agent architecture, that skill layer stays separate from routing."
+                    ),
+                    "facet_ids": ["context_modifier"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [support_refs[1]],
                 }
             ],
             "missing_facets": [],
@@ -638,6 +649,60 @@ def test_contextual_definition_query_accepts_source_backed_predicate() -> None:
 
     assert verified["terminal_status"] == "verified_answer_ready_candidate"
     assert verified["covered_facets"] == ["context_modifier", "definition_head"]
+    assert [claim["facet_ids"] for claim in verified["material_claims"]] == [
+        ["definition_head"],
+        ["context_modifier"],
+    ]
+
+
+def test_contextual_definition_query_allows_bounded_partial_definition_only() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            evidence_id="ev_skill",
+            concept_id="skill",
+        ),
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": "A skill is a method the agent follows for a class of task [[claim_1]].",
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "surface_text": "A skill is a method the agent follows for a class of task.",
+                    "facet_ids": ["definition_head"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [
+                        {
+                            "evidence_id": evidence[0]["evidence_id"],
+                            "locator_id": evidence[0]["locator_id"],
+                            "exact_quote": evidence[0]["passage_text"],
+                        }
+                    ],
+                }
+            ],
+            "missing_facets": ["context_modifier"],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="definition_partial",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["covered_facets"] == ["definition_head"]
+    assert verified["missing_facets"] == ["context_modifier"]
 
 
 def test_contextual_definition_query_rejects_unbacked_category_mutation_even_with_review() -> None:
@@ -670,18 +735,28 @@ def test_contextual_definition_query_rejects_unbacked_category_mutation_even_wit
             "relation": None,
             "selected_evidence_ids": [item["evidence_id"] for item in evidence],
             "answer_text": (
-                "A skill is a mechanism or module in an AI agent architecture [[claim_1]]."
+                "A skill is a mechanism or module. "
+                "In an AI agent architecture, that skill layer stays separate from routing "
+                "[[claim_1]] [[claim_2]]."
             ),
             "claims": [
                 {
                     "claim_id": "claim_1",
                     "claim_role": "direct",
-                    "facet_ids": [
-                        "definition_head",
-                        "context_modifier",
-                    ],
+                    "surface_text": "A skill is a mechanism or module.",
+                    "facet_ids": ["definition_head"],
                     "support_mode": "exact_quote",
-                    "support_refs": support_refs,
+                    "support_refs": [support_refs[0]],
+                },
+                {
+                    "claim_id": "claim_2",
+                    "claim_role": "direct",
+                    "surface_text": (
+                        "In an AI agent architecture, that skill layer stays separate from routing."
+                    ),
+                    "facet_ids": ["context_modifier"],
+                    "support_mode": "exact_quote",
+                    "support_refs": [support_refs[1]],
                 }
             ],
             "missing_facets": [],
@@ -702,7 +777,12 @@ def test_contextual_definition_query_rejects_unbacked_category_mutation_even_wit
                     {
                         "claim_id": "claim_1",
                         "verdict": "ENTAILED",
-                        "evidence_ids": ["ev_skill", "ev_context"],
+                        "evidence_ids": ["ev_skill"],
+                    },
+                    {
+                        "claim_id": "claim_2",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["ev_context"],
                     }
                 ],
                 "visible_coverage": {
