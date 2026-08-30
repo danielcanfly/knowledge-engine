@@ -66,6 +66,17 @@ def _support_ids(case: Mapping[str, Any]) -> set[str]:
     return {str(item["support_id"]) for item in case.get("gold_support", [])}
 
 
+def _primary_support(case: Mapping[str, Any]) -> Mapping[str, Any] | None:
+    for item in case.get("gold_support", []):
+        if str(item.get("support_role")) == "primary":
+            return item
+    return None
+
+
+def _certificate_keys_present(certificate: Mapping[str, Any], keys: set[str]) -> bool:
+    return keys <= set(certificate)
+
+
 def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     required = {
@@ -87,6 +98,9 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
         "graph_edge_required",
         "provenance_required",
         "temporal_versions_required",
+        "graph_certificate",
+        "provenance_certificate",
+        "temporal_certificate",
         "paraphrase_group",
         "negative_control_of",
         "derivation_notes",
@@ -142,6 +156,57 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
     temporal_required = int(case.get("temporal_versions_required", 0))
     if temporal_required > 0 and len(case.get("gold_support", [])) < temporal_required:
         errors.append("missing_temporal_certificate")
+    primary_support = _primary_support(case)
+    if primary_support is not None:
+        if case.get("graph_edge_required"):
+            graph_certificate = case.get("graph_certificate") or {}
+            if not _certificate_keys_present(
+                graph_certificate,
+                {
+                    "graph_edge_id",
+                    "graph_relation_type",
+                    "graph_directed",
+                    "primary_concept_id",
+                    "primary_section_id",
+                    "primary_source_identity",
+                },
+            ):
+                errors.append("graph_certificate_incomplete")
+        if case.get("provenance_required"):
+            provenance_certificate = case.get("provenance_certificate") or {}
+            if not _certificate_keys_present(
+                provenance_certificate,
+                {
+                    "primary_concept_id",
+                    "primary_section_id",
+                    "primary_source_identity",
+                    "provenance_record_id",
+                    "provenance_subject_concept_id",
+                    "subject_match",
+                },
+            ):
+                errors.append("provenance_certificate_incomplete")
+            explicit_mapping_note = provenance_certificate.get("explicit_mapping_note")
+            if provenance_certificate.get("subject_match") is False and not explicit_mapping_note:
+                errors.append("provenance_certificate_missing_mapping_note")
+        if case.get("family") == "temporal_version":
+            temporal_certificate = case.get("temporal_certificate") or {}
+            if not _certificate_keys_present(
+                temporal_certificate,
+                {
+                    "primary_concept_id",
+                    "primary_section_id",
+                    "primary_source_identity",
+                    "temporal_evidence_mode",
+                    "minimum_required_for_positive",
+                    "observed_temporal_record_count",
+                },
+            ):
+                errors.append("temporal_certificate_incomplete")
+            if temporal_certificate.get("temporal_evidence_mode") != "insufficient":
+                errors.append("temporal_certificate_mode_invalid")
+            if int(case.get("temporal_versions_required", 0)) != 0:
+                errors.append("temporal_versions_required_nonzero")
     return errors
 
 
@@ -347,6 +412,51 @@ def audit_captured_result(case: Mapping[str, Any], result: Mapping[str, Any]) ->
         "forbidden_inference_documented": bool(case.get("forbidden_inferences")),
         "support_ids_observed": case.get("expected_behavior") == "abstain" or bool(cited_ids),
     }
+    graph_certificate = case.get("graph_certificate") or {}
+    provenance_certificate = case.get("provenance_certificate") or {}
+    temporal_certificate = case.get("temporal_certificate") or {}
+    deterministic_checks["graph_certificate_valid"] = (not case.get("graph_edge_required")) or (
+        bool(graph_certificate)
+        and _certificate_keys_present(
+            graph_certificate,
+            {
+                "graph_edge_id",
+                "graph_relation_type",
+                "graph_directed",
+                "primary_concept_id",
+                "primary_section_id",
+                "primary_source_identity",
+            },
+        )
+    )
+    deterministic_checks["provenance_certificate_valid"] = (
+        not case.get("provenance_required")
+    ) or (
+        bool(provenance_certificate)
+        and _certificate_keys_present(
+            provenance_certificate,
+            {
+                "primary_concept_id",
+                "primary_section_id",
+                "primary_source_identity",
+                "provenance_record_id",
+                "provenance_subject_concept_id",
+                "subject_match",
+            },
+        )
+        and (
+            provenance_certificate.get("subject_match") is True
+            or bool(provenance_certificate.get("explicit_mapping_note"))
+        )
+    )
+    deterministic_checks["temporal_certificate_valid"] = (
+        case.get("family") != "temporal_version"
+        or (
+            bool(temporal_certificate)
+            and temporal_certificate.get("temporal_evidence_mode") == "insufficient"
+            and int(case.get("temporal_versions_required", 0)) == 0
+        )
+    )
     passed = all(deterministic_checks.values())
     host_review = (
         HOSTILE_SEMANTIC_REVIEW_REQUIRED
@@ -366,8 +476,8 @@ def audit_captured_result(case: Mapping[str, Any], result: Mapping[str, Any]) ->
         "unsupported_accepted_claim_count": int(result.get("unsupported_accepted_claims") or 0),
         "distinct_source_minimum": deterministic_checks["distinct_source_minimum"],
         "graph_provenance_temporal_structural_checks": {
-            "graph_required": deterministic_checks["graph_required"],
-            "provenance_required": deterministic_checks["provenance_required"],
+            "graph_required": deterministic_checks["graph_certificate_valid"],
+            "provenance_required": deterministic_checks["provenance_certificate_valid"],
             "temporal_versions_required": int(case.get("temporal_versions_required", 0)),
         },
         "partial_unanswered_dimension_check": deterministic_checks["partial_unanswered_dimensions"],
