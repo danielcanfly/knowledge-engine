@@ -84,6 +84,39 @@ def test_support_refs_and_gold_supports_are_structured() -> None:
             assert forbidden["inference_id"].strip()
             assert forbidden["forbidden_text_or_relation"].strip()
             assert forbidden["reason"].strip()
+            assert forbidden["forbidden_text_or_relation"].strip() != row["question"].strip()
+        if row["expected_behavior"] == "abstain":
+            assert row["required_propositions"][0]["relation_type"] == "context_only"
+        if row["graph_edge_required"]:
+            assert row["graph_certificate"]["graph_edge_id"].strip()
+            assert row["graph_certificate"]["primary_concept_id"].strip()
+        if row["provenance_required"]:
+            assert row["provenance_certificate"]["provenance_record_id"].strip()
+            assert row["provenance_certificate"]["provenance_subject_concept_id"].strip()
+            assert "subject_match" in row["provenance_certificate"]
+        if row["family"] == "temporal_version":
+            assert row["temporal_certificate"]["temporal_evidence_mode"] == "insufficient"
+            assert row["temporal_certificate"]["observed_temporal_record_count"] == 1
+            assert row["temporal_versions_required"] == 0
+
+
+def test_certificate_subjects_and_edges_are_claim_local() -> None:
+    rows = load_bank()
+    for row in rows:
+        primary = next(s for s in row["gold_support"] if s["support_role"] == "primary")
+        primary_concept = primary["section_id"].split("#", 1)[0]
+        if row["provenance_required"]:
+            certificate = row["provenance_certificate"]
+            assert certificate["primary_concept_id"] == primary_concept
+            assert certificate["subject_match"] is True
+        if row["graph_edge_required"]:
+            certificate = row["graph_certificate"]
+            assert certificate["primary_concept_id"] == primary_concept
+            assert certificate["graph_edge_id"].startswith("edge_")
+        if row["family"] == "temporal_version":
+            certificate = row["temporal_certificate"]
+            assert certificate["primary_concept_id"] == primary_concept
+            assert certificate["minimum_required_for_positive"] == 2
 
 
 def test_bank_sha_and_diversity_metrics_are_stable() -> None:
