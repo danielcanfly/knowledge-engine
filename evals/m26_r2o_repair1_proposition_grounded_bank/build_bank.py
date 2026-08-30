@@ -24,6 +24,68 @@ GOLD_MODE_STRUCTURAL = "structural"
 GOLD_MODE_SENTINEL_SYNTHESIS = "sentinel_synthesis"
 GOLD_MODE_CONTEXT_ONLY = "context_only"
 CONTEXT_SUPPORT_ROLES = {"context", "negative_distractor"}
+RELATION_KIND_BY_FAMILY = {
+    "simple_definition": "definition",
+    "contextual_definition": "definition",
+    "role_responsibility": "role",
+    "impact_effect": "effect",
+    "causal_why": "causal",
+    "how_process": "process",
+    "comparison": "comparison_dimension",
+    "relationship": "relationship",
+    "examples": "example",
+    "trade_offs": "tradeoff",
+    "architecture_components": "component",
+    "capability_skill_requirement": "requirement",
+    "enumerative_list": "enumeration",
+    "multi_part": "factual",
+    "broad_synthesis": "factual",
+    "narrow_factual": "factual",
+    "ambiguous_clarification": "context_only",
+    "insufficient_evidence": "context_only",
+    "partially_sufficient_evidence": "factual",
+    "conflicting_evidence": "conflict",
+    "lexical_similarity_low_relevance": "context_only",
+    "short_query": "factual",
+    "long_compositional_query": "factual",
+    "paraphrase_equivalence": "definition",
+    "adversarial_category_mutation": "context_only",
+    "causal_strengthening_negative": "context_only",
+    "universalization_negative": "context_only",
+    "modality_necessity_strengthening_negative": "context_only",
+    "temporal_version": "temporal",
+    "provenance_source_trace": "provenance",
+    "graph_relationship": "graph",
+    "mixed_domain_distractor": "context_only",
+}
+POSITIVE_FAMILY_ELIGIBILITY = {
+    "definition": ["simple_definition", "contextual_definition", "paraphrase_equivalence"],
+    "role": ["role_responsibility"],
+    "effect": ["impact_effect", "causal_why"],
+    "causal": ["causal_why", "impact_effect"],
+    "process": ["how_process"],
+    "comparison_dimension": ["comparison"],
+    "relationship": ["relationship"],
+    "example": ["examples"],
+    "tradeoff": ["trade_offs"],
+    "component": ["architecture_components"],
+    "capability": ["capability_skill_requirement"],
+    "requirement": ["capability_skill_requirement"],
+    "enumeration": ["enumerative_list", "architecture_components"],
+    "factual": [
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "conflict": ["conflicting_evidence"],
+    "provenance": ["provenance_source_trace"],
+    "graph": ["graph_relationship"],
+    "temporal": [],
+    "context_only": [],
+}
 
 PRIMARY_ONLY_NEW = [
     ("BROAD-0001", "R2O-PG-P063"),
@@ -333,6 +395,197 @@ def extractive_certificate(supports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def relation_kind_for(family: str, behavior: str) -> str:
+    if behavior == "abstain":
+        return "context_only"
+    return RELATION_KIND_BY_FAMILY.get(family, "factual")
+
+
+def support_subject(support: dict[str, Any]) -> str:
+    section_id = str(support.get("section_id", ""))
+    if "#" in section_id:
+        return section_locator(section_id)
+    locator = str(support.get("locator", "")).strip()
+    return locator or section_id or "the topic"
+
+
+def build_relation_certificate(
+    *,
+    family: str,
+    behavior: str,
+    proposition_text: str,
+    supports: list[dict[str, Any]],
+    certificate_mode: str,
+) -> dict[str, Any]:
+    relation_kind = relation_kind_for(family, behavior)
+    subject = support_subject(supports[0]) if supports else "the topic"
+    object_or_complement = proposition_text.strip()
+    if relation_kind == "relationship":
+        quoted = re.findall(r"`([^`]+)`", proposition_text)
+        if "Source PR #19 review item" in proposition_text:
+            object_or_complement = "Source PR #19 review item"
+        elif "Source PR #19 item" in proposition_text and quoted:
+            object_or_complement = f"Source PR #19 item {quoted[0]}"
+        elif quoted:
+            object_or_complement = quoted[0]
+    if relation_kind == "graph" and supports:
+        graph_support = next(
+            (support for support in supports if support.get("graph_certificate")),
+            supports[0],
+        )
+        graph_certificate = graph_support.get("graph_certificate", {})
+        subject = str(graph_certificate.get("source_node_id", subject))
+        object_or_complement = str(graph_certificate.get("target_node_id", object_or_complement))
+    return {
+        "relation_kind": relation_kind,
+        "subject": subject,
+        "predicate": relation_kind,
+        "object_or_complement": object_or_complement,
+        "source_support_ids": [support["support_id"] for support in supports],
+        "positive_family_eligibility": []
+        if behavior == "abstain"
+        else POSITIVE_FAMILY_ELIGIBILITY.get(relation_kind, [family]),
+        "negative_family_eligibility": [family] if behavior == "abstain" else [],
+        "certificate_mode": certificate_mode,
+    }
+
+
+def natural_question_for(
+    *,
+    family: str,
+    behavior: str,
+    question: str,
+    proposition: dict[str, Any],
+    case_id: str,
+) -> str:
+    if case_id.startswith("SENTINEL-"):
+        return question
+    if family in {"provenance_source_trace", "graph_relationship", "temporal_version"}:
+        return question
+    certificate = proposition["relation_certificate"]
+    subject = certificate["subject"]
+    relation_kind = certificate["relation_kind"]
+    if behavior == "abstain":
+        return question
+    if behavior == "partial":
+        return f"What does {subject} establish, and what remains unresolved?"
+    if family == "comparison":
+        comparison = proposition.get("comparison_certificate", {})
+        left = comparison.get("left_subject", "the first topic")
+        right = comparison.get("right_subject", "the second topic")
+        dimension = comparison.get("dimension", "their stated role")
+        return f"How do {left} and {right} differ on {dimension}?"
+    if relation_kind == "definition":
+        return f"What is {subject}?"
+    if relation_kind == "role":
+        return f"What does {subject} do?"
+    if relation_kind == "effect":
+        return f"What effect does {subject} have?"
+    if relation_kind == "causal":
+        return f"Why does {subject} matter?"
+    if relation_kind == "process":
+        return f"How does {subject} work?"
+    if relation_kind == "relationship":
+        return f"How is {subject} related to {certificate['object_or_complement']}?"
+    if relation_kind == "example":
+        return f"What examples of {subject} are given?"
+    if relation_kind == "tradeoff":
+        return f"What trade-off does {subject} describe?"
+    if relation_kind == "component":
+        return f"What are the main components of {subject}?"
+    if relation_kind in {"capability", "requirement"}:
+        return f"What does {subject} require?"
+    if relation_kind == "enumeration":
+        return f"What items are listed for {subject}?"
+    if family == "broad_synthesis":
+        return f"What does the corpus say about {subject}?"
+    if family == "multi_part":
+        return f"What does {subject} say about its parts?"
+    return f"What does {subject} say?"
+
+
+def refresh_relation_certificate(
+    record: dict[str, Any],
+    *,
+    certificate_mode: str | None = None,
+) -> None:
+    supports_by_id = {support["support_id"]: support for support in record["gold_support"]}
+    behavior = record["expected_behavior"]
+    for proposition in record["required_propositions"]:
+        supports = [
+            supports_by_id[ref]
+            for ref in proposition.get("support_refs", [])
+            if ref in supports_by_id
+        ]
+        mode = certificate_mode
+        if mode is None:
+            mode = "structural" if proposition.get("gold_mode") == GOLD_MODE_STRUCTURAL else "extractive"
+            if proposition.get("gold_mode") == GOLD_MODE_SENTINEL_SYNTHESIS:
+                mode = "sentinel"
+        proposition["relation_certificate"] = build_relation_certificate(
+            family=record["family"],
+            behavior=behavior,
+            proposition_text=proposition["proposition_text"],
+            supports=supports,
+            certificate_mode=mode,
+        )
+
+
+def enrich_record_relation_metadata(record: dict[str, Any]) -> None:
+    if record["expected_behavior"] == "partial" and not record.get(
+        "unanswered_dimensions_expected"
+    ):
+        record["unanswered_dimensions_expected"] = ["unsupported_requested_dimension"]
+    refresh_relation_certificate(record)
+    if record["family"] == "comparison" and record["expected_behavior"] in {"answer", "partial"}:
+        supports = record["gold_support"]
+        left = support_subject(supports[0]) if supports else "left side"
+        right = support_subject(supports[1]) if len(supports) > 1 else "right side"
+        certificate = {
+            "left_subject": left,
+            "right_subject": right,
+            "dimension": "the stated claim",
+            "left_prop_ids": [record["required_propositions"][0]["proposition_id"]],
+            "right_prop_ids": [record["required_propositions"][0]["proposition_id"]],
+        }
+        record["comparison_certificate"] = certificate
+        record["required_propositions"][0]["comparison_certificate"] = certificate
+        record["required_propositions"][0]["relation_certificate"][
+            "relation_kind"
+        ] = "comparison_dimension"
+        record["required_propositions"][0]["relation_certificate"][
+            "positive_family_eligibility"
+        ] = ["comparison"]
+    if record["family"] == "multi_part" and record["expected_behavior"] in {"answer", "partial"}:
+        record["multipart_clause_certificate"] = {
+            "supported_prop_ids": [
+                proposition["proposition_id"]
+                for proposition in record["required_propositions"]
+            ],
+            "unanswered_dimensions": list(record.get("unanswered_dimensions_expected", [])),
+        }
+    if record["family"] == "broad_synthesis" and record["expected_behavior"] == "answer":
+        record["broad_synthesis_certificate"] = {
+            "atomic_prop_ids": [
+                proposition["proposition_id"]
+                for proposition in record["required_propositions"]
+            ],
+            "support_ids": [
+                ref
+                for proposition in record["required_propositions"]
+                for ref in proposition.get("support_refs", [])
+            ],
+        }
+    if record["expected_behavior"] in {"answer", "partial"}:
+        record["question"] = natural_question_for(
+            family=record["family"],
+            behavior=record["expected_behavior"],
+            question=record["question"],
+            proposition=record["required_propositions"][0],
+            case_id=record["case_id"],
+        )
+
+
 def make_forbidden(case_id: str, family: str, question: str, behavior: str) -> list[dict[str, str]]:
     if case_id.startswith("SENTINEL-Q1"):
         text = "Do not contaminate the PM skill answer with agent-architecture or venture claims."
@@ -412,13 +665,25 @@ def build_sentinel_required_propositions(
     for index, support in enumerate(authority_supports, start=1):
         proposition_id = f"{case_id}-PROP{index:02d}"
         support["authority_for"] = [proposition_id]
+        proposition_text = sentinel_proposition_text(case_id, support)
         required.append(
             {
                 "proposition_id": proposition_id,
-                "proposition_text": sentinel_proposition_text(case_id, support),
+                "proposition_text": proposition_text,
                 "gold_mode": GOLD_MODE_SENTINEL_SYNTHESIS,
                 "hostile_semantic_review_required": True,
                 "extractive_certificate": extractive_certificate([support]),
+                "relation_certificate": build_relation_certificate(
+                    family="contextual_definition"
+                    if case_id.startswith("SENTINEL-Q2")
+                    else "role_responsibility"
+                    if case_id.startswith("SENTINEL-Q3")
+                    else "capability_skill_requirement",
+                    behavior="answer",
+                    proposition_text=proposition_text,
+                    supports=[support],
+                    certificate_mode="sentinel",
+                ),
                 "sentinel_atomic_mapping": {
                     "support_id": support["support_id"],
                     "source_identity": support["source_identity"],
@@ -563,6 +828,7 @@ def relation_type_for_behavior(behavior: str) -> str:
 
 def build_required_propositions(
     case_id: str,
+    family: str,
     behavior: str,
     supports: list[dict[str, Any]],
     proposition_text: str | None = None,
@@ -570,13 +836,21 @@ def build_required_propositions(
     proposition_id = prop_id_for_case(case_id)
     refs = direct_authority_refs(supports, proposition_id)
     gold_mode = GOLD_MODE_CONTEXT_ONLY if behavior == "abstain" else GOLD_MODE_EXTRACTIVE
+    text = proposition_text or proposition_text_from_support(supports)
     return [
         {
             "proposition_id": proposition_id,
-            "proposition_text": proposition_text or proposition_text_from_support(supports),
+            "proposition_text": text,
             "gold_mode": gold_mode,
             "hostile_semantic_review_required": False,
             "extractive_certificate": extractive_certificate(supports),
+            "relation_certificate": build_relation_certificate(
+                family=family,
+                behavior=behavior,
+                proposition_text=text,
+                supports=supports,
+                certificate_mode="extractive",
+            ),
             "relation_type": relation_type_for_behavior(behavior),
             "support_refs": refs,
             "entailment_note": (
@@ -639,7 +913,7 @@ def build_case_from_source(
         "minimum_material_claims": 0 if behavior in {"abstain", "clarify-compatible"} else 1,
         "maximum_unsupported_claims": 0,
         "required_propositions": build_required_propositions(
-            case_id, behavior, direct_supports, proposition_text
+            case_id, family or source_case["family"], behavior, direct_supports, proposition_text
         ),
         "optional_propositions": optional,
         "forbidden_inferences": make_forbidden(
@@ -695,6 +969,19 @@ def build_holdout_replacement(case_id: str, family: str, question: str, source_i
                 else GOLD_MODE_EXTRACTIVE,
                 "hostile_semantic_review_required": False,
                 "extractive_certificate": extractive_certificate([support]),
+                "relation_certificate": build_relation_certificate(
+                    family=family,
+                    behavior="abstain"
+                    if family == "temporal_version"
+                    else (
+                        "partial"
+                        if family in {"ambiguous_clarification", "partially_sufficient_evidence"}
+                        else "answer"
+                    ),
+                    proposition_text=proposition_text,
+                    supports=[support],
+                    certificate_mode="extractive",
+                ),
                 "relation_type": "direct_support"
                 if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"}
                 else "context_only"
@@ -1185,6 +1472,9 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         rec["gold_support"] = [primary_support]
         rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
 
+    for record in records:
+        enrich_record_relation_metadata(record)
+
     return records, primary_new, holdout_new
 
 
@@ -1301,6 +1591,107 @@ def audit_extractiveness(rows: list[dict[str, Any]]) -> list[list[Any]]:
                         reason,
                     ]
                 )
+    return audit_rows
+
+
+EVALUATOR_NATIVE_PHRASES = (
+    "compare the two cited sections",
+    "synthesize the two cited sections",
+    "what relationship does the source state for",
+    "how would you restate the supported point",
+    "what exact factual point is stated in",
+    "using only the cited source",
+    "cited source",
+    "cited sections",
+    "supported point",
+    "gold",
+    "evidence",
+)
+
+
+def natural_question_pass(row: dict[str, Any]) -> bool:
+    if row["family"] == "provenance_source_trace":
+        return True
+    if row["expected_behavior"] not in {"answer", "partial"}:
+        return True
+    question = str(row["question"]).lower()
+    return not any(phrase in question for phrase in EVALUATOR_NATIVE_PHRASES)
+
+
+def audit_relation_alignment(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    audit_rows: list[list[Any]] = []
+    for row in rows:
+        for prop in row["required_propositions"]:
+            cert = prop.get("relation_certificate", {})
+            positive_eligibility = cert.get("positive_family_eligibility", [])
+            positive = row["expected_behavior"] in {"answer", "partial"}
+            question_family_relation_match = (
+                row["family"] in positive_eligibility if positive else True
+            )
+            negative_absent = (
+                row["family"] not in positive_eligibility
+                if row["expected_behavior"] == "abstain"
+                else True
+            )
+            comparison_cert = (
+                bool(row.get("comparison_certificate", {}).get("dimension"))
+                if row["family"] == "comparison" and positive
+                else True
+            )
+            multipart_cert = (
+                bool(row.get("multipart_clause_certificate", {}).get("supported_prop_ids"))
+                if row["family"] == "multi_part" and positive
+                else True
+            )
+            partial_cert = (
+                bool(row.get("unanswered_dimensions_expected"))
+                if row["expected_behavior"] == "partial"
+                else True
+            )
+            pass_fail = "PASS"
+            reason = "ok"
+            if not natural_question_pass(row):
+                pass_fail = "FAIL"
+                reason = "evaluator_native_positive_question"
+            elif not question_family_relation_match:
+                pass_fail = "FAIL"
+                reason = "question_family_relation_mismatch"
+            elif not negative_absent:
+                pass_fail = "FAIL"
+                reason = "negative_requested_relation_present"
+            elif not comparison_cert:
+                pass_fail = "FAIL"
+                reason = "comparison_dimension_missing"
+            elif not multipart_cert:
+                pass_fail = "FAIL"
+                reason = "multipart_clause_coverage_missing"
+            elif not partial_cert:
+                pass_fail = "FAIL"
+                reason = "partial_unanswered_coverage_missing"
+            audit_rows.append(
+                [
+                    row["case_id"],
+                    row["pool"],
+                    row["family"],
+                    row["expected_behavior"],
+                    row["question"],
+                    natural_question_pass(row),
+                    prop["proposition_id"],
+                    cert.get("relation_kind", ""),
+                    "|".join(positive_eligibility),
+                    question_family_relation_match,
+                    all(
+                        ref in cert.get("source_support_ids", [])
+                        for ref in prop.get("support_refs", [])
+                    ),
+                    negative_absent,
+                    comparison_cert,
+                    multipart_cert,
+                    partial_cert,
+                    pass_fail,
+                    reason,
+                ]
+            )
     return audit_rows
 
 
@@ -1496,6 +1887,29 @@ def main() -> None:
             "reason",
         ],
         audit_extractiveness(rows),
+    )
+    write_csv(
+        ROOT / "RELATION_ALIGNMENT_AUDIT.csv",
+        [
+            "case_id",
+            "pool",
+            "family",
+            "expected_behavior",
+            "question",
+            "natural_question_pass",
+            "prop_id",
+            "relation_kind",
+            "positive_family_eligibility",
+            "question_family_relation_match",
+            "required_support_direct",
+            "negative_requested_relation_absent",
+            "comparison_dimension_cert",
+            "multipart_clause_coverage",
+            "partial_unanswered_coverage",
+            "PASS_FAIL",
+            "reason",
+        ],
+        audit_relation_alignment(rows),
     )
 
     primary_matrix = build_matrix(rows=rows, runtime_candidate_sha=RUNTIME_CANDIDATE_SHA, bank_sha=bank_sha, limit=48, sentinel_rows=sentinels)
