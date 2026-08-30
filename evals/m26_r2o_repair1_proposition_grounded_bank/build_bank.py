@@ -24,54 +24,119 @@ GOLD_MODE_STRUCTURAL = "structural"
 GOLD_MODE_SENTINEL_SYNTHESIS = "sentinel_synthesis"
 GOLD_MODE_CONTEXT_ONLY = "context_only"
 CONTEXT_SUPPORT_ROLES = {"context", "negative_distractor"}
-RELATION_KIND_BY_FAMILY = {
-    "simple_definition": "definition",
-    "contextual_definition": "definition",
-    "role_responsibility": "role",
-    "impact_effect": "effect",
-    "causal_why": "causal",
-    "how_process": "process",
-    "comparison": "comparison_dimension",
-    "relationship": "relationship",
-    "examples": "example",
-    "trade_offs": "tradeoff",
-    "architecture_components": "component",
-    "capability_skill_requirement": "requirement",
-    "enumerative_list": "enumeration",
-    "multi_part": "factual",
-    "broad_synthesis": "factual",
-    "narrow_factual": "factual",
-    "ambiguous_clarification": "context_only",
-    "insufficient_evidence": "context_only",
-    "partially_sufficient_evidence": "factual",
-    "conflicting_evidence": "conflict",
-    "lexical_similarity_low_relevance": "context_only",
-    "short_query": "factual",
-    "long_compositional_query": "factual",
-    "paraphrase_equivalence": "definition",
-    "adversarial_category_mutation": "context_only",
-    "causal_strengthening_negative": "context_only",
-    "universalization_negative": "context_only",
-    "modality_necessity_strengthening_negative": "context_only",
-    "temporal_version": "temporal",
-    "provenance_source_trace": "provenance",
-    "graph_relationship": "graph",
-    "mixed_domain_distractor": "context_only",
-}
+RELATION_AUTHORITY_REGISTRY_PATH = ROOT / "RELATION_AUTHORITY_REGISTRY.jsonl"
+COMPARISON_AUTHORITY_REGISTRY_PATH = ROOT / "COMPARISON_AUTHORITY_REGISTRY.jsonl"
 POSITIVE_FAMILY_ELIGIBILITY = {
-    "definition": ["simple_definition", "contextual_definition", "paraphrase_equivalence"],
-    "role": ["role_responsibility"],
-    "effect": ["impact_effect", "causal_why"],
-    "causal": ["causal_why", "impact_effect"],
-    "process": ["how_process"],
+    "definition": [
+        "simple_definition",
+        "contextual_definition",
+        "paraphrase_equivalence",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "role": [
+        "role_responsibility",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "effect": [
+        "impact_effect",
+        "causal_why",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "causal": [
+        "causal_why",
+        "impact_effect",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "process": [
+        "how_process",
+        "contextual_definition",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
     "comparison_dimension": ["comparison"],
-    "relationship": ["relationship"],
-    "example": ["examples"],
+    "relationship": [
+        "relationship",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "example": [
+        "examples",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
     "tradeoff": ["trade_offs"],
-    "component": ["architecture_components"],
-    "capability": ["capability_skill_requirement"],
-    "requirement": ["capability_skill_requirement"],
-    "enumeration": ["enumerative_list", "architecture_components"],
+    "component": [
+        "architecture_components",
+        "enumerative_list",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "capability": [
+        "capability_skill_requirement",
+        "enumerative_list",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "requirement": [
+        "capability_skill_requirement",
+        "enumerative_list",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
+    "enumeration": [
+        "enumerative_list",
+        "architecture_components",
+        "narrow_factual",
+        "short_query",
+        "long_compositional_query",
+        "multi_part",
+        "broad_synthesis",
+        "partially_sufficient_evidence",
+    ],
     "factual": [
         "narrow_factual",
         "short_query",
@@ -86,6 +151,72 @@ POSITIVE_FAMILY_ELIGIBILITY = {
     "temporal": [],
     "context_only": [],
 }
+LOW_RISK_CONSUMER_FAMILIES = [
+    "simple_definition",
+    "contextual_definition",
+    "role_responsibility",
+    "how_process",
+    "examples",
+    "enumerative_list",
+    "narrow_factual",
+    "short_query",
+    "long_compositional_query",
+    "paraphrase_equivalence",
+    "multi_part",
+    "broad_synthesis",
+    "partially_sufficient_evidence",
+]
+for _relation_kind in (
+    "definition",
+    "role",
+    "effect",
+    "causal",
+    "process",
+    "relationship",
+    "example",
+    "component",
+    "capability",
+    "requirement",
+    "enumeration",
+    "factual",
+):
+    POSITIVE_FAMILY_ELIGIBILITY[_relation_kind] = list(
+        dict.fromkeys(
+            [
+                *POSITIVE_FAMILY_ELIGIBILITY.get(_relation_kind, []),
+                *LOW_RISK_CONSUMER_FAMILIES,
+            ]
+        )
+    )
+HIGH_RISK_POSITIVE_FAMILIES = {
+    "architecture_components",
+    "impact_effect",
+    "causal_why",
+    "trade_offs",
+    "capability_skill_requirement",
+    "comparison",
+    "relationship",
+    "conflicting_evidence",
+    "temporal_version",
+    "provenance_source_trace",
+    "graph_relationship",
+}
+REQUESTED_RELATION_FOR_NEGATIVE_FAMILY = {
+    "impact_effect": "effect",
+    "causal_why": "causal",
+    "trade_offs": "tradeoff",
+    "capability_skill_requirement": "requirement",
+    "comparison": "comparison_dimension",
+    "relationship": "relationship",
+    "conflicting_evidence": "conflict",
+    "temporal_version": "temporal",
+    "causal_strengthening_negative": "causal",
+    "universalization_negative": "universal",
+    "modality_necessity_strengthening_negative": "necessity",
+    "mixed_domain_distractor": "mixed_domain",
+}
+RELATION_AUTHORITY_REGISTRY: dict[str, dict[str, Any]] = {}
+COMPARISON_AUTHORITY_REGISTRY: dict[str, dict[str, Any]] = {}
 
 PRIMARY_ONLY_NEW = [
     ("BROAD-0001", "R2O-PG-P063"),
@@ -364,6 +495,11 @@ def section_locator(section_id: str) -> str:
     return section_id.rsplit("#", 1)[-1].replace("-", " ").title()
 
 
+def concept_title(section_id: str) -> str:
+    concept = concept_id_from_section(section_id).rsplit("/", 1)[-1]
+    return concept.replace("-", " ").title()
+
+
 def prop_id_for_case(case_id: str) -> str:
     return REQUIRED_PROP_ID.format(case_id=case_id)
 
@@ -395,18 +531,326 @@ def extractive_certificate(supports: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def relation_kind_for(family: str, behavior: str) -> str:
-    if behavior == "abstain":
-        return "context_only"
-    return RELATION_KIND_BY_FAMILY.get(family, "factual")
-
-
 def support_subject(support: dict[str, Any]) -> str:
     section_id = str(support.get("section_id", ""))
     if "#" in section_id:
-        return section_locator(section_id)
+        locator = section_locator(section_id)
+        if re.search(r"(section_[0-9a-f]{8,}|dec [0-9a-f]{12,})", locator, re.I):
+            return concept_title(section_id)
+        return locator
     locator = str(support.get("locator", "")).strip()
     return locator or section_id or "the topic"
+
+
+def first_matching_cue(text: str, patterns: list[str]) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.I)
+        if match:
+            return match.group(0)
+    return ""
+
+
+def explicit_relation_cue(snippet: str, proposition_text: str) -> tuple[str, list[str], str]:
+    text = f"{snippet}\n{proposition_text}"
+    cue = first_matching_cue(
+        text,
+        [
+            r"\btrade[- ]?off\b",
+            r"\bversus\b",
+            r"\bvs\.\b",
+            r"\bat the cost of\b",
+            r"\bbenefit[s]? / cost[s]?\b",
+            r"\blatency / quality tension\b",
+            r"\bsimplicity / control tension\b",
+            r"\bwhile\b",
+            r"\bhowever\b",
+            r"\bbut\b",
+        ],
+    )
+    if cue:
+        return "tradeoff", [cue], "Explicit competing dimension or tension cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bbecause\b",
+            r"\bso that\b",
+            r"\bin order to\b",
+            r"\btherefore\b",
+            r"\bfor the purpose of\b",
+            r"\bthe reason\b",
+            r"\bprevents\b.{0,80}\bby\b",
+            r"\benables\b.{0,80}\bby\b",
+        ],
+    )
+    if cue:
+        return "causal", [cue], "Explicit rationale, purpose, or causal cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\benables?\b",
+            r"\bprevents?\b",
+            r"\breduces?\b",
+            r"\bincreases?\b",
+            r"\bchanges?\b",
+            r"\bleads to\b",
+            r"\bresults? in\b",
+            r"\bproduces?\b",
+            r"\bkeeps?\b",
+            r"\baffects?\b",
+        ],
+    )
+    if cue:
+        return "effect", [cue], "Explicit outcome or effect cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bfirst\b",
+            r"\bthen\b",
+            r"\bnext\b",
+            r"\bfinally\b",
+            r"\bsequence\b",
+            r"\bstages?\b",
+            r"\bphases?\b",
+            r"\blifecycle\b",
+        ],
+    )
+    if cue:
+        return "process", [cue], "Explicit ordered sequence or lifecycle cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bmust\b",
+            r"\brequired\b",
+            r"\brequires\b",
+            r"\bshould receive\b",
+            r"\bshould define\b",
+            r"\bshould include\b",
+            r"\bneeds?\b",
+            r"\bcalls for\b",
+            r"\bacceptance criteria\b",
+        ],
+    )
+    if cue:
+        return "requirement", [cue], "Explicit requirement cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bcan execute\b",
+            r"\bcan\b",
+            r"\bcapable\b",
+            r"\bsupports?\b",
+            r"\bmay\b",
+        ],
+    )
+    if cue:
+        return "capability", [cue], "Explicit capability cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bconsists of\b",
+            r"\bincludes these components\b",
+            r"\bcomponents?\b",
+            r"\bparts?\b",
+            r"\blayers?\b",
+            r"\belements?\b",
+            r"\bseparates?\b",
+        ],
+    )
+    if cue:
+        return "component", [cue], "Explicit component or structure cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bfor example\b",
+            r"\bexamples include\b",
+            r"\bsuch as\b",
+        ],
+    )
+    if cue:
+        return "example", [cue], "Explicit example cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bowns?\b",
+            r"\bcontrols?\b",
+            r"\bperforms?\b",
+            r"\bverifies?\b",
+            r"\bdecides?\b",
+            r"\bis responsible for\b",
+            r"\bdecomposes?\b",
+            r"\bmanages?\b",
+        ],
+    )
+    if cue:
+        return "role", [cue], "Explicit action, function, or ownership cue."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\baccounts for\b",
+            r"\badopts?\b",
+            r"\bbound to\b",
+            r"\brelated to\b",
+            r"\breplaces\b",
+            r"\bmaps? to\b",
+        ],
+    )
+    if cue:
+        return "relationship", [cue], "Explicit relation between named concepts."
+
+    cue = first_matching_cue(
+        text,
+        [
+            r"\bis defined as\b",
+            r"\bmeans\b",
+            r"\brefers to\b",
+            r"\brepresents\b",
+            r"\bis the\b",
+            r"\bis a\b",
+            r"\bare\b",
+            r"\bdefines\b",
+        ],
+    )
+    if cue:
+        return "definition", [cue], "Explicit identity, meaning, or category cue."
+
+    if re.search(r"(^|\n)\s*[-*]\s+", snippet) or snippet.count(";") >= 3:
+        return "enumeration", ["bounded list"], "Explicit bounded list structure."
+
+    return "factual", ["exact factual snippet"], "Direct factual source assertion."
+
+
+def authority_id_for(
+    *,
+    source_identity: str,
+    section_id: str,
+    exact_support_snippet: str,
+    relation_kind: str,
+    subject: str,
+    object_or_complement: str,
+) -> str:
+    payload = "\0".join(
+        [
+            source_identity,
+            section_id,
+            exact_support_snippet,
+            relation_kind,
+            subject,
+            object_or_complement,
+        ]
+    )
+    return "rel_auth_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
+
+
+def register_relation_authority(
+    *,
+    support: dict[str, Any],
+    relation_kind: str,
+    subject: str,
+    predicate: str,
+    object_or_complement: str,
+    cue_spans: list[str],
+    certificate_mode: str,
+    authority_note: str,
+    manual_hostile_review_required: bool = False,
+    positive_family_eligibility: list[str] | None = None,
+) -> str:
+    exact_support_snippet = str(support.get("exact_support_snippet", ""))
+    matched_cues = [cue for cue in cue_spans if cue and cue in exact_support_snippet]
+    if not matched_cues and exact_support_snippet:
+        matched_cues = [exact_support_snippet.strip()[:120]]
+    authority_id = authority_id_for(
+        source_identity=str(support.get("source_identity", "")),
+        section_id=str(support.get("section_id", "")),
+        exact_support_snippet=exact_support_snippet,
+        relation_kind=relation_kind,
+        subject=subject,
+        object_or_complement=object_or_complement,
+    )
+    RELATION_AUTHORITY_REGISTRY[authority_id] = {
+        "authority_id": authority_id,
+        "source_identity": str(support.get("source_identity", "")),
+        "section_id": str(support.get("section_id", "")),
+        "locator": str(support.get("locator", "")),
+        "exact_support_snippet": exact_support_snippet,
+        "relation_kind": relation_kind,
+        "subject": subject,
+        "predicate": predicate,
+        "object_or_complement": object_or_complement,
+        "cue_spans": matched_cues,
+        "certificate_mode": certificate_mode,
+        "positive_family_eligibility": positive_family_eligibility
+        if positive_family_eligibility is not None
+        else POSITIVE_FAMILY_ELIGIBILITY.get(relation_kind, []),
+        "negative_upgrade_families": [],
+        "authority_note": authority_note,
+        "manual_hostile_review_required": manual_hostile_review_required,
+    }
+    return authority_id
+
+
+def structural_relation_from_support(
+    support: dict[str, Any],
+    proposition_text: str,
+) -> tuple[str, str, str, str, list[str], str]:
+    if support.get("graph_certificate"):
+        graph_certificate = support["graph_certificate"]
+        return (
+            "graph",
+            str(graph_certificate.get("source_node_id", support_subject(support))),
+            "graph",
+            str(graph_certificate.get("target_node_id", proposition_text)),
+            [str(graph_certificate.get("edge_id", support.get("exact_support_snippet", "")))],
+            "Structured graph edge authority.",
+        )
+    if support.get("provenance_certificate"):
+        provenance_certificate = support["provenance_certificate"]
+        return (
+            "provenance",
+            str(provenance_certificate.get("record_id", support_subject(support))),
+            "provenance",
+            proposition_text,
+            [str(provenance_certificate.get("record_id", support.get("exact_support_snippet", "")))],
+            "Structured provenance record authority.",
+        )
+    return (
+        "temporal",
+        support_subject(support),
+        "temporal",
+        proposition_text,
+        ["observed_temporal_record_count"],
+        "Structured temporal insufficiency authority.",
+    )
+
+
+def sentinel_positive_eligibility(proposition_text: str, support: dict[str, Any]) -> list[str]:
+    text = f"{support.get('source_identity', '')} {proposition_text}".lower()
+    if "product manager" in text or "pm-" in text:
+        return [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ]
+    if "skill | what method should the agent follow" in text:
+        return [
+            "simple_definition",
+            "contextual_definition",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ]
+    if "research should help" in text:
+        return ["relationship", "role_responsibility", "narrow_factual"]
+    return ["narrow_factual"]
 
 
 def build_relation_certificate(
@@ -417,9 +861,40 @@ def build_relation_certificate(
     supports: list[dict[str, Any]],
     certificate_mode: str,
 ) -> dict[str, Any]:
-    relation_kind = relation_kind_for(family, behavior)
-    subject = support_subject(supports[0]) if supports else "the topic"
+    support = supports[0] if supports else {}
+    subject = support_subject(support) if support else "the topic"
     object_or_complement = proposition_text.strip()
+    cue_spans: list[str] = []
+    authority_note = "No source support was available."
+    if certificate_mode == "structural":
+        relation_kind, subject, predicate, object_or_complement, cue_spans, authority_note = (
+            structural_relation_from_support(support, proposition_text)
+        )
+    elif certificate_mode == "sentinel":
+        relation_kind, cue_spans, authority_note = explicit_relation_cue(
+            str(support.get("exact_support_snippet", "")),
+            proposition_text,
+        )
+        if "Skill | What method should the agent follow" in proposition_text:
+            relation_kind = "requirement"
+            cue_spans = ["should"]
+            authority_note = "Manual sentinel authority from the Skill table row."
+        elif "Research should help you recover" in proposition_text:
+            relation_kind = "relationship"
+            cue_spans = ["Research should help"]
+            authority_note = "Manual sentinel authority for user-research role in PM workflow."
+        elif "Product Manager" in proposition_text:
+            relation_kind = "requirement"
+            cue_spans = ["need"]
+            authority_note = "Manual sentinel authority for PM skill requirement evidence."
+        predicate = relation_kind
+    else:
+        relation_kind, cue_spans, authority_note = explicit_relation_cue(
+            "\n\n".join(str(item.get("exact_support_snippet", "")) for item in supports),
+            proposition_text,
+        )
+        predicate = relation_kind
+
     if relation_kind == "relationship":
         quoted = re.findall(r"`([^`]+)`", proposition_text)
         if "Source PR #19 review item" in proposition_text:
@@ -436,15 +911,48 @@ def build_relation_certificate(
         graph_certificate = graph_support.get("graph_certificate", {})
         subject = str(graph_certificate.get("source_node_id", subject))
         object_or_complement = str(graph_certificate.get("target_node_id", object_or_complement))
+    positive_family_eligibility = (
+        sentinel_positive_eligibility(proposition_text, support)
+        if certificate_mode == "sentinel"
+        else POSITIVE_FAMILY_ELIGIBILITY.get(relation_kind, [])
+    )
+    authority_ids = []
+    for item in supports:
+        authority_ids.append(
+            register_relation_authority(
+                support=item,
+                relation_kind=relation_kind,
+                subject=subject,
+                predicate=predicate,
+                object_or_complement=object_or_complement,
+                cue_spans=cue_spans,
+                certificate_mode=certificate_mode,
+                authority_note=authority_note,
+                manual_hostile_review_required=relation_kind
+                in {
+                    "effect",
+                    "causal",
+                    "tradeoff",
+                    "requirement",
+                    "capability",
+                    "relationship",
+                    "comparison_dimension",
+                    "conflict",
+                    "temporal",
+                    "provenance",
+                    "graph",
+                },
+                positive_family_eligibility=positive_family_eligibility,
+            )
+        )
     return {
         "relation_kind": relation_kind,
         "subject": subject,
-        "predicate": relation_kind,
+        "predicate": predicate,
         "object_or_complement": object_or_complement,
         "source_support_ids": [support["support_id"] for support in supports],
-        "positive_family_eligibility": []
-        if behavior == "abstain"
-        else POSITIVE_FAMILY_ELIGIBILITY.get(relation_kind, [family]),
+        "source_relation_authority_ids": authority_ids,
+        "positive_family_eligibility": positive_family_eligibility,
         "negative_family_eligibility": [family] if behavior == "abstain" else [],
         "certificate_mode": certificate_mode,
     }
@@ -504,6 +1012,142 @@ def natural_question_for(
     return f"What does {subject} say?"
 
 
+def requested_relation_for_family(family: str) -> str:
+    return REQUESTED_RELATION_FOR_NEGATIVE_FAMILY.get(family, family)
+
+
+def convert_to_negative_relation_control(record: dict[str, Any], reason: str) -> None:
+    family = record["family"]
+    requested_relation = requested_relation_for_family(family)
+    record["expected_behavior"] = "abstain"
+    record["expected_behavior_set"] = ["abstain"]
+    record["expected_terminal_set"] = ["safe_abstention", "owner_only_safe_abstention"]
+    record["minimum_material_claims"] = 0
+    record["negative_control_of"] = record.get("negative_control_of") or f"unsupported-{requested_relation}"
+    record["requested_unsupported_relation_kind"] = requested_relation
+    record["supported_relation_authority_ids"] = [
+        authority_id
+        for prop in record.get("required_propositions", [])
+        for authority_id in prop.get("relation_certificate", {}).get(
+            "source_relation_authority_ids", []
+        )
+    ]
+    record["forbidden_inferences"] = [
+        {
+            "inference_id": f"{record['case_id']}-R5F01",
+            "forbidden_text_or_relation": requested_relation,
+            "reason": reason,
+        }
+    ]
+    for prop in record["required_propositions"]:
+        prop["gold_mode"] = GOLD_MODE_CONTEXT_ONLY
+        prop["relation_type"] = "context_only"
+        prop["entailment_note"] = (
+            "The source supports only the certified weaker relation; it does not "
+            f"support the requested {requested_relation} relation."
+        )
+
+
+def comparison_authority_id(
+    left_authority_id: str,
+    right_authority_id: str,
+    dimension: str,
+) -> str:
+    payload = f"{left_authority_id}\0{right_authority_id}\0{dimension}"
+    return "cmp_auth_" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
+
+
+def register_comparison_authority(
+    *,
+    left_authority_id: str,
+    right_authority_id: str,
+    left_subject: str,
+    right_subject: str,
+    dimension: str,
+    left_value_proposition: str,
+    right_value_proposition: str,
+    comparison_statement: str,
+    manual_entailment_note: str,
+) -> str:
+    authority_id = comparison_authority_id(left_authority_id, right_authority_id, dimension)
+    COMPARISON_AUTHORITY_REGISTRY[authority_id] = {
+        "comparison_authority_id": authority_id,
+        "left_authority_id": left_authority_id,
+        "right_authority_id": right_authority_id,
+        "left_subject": left_subject,
+        "right_subject": right_subject,
+        "dimension": dimension,
+        "left_value_proposition": left_value_proposition,
+        "right_value_proposition": right_value_proposition,
+        "comparison_statement": comparison_statement,
+        "manual_entailment_note": manual_entailment_note,
+    }
+    return authority_id
+
+
+def try_apply_curated_comparison(record: dict[str, Any]) -> bool:
+    if len(record["required_propositions"]) != 1 or len(record["gold_support"]) < 2:
+        return False
+    supports = record["gold_support"]
+    combined = "\n".join(support["exact_support_snippet"] for support in supports).lower()
+    if not (
+        "completion is a state transition owned" in combined
+        and "system of record that owns authoritative run identity" in combined
+    ):
+        return False
+    prop = record["required_propositions"][0]
+    cert = prop["relation_certificate"]
+    source_authority_ids = cert.get("source_relation_authority_ids", [])
+    if len(source_authority_ids) < 2:
+        return False
+    left_subject = "completion authority"
+    right_subject = "canonical run authority"
+    dimension = "what authority each source says owns"
+    comparison_statement = (
+        "Completion authority owns the completion state transition; canonical run "
+        "authority owns authoritative run identity, state, transitions, evidence "
+        "pointers, approvals, and terminal status."
+    )
+    comparison_id = register_comparison_authority(
+        left_authority_id=source_authority_ids[0],
+        right_authority_id=source_authority_ids[1],
+        left_subject=left_subject,
+        right_subject=right_subject,
+        dimension=dimension,
+        left_value_proposition=supports[0]["exact_support_snippet"],
+        right_value_proposition=supports[1]["exact_support_snippet"],
+        comparison_statement=comparison_statement,
+        manual_entailment_note=(
+            "Both sides explicitly state ownership; the comparison dimension is "
+            "therefore shared and source-defined."
+        ),
+    )
+    comparison_certificate = {
+        "comparison_authority_id": comparison_id,
+        "left_subject": left_subject,
+        "right_subject": right_subject,
+        "dimension": dimension,
+        "left_prop_ids": [prop["proposition_id"]],
+        "right_prop_ids": [prop["proposition_id"]],
+    }
+    record["comparison_certificate"] = comparison_certificate
+    prop["comparison_certificate"] = comparison_certificate
+    prop["relation_certificate"] = {
+        **cert,
+        "relation_kind": "comparison_dimension",
+        "predicate": "comparison_dimension",
+        "subject": left_subject,
+        "object_or_complement": right_subject,
+        "positive_family_eligibility": ["comparison"],
+        "comparison_authority_id": comparison_id,
+    }
+    record["question"] = (
+        "How do completion authority and canonical run authority differ in what "
+        "authority each source says owns?"
+    )
+    return True
+
+
 def refresh_relation_certificate(
     record: dict[str, Any],
     *,
@@ -538,24 +1182,11 @@ def enrich_record_relation_metadata(record: dict[str, Any]) -> None:
         record["unanswered_dimensions_expected"] = ["unsupported_requested_dimension"]
     refresh_relation_certificate(record)
     if record["family"] == "comparison" and record["expected_behavior"] in {"answer", "partial"}:
-        supports = record["gold_support"]
-        left = support_subject(supports[0]) if supports else "left side"
-        right = support_subject(supports[1]) if len(supports) > 1 else "right side"
-        certificate = {
-            "left_subject": left,
-            "right_subject": right,
-            "dimension": "the stated claim",
-            "left_prop_ids": [record["required_propositions"][0]["proposition_id"]],
-            "right_prop_ids": [record["required_propositions"][0]["proposition_id"]],
-        }
-        record["comparison_certificate"] = certificate
-        record["required_propositions"][0]["comparison_certificate"] = certificate
-        record["required_propositions"][0]["relation_certificate"][
-            "relation_kind"
-        ] = "comparison_dimension"
-        record["required_propositions"][0]["relation_certificate"][
-            "positive_family_eligibility"
-        ] = ["comparison"]
+        if not try_apply_curated_comparison(record):
+            convert_to_negative_relation_control(
+                record,
+                "No curated two-sided comparison authority with a shared source-defined dimension.",
+            )
     if record["family"] == "multi_part" and record["expected_behavior"] in {"answer", "partial"}:
         record["multipart_clause_certificate"] = {
             "supported_prop_ids": [
@@ -576,6 +1207,20 @@ def enrich_record_relation_metadata(record: dict[str, Any]) -> None:
                 for ref in proposition.get("support_refs", [])
             ],
         }
+    if (
+        record["expected_behavior"] in {"answer", "partial"}
+        and record["family"] in HIGH_RISK_POSITIVE_FAMILIES
+    ):
+        eligibility = {
+            family
+            for prop in record["required_propositions"]
+            for family in prop["relation_certificate"].get("positive_family_eligibility", [])
+        }
+        if record["family"] not in eligibility:
+            convert_to_negative_relation_control(
+                record,
+                "Source-first relation authority does not certify the requested positive family.",
+            )
     if record["expected_behavior"] in {"answer", "partial"}:
         record["question"] = natural_question_for(
             family=record["family"],
@@ -1695,6 +2340,62 @@ def audit_relation_alignment(rows: list[dict[str, Any]]) -> list[list[Any]]:
     return audit_rows
 
 
+def audit_registry_source_cues() -> list[list[Any]]:
+    rows: list[list[Any]] = []
+    for authority in sorted(
+        RELATION_AUTHORITY_REGISTRY.values(),
+        key=lambda item: item["authority_id"],
+    ):
+        snippet = str(authority["exact_support_snippet"])
+        cue_spans = list(authority.get("cue_spans", []))
+        byte_match = bool(cue_spans) and all(str(cue) in snippet for cue in cue_spans)
+        pass_fail = "PASS" if byte_match else "FAIL"
+        rows.append(
+            [
+                authority["authority_id"],
+                authority["source_identity"],
+                authority["section_id"],
+                authority["relation_kind"],
+                "|".join(str(cue) for cue in cue_spans),
+                byte_match,
+                pass_fail,
+                "ok" if pass_fail == "PASS" else "cue_span_not_in_exact_support_snippet",
+            ]
+        )
+    return rows
+
+
+def audit_sentinel_relations(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    audit_rows: list[list[Any]] = []
+    for row in rows:
+        if row["pool"] != "sentinel":
+            continue
+        certificates = [
+            prop["relation_certificate"] for prop in row["required_propositions"]
+        ]
+        audit_rows.append(
+            [
+                row["case_id"],
+                row["question"],
+                "|".join(prop["proposition_id"] for prop in row["required_propositions"]),
+                "|".join(cert["relation_kind"] for cert in certificates),
+                "|".join(
+                    authority_id
+                    for cert in certificates
+                    for authority_id in cert.get("source_relation_authority_ids", [])
+                ),
+                "PASS",
+                "Sentinel question preserved with bounded manual source authority.",
+            ]
+        )
+    return audit_rows
+
+
+def write_registry_jsonl(path: Path, rows: dict[str, dict[str, Any]], key: str) -> None:
+    ordered = sorted(rows.values(), key=lambda item: str(item[key]))
+    write_jsonl(path, ordered)
+
+
 def source_census(rows: list[dict[str, Any]]) -> dict[str, Any]:
     source_identities = set()
     source_files = set()
@@ -1809,11 +2510,23 @@ def build_holdout_matrix(rows: list[dict[str, Any]], runtime_candidate_sha: str,
 
 
 def main() -> None:
+    RELATION_AUTHORITY_REGISTRY.clear()
+    COMPARISON_AUTHORITY_REGISTRY.clear()
     records, _, _ = build_primary_holdout_bank()
     primary, holdout, sentinels = group_by_pool(records)
     bank_sha = canonical_bank_sha(primary, holdout, sentinels)
 
     ROOT.mkdir(parents=True, exist_ok=True)
+    write_registry_jsonl(
+        RELATION_AUTHORITY_REGISTRY_PATH,
+        RELATION_AUTHORITY_REGISTRY,
+        "authority_id",
+    )
+    write_registry_jsonl(
+        COMPARISON_AUTHORITY_REGISTRY_PATH,
+        COMPARISON_AUTHORITY_REGISTRY,
+        "comparison_authority_id",
+    )
     write_jsonl(ROOT / "broad_bank.primary.jsonl", primary)
     write_jsonl(ROOT / "broad_bank.holdout.jsonl", holdout)
     write_jsonl(ROOT / "broad_bank.sentinels.jsonl", sentinels)
@@ -1910,6 +2623,33 @@ def main() -> None:
             "reason",
         ],
         audit_relation_alignment(rows),
+    )
+    write_csv(
+        ROOT / "REGISTRY_SOURCE_CUE_AUDIT.csv",
+        [
+            "authority_id",
+            "source_identity",
+            "section_id",
+            "relation_kind",
+            "cue_spans",
+            "extractive_cue_byte_match",
+            "PASS_FAIL",
+            "reason",
+        ],
+        audit_registry_source_cues(),
+    )
+    write_csv(
+        ROOT / "SENTINEL_RELATION_AUDIT.csv",
+        [
+            "case_id",
+            "question",
+            "prop_id",
+            "relation_kind",
+            "authority_ids",
+            "PASS_FAIL",
+            "reason",
+        ],
+        audit_sentinel_relations(rows),
     )
 
     primary_matrix = build_matrix(rows=rows, runtime_candidate_sha=RUNTIME_CANDIDATE_SHA, bank_sha=bank_sha, limit=48, sentinel_rows=sentinels)
