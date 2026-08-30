@@ -416,6 +416,8 @@ def test_provider_projection_preserves_agent_architecture_and_user_research_cont
         "research-method",
     )
 
+    assert legacy._contextual_definition_query_parts(q2) is not None
+    assert legacy._contextual_definition_query_parts(q3) is None
     assert closure_runtime._provider_evidence_order([q2_item], [], q2)[0] == q2_item
     assert "agent architecture" in closure_runtime._provider_snippet(q2_item, q2, [])
     assert closure_runtime._provider_evidence_order([q3_item], [], q3)[0] == q3_item

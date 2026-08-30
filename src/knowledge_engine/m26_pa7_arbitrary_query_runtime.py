@@ -310,6 +310,77 @@ DEFINITION_NON_NOUN_TERMS = {
     "responsible",
     "similar",
 }
+
+DEFINITION_QUERY_FALSE_PREFIXES = (
+    r"^(?:the\s+)?role\s+of\b",
+    r"^(?:the\s+)?impact\s+of\b",
+    r"^(?:the\s+)?effect\s+of\b",
+    r"^(?:the\s+)?difference\s+between\b",
+    r"^(?:the\s+)?relationship\s+between\b",
+    r"^(?:the\s+)?best\s+way\s+to\b",
+    r"^(?:the\s+)?purpose\s+of\b",
+    r"^(?:the\s+)?value\s+of\b",
+    r"^(?:the\s+)?benefits?\s+of\b",
+    r"^(?:the\s+)?failure\s+modes?\s+of\b",
+    r"^(?:the\s+)?trade[- ]offs?\s+of\b",
+    r"^(?:the\s+)?used\s+for\b",
+    r"^(?:the\s+)?happening\b",
+    r"^(?:the\s+)?causing\b",
+)
+
+
+def _definition_head_pattern(head: str) -> re.Pattern[str] | None:
+    tokens = re.findall(r"[a-z0-9]+", str(head).casefold())
+    if not tokens:
+        return None
+    if len(tokens) == 1:
+        token = tokens[0]
+        if len(token) > 1 and not token.endswith("s"):
+            token = rf"{re.escape(token)}s?"
+        elif len(token) > 4 and token.endswith("s") and not token.endswith("ss"):
+            token = rf"{re.escape(token[:-1])}s?"
+        else:
+            token = re.escape(token)
+        return re.compile(rf"\b{token}\b", flags=re.I)
+    parts = [re.escape(token) for token in tokens[:-1]]
+    last = tokens[-1]
+    if len(last) > 1 and not last.endswith("s"):
+        parts.append(rf"{re.escape(last)}s?")
+    elif len(last) > 4 and last.endswith("s") and not last.endswith("ss"):
+        parts.append(rf"{re.escape(last[:-1])}s?")
+    else:
+        parts.append(re.escape(last))
+    return re.compile(r"\b" + r"\s+".join(parts) + r"\b", flags=re.I)
+
+
+def _definition_quote_supports_head(head: str, quote: str) -> bool:
+    pattern = _definition_head_pattern(head)
+    if pattern is None:
+        return False
+    normalized = " ".join(str(quote).casefold().split())
+    if not pattern.search(normalized):
+        return False
+    head_pattern = pattern.pattern
+    relation_patterns = (
+        rf"{head_pattern}\s*(?:is|are|was|were)\b",
+        rf"{head_pattern}\s*(?:means?|refers?\s+to|describe(?:s)?|represent(?:s)?|define(?:s)?|defined\s+as|functions?\s+as|serves?\s+as|acts?\s+as|constitutes?|comprises?|consists?\s+of|includes?)\b",
+        rf"{head_pattern}\s*[:|]\s*",
+    )
+    return any(re.search(pattern, normalized, flags=re.I) for pattern in relation_patterns)
+
+
+def _definition_claim_supports_local_relation(
+    *,
+    head: str,
+    surface_terms: set[str],
+    support_quotes: Sequence[str],
+) -> bool:
+    head_terms = _coverage_terms(head)
+    if not head_terms or not (surface_terms & head_terms):
+        return False
+    return any(_definition_quote_supports_head(head, quote) for quote in support_quotes)
+
+
 def _strip_leading_articles(text: str) -> str:
     return re.sub(r"^(?:a|an|the)\s+", "", str(text).strip(), flags=re.I)
 
@@ -333,6 +404,12 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
             continue
         body = normalized[len(prefix) :].strip(" ?.")
         if not body:
+            return None
+        if re.search(
+            "|".join(DEFINITION_QUERY_FALSE_PREFIXES),
+            body,
+            flags=re.I,
+        ):
             return None
         if (prefix.startswith("what does") or prefix.startswith("what do")) and (
             " mean " not in f" {body} "

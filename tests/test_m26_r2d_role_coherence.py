@@ -127,6 +127,12 @@ def test_generic_acronym_alias_keeps_sre_evidence_and_rejects_scattered_terms() 
 
 
 def test_direct_grounded_controls_for_ai_skill_user_research_and_short_query() -> None:
+    assert runtime._contextual_definition_query_parts(
+        "What is a skill in an AI agent architecture?"
+    ) is not None
+    assert runtime._contextual_definition_query_parts(
+        "What is the role of user research in product management?"
+    ) is None
     assert _record(
         "What is a skill in an AI agent architecture?",
         "In an agent architecture, a skill is task methodology above lower-level tools.",
