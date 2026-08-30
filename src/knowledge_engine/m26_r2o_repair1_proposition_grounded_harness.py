@@ -13,6 +13,8 @@ BANK_DIR = (
     / "evals"
     / "m26_r2o_repair1_proposition_grounded_bank"
 )
+RELATION_AUTHORITY_REGISTRY = BANK_DIR / "RELATION_AUTHORITY_REGISTRY.jsonl"
+COMPARISON_AUTHORITY_REGISTRY = BANK_DIR / "COMPARISON_AUTHORITY_REGISTRY.jsonl"
 
 BANK_SCHEMA_VERSION = "m26-r2o-proposition-grounded-bank/v1"
 AUDIT_SCHEMA_VERSION = "m26-r2o-proposition-grounded-audit/v1"
@@ -68,9 +70,38 @@ EVALUATOR_NATIVE_PHRASES = (
     "cited source",
     "cited sections",
     "supported point",
+    "the stated claim",
     "gold",
     "evidence",
+    "according to the provided snippet",
+    "restating the source",
 )
+HIGH_RISK_POSITIVE_FAMILIES = {
+    "architecture_components",
+    "impact_effect",
+    "causal_why",
+    "trade_offs",
+    "capability_skill_requirement",
+    "comparison",
+    "relationship",
+    "conflicting_evidence",
+    "temporal_version",
+    "provenance_source_trace",
+    "graph_relationship",
+}
+EXPECTED_RELATION_KINDS_BY_HIGH_RISK_FAMILY = {
+    "architecture_components": {"component", "enumeration"},
+    "impact_effect": {"effect", "causal"},
+    "causal_why": {"causal", "effect", "purpose"},
+    "trade_offs": {"tradeoff"},
+    "capability_skill_requirement": {"capability", "requirement", "definition"},
+    "comparison": {"comparison_dimension"},
+    "relationship": {"relationship"},
+    "conflicting_evidence": {"conflict"},
+    "temporal_version": {"temporal"},
+    "provenance_source_trace": {"provenance"},
+    "graph_relationship": {"graph"},
+}
 
 
 def load_bank(bank_dir: Path = BANK_DIR) -> list[dict[str, Any]]:
@@ -86,6 +117,32 @@ def load_bank(bank_dir: Path = BANK_DIR) -> list[dict[str, Any]]:
             if line
         )
     return rows
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+def load_relation_authority_registry(
+    bank_dir: Path = BANK_DIR,
+) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(row["authority_id"]): row
+        for row in _read_jsonl(bank_dir / "RELATION_AUTHORITY_REGISTRY.jsonl")
+        if row.get("authority_id")
+    }
+
+
+def load_comparison_authority_registry(
+    bank_dir: Path = BANK_DIR,
+) -> dict[str, Mapping[str, Any]]:
+    return {
+        str(row["comparison_authority_id"]): row
+        for row in _read_jsonl(bank_dir / "COMPARISON_AUTHORITY_REGISTRY.jsonl")
+        if row.get("comparison_authority_id")
+    }
 
 
 def canonical_bank_sha(bank_dir: Path = BANK_DIR) -> str:
@@ -290,12 +347,38 @@ def _natural_question_pass(case: Mapping[str, Any]) -> bool:
     return not any(phrase in question for phrase in EVALUATOR_NATIVE_PHRASES)
 
 
+def _hashlike_positive_subject(case: Mapping[str, Any]) -> bool:
+    if not _is_positive(case):
+        return False
+    if str(case.get("family")) in {"provenance_source_trace", "graph_relationship"}:
+        return False
+    return bool(
+        re.search(
+            r"(section_[0-9a-f]{8,}|dec[_ -][0-9a-f]{12,}|[0-9a-f]{24,})",
+            str(case.get("question", "")),
+            re.I,
+        )
+    )
+
+
+def _registry_authority_ids(case: Mapping[str, Any]) -> set[str]:
+    return {
+        str(authority_id)
+        for prop in case.get("required_propositions", [])
+        for authority_id in (prop.get("relation_certificate") or {}).get(
+            "source_relation_authority_ids", []
+        )
+    }
+
+
 def validate_relation_alignment(case: Mapping[str, Any]) -> list[str]:
     errors: list[str] = []
     family = str(case.get("family", ""))
     positive = _is_positive(case)
     if not _natural_question_pass(case):
         errors.append("EVALUATOR_NATIVE_POSITIVE_QUESTION")
+    if _hashlike_positive_subject(case):
+        errors.append("HASHLIKE_POSITIVE_USER_SUBJECT")
 
     relation_kinds: set[str] = set()
     positive_eligibility: set[str] = set()
@@ -327,12 +410,15 @@ def validate_relation_alignment(case: Mapping[str, Any]) -> list[str]:
         {"causal", "effect", "purpose"}
     ):
         errors.append("POSITIVE_CAUSAL_WITHOUT_CAUSAL_CERT")
+        errors.append("BOOKKEEPING_AS_CAUSAL")
     if positive and family == "trade_offs" and "tradeoff" not in relation_kinds:
         errors.append("POSITIVE_TRADEOFF_WITHOUT_TRADEOFF_CERT")
+        errors.append("DEFINITION_PAIR_AS_TRADEOFF")
     if positive and family == "impact_effect" and relation_kinds.isdisjoint(
         {"effect", "causal"}
     ):
         errors.append("POSITIVE_EFFECT_WITHOUT_EFFECT_CERT")
+        errors.append("IDENTITY_AS_EFFECT")
     if positive and family == "architecture_components" and relation_kinds.isdisjoint(
         {"component", "enumeration"}
     ):
@@ -341,6 +427,7 @@ def validate_relation_alignment(case: Mapping[str, Any]) -> list[str]:
         {"capability", "requirement", "definition"}
     ):
         errors.append("POSITIVE_CAPABILITY_WITHOUT_CAPABILITY_CERT")
+        errors.append("BOOKKEEPING_AS_REQUIREMENT")
     if positive and family == "comparison":
         comparison = case.get("comparison_certificate") or {}
         if not (
@@ -348,10 +435,34 @@ def validate_relation_alignment(case: Mapping[str, Any]) -> list[str]:
             and comparison.get("right_subject")
             and comparison.get("dimension")
             and "comparison_dimension" in relation_kinds
+            and comparison.get("comparison_authority_id")
         ):
             errors.append("POSITIVE_COMPARISON_WITHOUT_DIMENSION_CERT")
+            errors.append("UNRELATED_FACT_COMPARISON")
     if positive and family == "relationship" and "relationship" not in relation_kinds:
         errors.append("POSITIVE_RELATIONSHIP_WITHOUT_RELATION_CERT")
+        errors.append("COOCCURRENCE_AS_RELATIONSHIP")
+    if positive and family == "conflicting_evidence":
+        support_refs = {
+            ref
+            for prop in case.get("required_propositions", [])
+            for ref in prop.get("support_refs", [])
+        }
+        if "conflict" not in relation_kinds or len(support_refs) < 2:
+            errors.append("SINGLE_SOURCE_CONFLICT")
+    if positive and family == "temporal_version":
+        temporal = case.get("temporal_certificate") or {}
+        observed = int(temporal.get("observed_temporal_record_count", 0))
+        required = int(temporal.get("minimum_required_for_positive", 2))
+        if "temporal" not in relation_kinds or observed < required:
+            errors.append("SINGLE_RECORD_POSITIVE_TEMPORAL")
+    if positive and family in HIGH_RISK_POSITIVE_FAMILIES and relation_kinds.isdisjoint(
+        EXPECTED_RELATION_KINDS_BY_HIGH_RISK_FAMILY[family]
+    ):
+        errors.append("HIGH_RISK_POSITIVE_WITHOUT_EXPLICIT_AUTHORITY")
+    requested_relation = str(case.get("requested_unsupported_relation_kind", ""))
+    if requested_relation and not positive and requested_relation in relation_kinds:
+        errors.append("NEGATIVE_REQUESTED_RELATION_PRESENT")
     if positive and family == "multi_part" and not (
         (case.get("multipart_clause_certificate") or {}).get("supported_prop_ids")
     ):
@@ -511,8 +622,37 @@ def validate_case_structure(case: Mapping[str, Any]) -> list[str]:
 def validate_bank(bank_dir: Path = BANK_DIR) -> list[str]:
     rows = load_bank(bank_dir)
     errors: list[str] = []
+    relation_registry = load_relation_authority_registry(bank_dir)
+    comparison_registry = load_comparison_authority_registry(bank_dir)
+    if not relation_registry:
+        errors.append("RELATION_AUTHORITY_REGISTRY_MISSING")
+    for authority in relation_registry.values():
+        if "case_id" in authority:
+            errors.append("REGISTRY_CASE_ID_FIELD")
+        if "family" in authority:
+            errors.append("REGISTRY_FAMILY_AUTHORITY_FIELD")
+        snippet = str(authority.get("exact_support_snippet", ""))
+        cues = authority.get("cue_spans", [])
+        if not cues or not all(str(cue) in snippet for cue in cues):
+            errors.append("EXTRACTIVE_CUE_BYTE_MATCH_FAIL")
+    for comparison in comparison_registry.values():
+        if comparison.get("left_authority_id") not in relation_registry:
+            errors.append("COMPARISON_AUTHORITY_REF_MISSING")
+        if comparison.get("right_authority_id") not in relation_registry:
+            errors.append("COMPARISON_AUTHORITY_REF_MISSING")
     for row in rows:
         errors.extend(validate_case_structure(row))
+        for authority_id in _registry_authority_ids(row):
+            if authority_id not in relation_registry:
+                errors.append("RELATION_AUTHORITY_REF_MISSING")
+        if row.get("family") == "comparison" and _is_positive(row):
+            comparison_id = str(
+                (row.get("comparison_certificate") or {}).get(
+                    "comparison_authority_id", ""
+                )
+            )
+            if comparison_id not in comparison_registry:
+                errors.append("COMPARISON_AUTHORITY_REF_MISSING")
     prim = [row for row in rows if row["pool"] == "primary"]
     hold = [row for row in rows if row["pool"] == "holdout"]
     prim_pairs = {

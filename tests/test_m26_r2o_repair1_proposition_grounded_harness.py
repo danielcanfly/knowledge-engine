@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import importlib.util
 import json
 from collections import Counter
+from pathlib import Path
 
 from knowledge_engine.m26_r2o_repair1_proposition_grounded_harness import (
     BANK_DIR,
@@ -298,6 +300,138 @@ def test_relation_alignment_audit_and_natural_questions_pass() -> None:
     assert {row["PASS_FAIL"] for row in relation_audit} == {"PASS"}
 
 
+def test_repair5_source_first_registries_and_independent_audit_pass() -> None:
+    registry = [
+        json.loads(line)
+        for line in (BANK_DIR / "RELATION_AUTHORITY_REGISTRY.jsonl").read_text().splitlines()
+        if line
+    ]
+    comparison_registry = [
+        json.loads(line)
+        for line in (BANK_DIR / "COMPARISON_AUTHORITY_REGISTRY.jsonl").read_text().splitlines()
+        if line
+    ]
+    assert registry
+    assert comparison_registry
+    assert all("case_id" not in row for row in registry)
+    assert all("family" not in row for row in registry)
+    assert all(
+        cue in row["exact_support_snippet"]
+        for row in registry
+        for cue in row["cue_spans"]
+    )
+
+    with (BANK_DIR / "REGISTRY_SOURCE_CUE_AUDIT.csv").open() as fh:
+        cue_audit = list(csv.DictReader(fh))
+    assert cue_audit
+    assert {row["PASS_FAIL"] for row in cue_audit} == {"PASS"}
+
+    with (BANK_DIR / "SENTINEL_RELATION_AUDIT.csv").open() as fh:
+        sentinel_audit = list(csv.DictReader(fh))
+    assert len(sentinel_audit) == 7
+    assert {row["PASS_FAIL"] for row in sentinel_audit} == {"PASS"}
+
+    auditor_path = Path("tools/eval_audit/m26_r2o_relation_truth_audit.py")
+    auditor_source = auditor_path.read_text()
+    assert "RELATION_KIND_BY_FAMILY" not in auditor_source
+    assert "relation_kind_for" not in auditor_source
+    assert "build_bank" not in auditor_source
+
+    spec = importlib.util.spec_from_file_location("repair5_audit", auditor_path)
+    assert spec and spec.loader
+    audit_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit_module)
+    audit_rows = audit_module.audit_rows(BANK_DIR)
+    assert audit_rows
+    assert {row["PASS_FAIL"] for row in audit_rows} == {"PASS"}
+
+
+def test_repair5_corrupted_fixtures_rejected_by_harness_and_independent_auditor() -> None:
+    auditor_path = Path("tools/eval_audit/m26_r2o_relation_truth_audit.py")
+    spec = importlib.util.spec_from_file_location("repair5_audit", auditor_path)
+    assert spec and spec.loader
+    audit_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit_module)
+    registry = audit_module.load_registry(BANK_DIR)
+    comparison_registry = audit_module.load_comparison_registry(BANK_DIR)
+    rows = load_bank()
+
+    def clone(case_id: str) -> dict[str, object]:
+        return json.loads(json.dumps(next(row for row in rows if row["case_id"] == case_id)))
+
+    fixtures: list[tuple[str, dict[str, object], str]] = []
+
+    causal = clone("R2O-PG-P037")
+    causal["expected_behavior"] = "answer"
+    causal["expected_behavior_set"] = ["answer"]
+    causal["family"] = "causal_why"
+    fixtures.append(("C1", causal, "BOOKKEEPING_AS_CAUSAL"))
+
+    tradeoff = clone("R2O-PG-P042")
+    tradeoff["expected_behavior"] = "answer"
+    tradeoff["expected_behavior_set"] = ["answer"]
+    tradeoff["family"] = "trade_offs"
+    fixtures.append(("C2", tradeoff, "DEFINITION_PAIR_AS_TRADEOFF"))
+
+    effect = clone("R2O-PG-P036")
+    effect["expected_behavior"] = "answer"
+    effect["expected_behavior_set"] = ["answer"]
+    effect["family"] = "impact_effect"
+    fixtures.append(("C3", effect, "IDENTITY_AS_EFFECT"))
+
+    requirement = clone("R2O-PG-P012")
+    requirement["expected_behavior"] = "answer"
+    requirement["expected_behavior_set"] = ["answer"]
+    requirement["family"] = "capability_skill_requirement"
+    fixtures.append(("C4", requirement, "BOOKKEEPING_AS_REQUIREMENT"))
+
+    comparison = clone("R2O-PG-H008")
+    comparison["expected_behavior"] = "answer"
+    comparison["expected_behavior_set"] = ["answer"]
+    comparison["family"] = "comparison"
+    comparison["comparison_certificate"] = {}
+    fixtures.append(("C5", comparison, "UNRELATED_FACT_COMPARISON"))
+
+    relationship = clone("R2O-PG-H003")
+    relationship["family"] = "relationship"
+    relationship["question"] = "How is Plan And Execute related to itself?"
+    fixtures.append(("C6", relationship, "COOCCURRENCE_AS_RELATIONSHIP"))
+
+    conflict = clone("R2O-PG-P052")
+    conflict["expected_behavior"] = "answer"
+    conflict["expected_behavior_set"] = ["answer"]
+    conflict["family"] = "conflicting_evidence"
+    fixtures.append(("C7", conflict, "SINGLE_SOURCE_CONFLICT"))
+
+    temporal = clone("R2O-PG-P029")
+    temporal["expected_behavior"] = "answer"
+    temporal["expected_behavior_set"] = ["answer"]
+    temporal["family"] = "temporal_version"
+    fixtures.append(("C8", temporal, "SINGLE_RECORD_POSITIVE_TEMPORAL"))
+
+    evaluator_native = clone("R2O-PG-P007")
+    evaluator_native["question"] = (
+        "How do completion authority and canonical run authority differ on the stated claim?"
+    )
+    fixtures.append(("C9", evaluator_native, "EVALUATOR_NATIVE_POSITIVE_QUESTION"))
+
+    hash_subject = clone("R2O-PG-H038")
+    hash_subject["question"] = (
+        "What does Reviewed Synthesis Dec 1f9025c488e9c83356e402ec4f859d11 say?"
+    )
+    fixtures.append(("C10", hash_subject, "HASHLIKE_POSITIVE_USER_SUBJECT"))
+
+    for _, fixture, expected_code in fixtures:
+        harness_errors = validate_case_structure(fixture)
+        independent_errors = audit_module.case_errors(
+            fixture,
+            registry,
+            comparison_registry,
+        )
+        assert expected_code in harness_errors
+        assert expected_code in independent_errors
+
+
 def test_harness_rejects_repair3_relation_corruption_fixtures() -> None:
     rows = load_bank()
 
@@ -317,9 +451,11 @@ def test_harness_rejects_repair3_relation_corruption_fixtures() -> None:
     tradeoff = next(
         row
         for row in rows
-        if row["family"] == "trade_offs" and row["expected_behavior"] == "answer"
+        if row["family"] == "trade_offs"
     )
     corrupt_tradeoff = json.loads(json.dumps(tradeoff))
+    corrupt_tradeoff["expected_behavior"] = "answer"
+    corrupt_tradeoff["expected_behavior_set"] = ["answer"]
     corrupt_tradeoff["required_propositions"][0]["relation_certificate"][
         "relation_kind"
     ] = "definition"
@@ -331,6 +467,8 @@ def test_harness_rejects_repair3_relation_corruption_fixtures() -> None:
 
     capability = next(row for row in rows if row["family"] == "capability_skill_requirement")
     corrupt_capability = json.loads(json.dumps(capability))
+    corrupt_capability["expected_behavior"] = "answer"
+    corrupt_capability["expected_behavior_set"] = ["answer"]
     corrupt_capability["required_propositions"][0]["relation_certificate"][
         "relation_kind"
     ] = "factual"
@@ -361,9 +499,10 @@ def test_harness_rejects_repair3_relation_corruption_fixtures() -> None:
         row
         for row in rows
         if row["family"] == "architecture_components"
-        and row["expected_behavior"] == "answer"
     )
     corrupt_components = json.loads(json.dumps(components))
+    corrupt_components["expected_behavior"] = "answer"
+    corrupt_components["expected_behavior_set"] = ["answer"]
     corrupt_components["required_propositions"][0]["relation_certificate"][
         "relation_kind"
     ] = "definition"

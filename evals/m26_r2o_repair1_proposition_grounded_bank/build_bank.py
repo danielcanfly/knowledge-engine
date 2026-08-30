@@ -217,6 +217,279 @@ REQUESTED_RELATION_FOR_NEGATIVE_FAMILY = {
 }
 RELATION_AUTHORITY_REGISTRY: dict[str, dict[str, Any]] = {}
 COMPARISON_AUTHORITY_REGISTRY: dict[str, dict[str, Any]] = {}
+HIGH_RISK_CUE_PATTERNS = {
+    "effect": [
+        r"\benables?\b",
+        r"\bprevents?\b",
+        r"\breduces?\b",
+        r"\bincreases?\b",
+        r"\bleads to\b",
+        r"\bresults? in\b",
+        r"\bproduces?\b",
+        r"\baffects?\b",
+    ],
+    "causal": [
+        r"\bbecause\b",
+        r"\bso that\b",
+        r"\bin order to\b",
+        r"\btherefore\b",
+        r"\bfor the purpose of\b",
+        r"\bprevents\b.{0,80}\bby\b",
+        r"\benables\b.{0,80}\bby\b",
+    ],
+    "tradeoff": [
+        r"\btrade[- ]?off\b",
+        r"\bversus\b",
+        r"\bvs\.\b",
+        r"\bat the cost of\b",
+        r"\bwhile\b",
+        r"\bhowever\b",
+        r"\bbut\b",
+    ],
+    "requirement": [
+        r"\bmust\b",
+        r"\brequired\b",
+        r"\brequires\b",
+        r"\bshould\b",
+        r"\bneeds?\b",
+        r"\bcalls for\b",
+        r"\bacceptance criteria\b",
+    ],
+    "capability": [
+        r"\bcan execute\b",
+        r"\bcan\b",
+        r"\bcapable\b",
+        r"\bsupports?\b",
+    ],
+    "relationship": [
+        r"\baccounts for\b",
+        r"\badopts?\b",
+        r"\bbound to\b",
+        r"\brelated to\b",
+        r"\breplaces\b",
+        r"\bmaps? to\b",
+    ],
+    "component": [
+        r"\bconsists of\b",
+        r"\bincludes these components\b",
+        r"\bcomponents?\b",
+        r"\bparts?\b",
+        r"\blayers?\b",
+        r"\belements?\b",
+        r"\bseparates?\b",
+    ],
+}
+SENTINEL_MANUAL_AUTHORITY_SPECS = {
+    "SENTINEL-Q1-A-SUP01": {
+        "case_id": "SENTINEL-Q1-A",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-07",
+        "section_id": "section_62e85bad0c00e0029df3",
+        "locator": "Section_62E85Bad0C00E0029Df3",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM exposure-rule authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-A-SUP02": {
+        "case_id": "SENTINEL-Q1-A",
+        "source_identity": "daniel_blog_en__pm-user-research-fieldwork-01",
+        "section_id": "section_0f428df1d419b40aab43",
+        "locator": "Section_0F428Df1D419B40Aab43",
+        "relation_kind_override": "relationship",
+        "cue_spans": ["Research should help"],
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "relationship",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM user-research authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-A-SUP03": {
+        "case_id": "SENTINEL-Q1-A",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-06",
+        "section_id": "article_19e366642b6399741e71",
+        "locator": "Article_19E366642B6399741E71",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM experimentation authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-B-SUP01": {
+        "case_id": "SENTINEL-Q1-B",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-05",
+        "section_id": "section_ef280e44c12bb9559b47",
+        "locator": "Section_Ef280E44C12Bb9559B47",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM sessionisation authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-B-SUP02": {
+        "case_id": "SENTINEL-Q1-B",
+        "source_identity": "daniel_blog_en__pm-user-research-fieldwork-01",
+        "section_id": "section_0f428df1d419b40aab43",
+        "locator": "Section_0F428Df1D419B40Aab43",
+        "relation_kind_override": "relationship",
+        "cue_spans": ["Research should help"],
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM user-research authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-B-SUP03": {
+        "case_id": "SENTINEL-Q1-B",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-07",
+        "section_id": "section_62e85bad0c00e0029df3",
+        "locator": "Section_62E85Bad0C00E0029Df3",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM exposure-rule authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-B-SUP04": {
+        "case_id": "SENTINEL-Q1-B",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-06",
+        "section_id": "article_19e366642b6399741e71",
+        "locator": "Article_19E366642B6399741E71",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM experimentation authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q2-A-SUP01": {
+        "case_id": "SENTINEL-Q2-A",
+        "source_identity": "daniel_blog_en__harness-theory-part-5",
+        "section_id": "section_23030cd5331ceb4938af",
+        "locator": "Section_23030Cd5331Ceb4938Af",
+        "relation_kind_override": "requirement",
+        "cue_spans": ["should"],
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel skill-table authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q2-A-SUP02": {
+        "case_id": "SENTINEL-Q2-A",
+        "source_identity": "daniel_blog_en__the-atlas-of-agent-design-patterns-part-9",
+        "section_id": "section_77386dae3ac22a648373",
+        "locator": "Section_77386Dae3Ac22A648373",
+        "positive_family_eligibility": ["narrow_factual"],
+        "authority_note": "Exact sentinel context authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q2-A-SUP03": {
+        "case_id": "SENTINEL-Q2-A",
+        "source_identity": "daniel_blog_en__the-atlas-of-agent-design-patterns-part-8",
+        "section_id": "article_675126909c8a466dabcb",
+        "locator": "Article_675126909C8A466Dabcb",
+        "positive_family_eligibility": ["narrow_factual"],
+        "authority_note": "Exact sentinel context authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q3-CONTROL-SUP01": {
+        "case_id": "SENTINEL-Q3-CONTROL",
+        "source_identity": "daniel_blog_en__pm-user-research-fieldwork-01",
+        "section_id": "section_0f428df1d419b40aab43",
+        "locator": "Section_0F428Df1D419B40Aab43",
+        "relation_kind_override": "relationship",
+        "cue_spans": ["Research should help"],
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "relationship",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel user-research authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-C-SUP01": {
+        "case_id": "SENTINEL-Q1-C",
+        "source_identity": "daniel_blog_en__pm-user-research-fieldwork-01",
+        "section_id": "section_42aebd472af535953afb",
+        "locator": "Section_42Aebd472Af535953Afb",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM tradeoff authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-C-SUP02": {
+        "case_id": "SENTINEL-Q1-C",
+        "source_identity": "daniel_blog_en__pm-user-research-fieldwork-01",
+        "section_id": "section_0f428df1d419b40aab43",
+        "locator": "Section_0F428Df1D419B40Aab43",
+        "relation_kind_override": "relationship",
+        "cue_spans": ["Research should help"],
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM user-research authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-C-SUP03": {
+        "case_id": "SENTINEL-Q1-C",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-05",
+        "section_id": "section_ef280e44c12bb9559b47",
+        "locator": "Section_Ef280E44C12Bb9559B47",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM sessionisation authority bound to the source identity, locator, and source bytes.",
+    },
+    "SENTINEL-Q1-C-SUP04": {
+        "case_id": "SENTINEL-Q1-C",
+        "source_identity": "daniel_blog_en__pm-product-data-and-experimentation-07",
+        "section_id": "section_62e85bad0c00e0029df3",
+        "locator": "Section_62E85Bad0C00E0029Df3",
+        "positive_family_eligibility": [
+            "simple_definition",
+            "contextual_definition",
+            "role_responsibility",
+            "capability_skill_requirement",
+            "narrow_factual",
+        ],
+        "authority_note": "Exact sentinel PM exposure-rule authority bound to the source identity, locator, and source bytes.",
+    },
+}
 
 PRIMARY_ONLY_NEW = [
     ("BROAD-0001", "R2O-PG-P063"),
@@ -550,8 +823,15 @@ def first_matching_cue(text: str, patterns: list[str]) -> str:
     return ""
 
 
-def explicit_relation_cue(snippet: str, proposition_text: str) -> tuple[str, list[str], str]:
-    text = f"{snippet}\n{proposition_text}"
+def has_relation_cue(text: str, relation_kind: str) -> bool:
+    return any(
+        re.search(pattern, text, flags=re.I)
+        for pattern in HIGH_RISK_CUE_PATTERNS.get(relation_kind, [])
+    )
+
+
+def explicit_relation_cue(snippet: str) -> tuple[str, list[str], str]:
+    text = snippet
     cue = first_matching_cue(
         text,
         [
@@ -593,11 +873,9 @@ def explicit_relation_cue(snippet: str, proposition_text: str) -> tuple[str, lis
             r"\bprevents?\b",
             r"\breduces?\b",
             r"\bincreases?\b",
-            r"\bchanges?\b",
             r"\bleads to\b",
             r"\bresults? in\b",
             r"\bproduces?\b",
-            r"\bkeeps?\b",
             r"\baffects?\b",
         ],
     )
@@ -626,6 +904,7 @@ def explicit_relation_cue(snippet: str, proposition_text: str) -> tuple[str, lis
             r"\bmust\b",
             r"\brequired\b",
             r"\brequires\b",
+            r"\bshould\b",
             r"\bshould receive\b",
             r"\bshould define\b",
             r"\bshould include\b",
@@ -644,7 +923,6 @@ def explicit_relation_cue(snippet: str, proposition_text: str) -> tuple[str, lis
             r"\bcan\b",
             r"\bcapable\b",
             r"\bsupports?\b",
-            r"\bmay\b",
         ],
     )
     if cue:
@@ -766,7 +1044,7 @@ def register_relation_authority(
     exact_support_snippet = str(support.get("exact_support_snippet", ""))
     matched_cues = [cue for cue in cue_spans if cue and cue in exact_support_snippet]
     if not matched_cues and exact_support_snippet:
-        matched_cues = [exact_support_snippet.strip()[:120]]
+        matched_cues = [exact_support_snippet.strip()]
     authority_id = authority_id_for(
         source_identity=str(support.get("source_identity", "")),
         section_id=str(support.get("section_id", "")),
@@ -831,30 +1109,32 @@ def structural_relation_from_support(
     )
 
 
-def sentinel_positive_eligibility(proposition_text: str, support: dict[str, Any]) -> list[str]:
-    text = f"{support.get('source_identity', '')} {proposition_text}".lower()
-    if "product manager" in text or "pm-" in text:
-        return [
-            "simple_definition",
-            "contextual_definition",
-            "role_responsibility",
-            "capability_skill_requirement",
-            "narrow_factual",
-        ]
-    if "skill | what method should the agent follow" in text:
-        return [
-            "simple_definition",
-            "contextual_definition",
-            "capability_skill_requirement",
-            "narrow_factual",
-        ]
-    if "research should help" in text:
-        return ["relationship", "role_responsibility", "narrow_factual"]
-    return ["narrow_factual"]
+def sentinel_manual_authority_spec(
+    case_id: str,
+    support: dict[str, Any],
+) -> dict[str, Any] | None:
+    spec = SENTINEL_MANUAL_AUTHORITY_SPECS.get(str(support.get("support_id", "")))
+    if not spec or spec.get("case_id") != case_id:
+        return None
+    if (
+        str(support.get("source_identity", "")) != str(spec.get("source_identity", ""))
+        or str(support.get("section_id", "")) != str(spec.get("section_id", ""))
+        or str(support.get("locator", "")) != str(spec.get("locator", ""))
+    ):
+        return None
+    return spec
+
+
+def sentinel_positive_eligibility(case_id: str, support: dict[str, Any]) -> list[str]:
+    spec = sentinel_manual_authority_spec(case_id, support)
+    if spec is None:
+        return ["narrow_factual"]
+    return list(spec["positive_family_eligibility"])
 
 
 def build_relation_certificate(
     *,
+    case_id: str,
     family: str,
     behavior: str,
     proposition_text: str,
@@ -873,26 +1153,28 @@ def build_relation_certificate(
     elif certificate_mode == "sentinel":
         relation_kind, cue_spans, authority_note = explicit_relation_cue(
             str(support.get("exact_support_snippet", "")),
-            proposition_text,
         )
-        if "Skill | What method should the agent follow" in proposition_text:
-            relation_kind = "requirement"
-            cue_spans = ["should"]
-            authority_note = "Manual sentinel authority from the Skill table row."
-        elif "Research should help you recover" in proposition_text:
-            relation_kind = "relationship"
-            cue_spans = ["Research should help"]
-            authority_note = "Manual sentinel authority for user-research role in PM workflow."
-        elif "Product Manager" in proposition_text:
-            relation_kind = "requirement"
-            cue_spans = ["need"]
-            authority_note = "Manual sentinel authority for PM skill requirement evidence."
+        manual_spec = sentinel_manual_authority_spec(case_id, support)
+        if manual_spec is not None:
+            authority_note = str(manual_spec["authority_note"])
+            if manual_spec.get("relation_kind_override"):
+                relation_kind = str(manual_spec["relation_kind_override"])
+                cue_spans = list(manual_spec.get("cue_spans", []))
         predicate = relation_kind
     else:
         relation_kind, cue_spans, authority_note = explicit_relation_cue(
             "\n\n".join(str(item.get("exact_support_snippet", "")) for item in supports),
-            proposition_text,
         )
+        if relation_kind in HIGH_RISK_CUE_PATTERNS and any(
+            not has_relation_cue(str(item.get("exact_support_snippet", "")), relation_kind)
+            for item in supports
+        ):
+            relation_kind = "factual"
+            cue_spans = [str(support.get("exact_support_snippet", "")).strip()]
+            authority_note = (
+                "Multi-support source set did not carry the same explicit high-risk "
+                "relation cue on every support, so it is certified only as factual."
+            )
         predicate = relation_kind
 
     if relation_kind == "relationship":
@@ -912,7 +1194,7 @@ def build_relation_certificate(
         subject = str(graph_certificate.get("source_node_id", subject))
         object_or_complement = str(graph_certificate.get("target_node_id", object_or_complement))
     positive_family_eligibility = (
-        sentinel_positive_eligibility(proposition_text, support)
+        sentinel_positive_eligibility(case_id, support)
         if certificate_mode == "sentinel"
         else POSITIVE_FAMILY_ELIGIBILITY.get(relation_kind, [])
     )
@@ -1167,6 +1449,7 @@ def refresh_relation_certificate(
             if proposition.get("gold_mode") == GOLD_MODE_SENTINEL_SYNTHESIS:
                 mode = "sentinel"
         proposition["relation_certificate"] = build_relation_certificate(
+            case_id=record["case_id"],
             family=record["family"],
             behavior=behavior,
             proposition_text=proposition["proposition_text"],
@@ -1181,12 +1464,15 @@ def enrich_record_relation_metadata(record: dict[str, Any]) -> None:
     ):
         record["unanswered_dimensions_expected"] = ["unsupported_requested_dimension"]
     refresh_relation_certificate(record)
-    if record["family"] == "comparison" and record["expected_behavior"] in {"answer", "partial"}:
-        if not try_apply_curated_comparison(record):
-            convert_to_negative_relation_control(
-                record,
-                "No curated two-sided comparison authority with a shared source-defined dimension.",
-            )
+    if (
+        record["family"] == "comparison"
+        and record["expected_behavior"] in {"answer", "partial"}
+        and not try_apply_curated_comparison(record)
+    ):
+        convert_to_negative_relation_control(
+            record,
+            "No curated two-sided comparison authority with a shared source-defined dimension.",
+        )
     if record["family"] == "multi_part" and record["expected_behavior"] in {"answer", "partial"}:
         record["multipart_clause_certificate"] = {
             "supported_prop_ids": [
@@ -1319,6 +1605,7 @@ def build_sentinel_required_propositions(
                 "hostile_semantic_review_required": True,
                 "extractive_certificate": extractive_certificate([support]),
                 "relation_certificate": build_relation_certificate(
+                    case_id=case_id,
                     family="contextual_definition"
                     if case_id.startswith("SENTINEL-Q2")
                     else "role_responsibility"
@@ -1490,6 +1777,7 @@ def build_required_propositions(
             "hostile_semantic_review_required": False,
             "extractive_certificate": extractive_certificate(supports),
             "relation_certificate": build_relation_certificate(
+                case_id=case_id,
                 family=family,
                 behavior=behavior,
                 proposition_text=text,
@@ -1615,6 +1903,7 @@ def build_holdout_replacement(case_id: str, family: str, question: str, source_i
                 "hostile_semantic_review_required": False,
                 "extractive_certificate": extractive_certificate([support]),
                 "relation_certificate": build_relation_certificate(
+                    case_id=case_id,
                     family=family,
                     behavior="abstain"
                     if family == "temporal_version"
@@ -2117,6 +2406,8 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         rec["gold_support"] = [primary_support]
         rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
 
+    RELATION_AUTHORITY_REGISTRY.clear()
+    COMPARISON_AUTHORITY_REGISTRY.clear()
     for record in records:
         enrich_record_relation_metadata(record)
 
