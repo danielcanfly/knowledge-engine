@@ -1,156 +1,117 @@
 authority_id,source_identity,section_id,relation_kind,cue_spans,extractive_cue_byte_match,PASS_FAIL,reason
+rel_auth_00274bb92f50dc8f72d5,concepts/durable-thread-state.md,concepts/durable-thread-state#durable-thread-state,factual,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.",True,PASS,ok
+rel_auth_009beb019eb1e163dd9a,concepts/completion-gate.md,concepts/completion-gate#gate-behavior,requirement,should,True,PASS,ok
 rel_auth_00a10a34c9631ff4f65a,concepts/harnessability.md,concepts/harnessability#assessment,requirement,calls for,True,PASS,ok
 rel_auth_0193f7c65c933de597ba,concepts/harness-agent-loop.md,concepts/harness-agent-loop#edited-adoption,requirement,required,True,PASS,ok
 rel_auth_0560e0b7bf56a09ba0e5,concepts/harness-agent-loop.md,concepts/harness-agent-loop#source-adoption,relationship,accounts for,True,PASS,ok
 rel_auth_0647c4a25755df2d2b37,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#adaptive-planning-and-replanning,factual,Adaptive planning revises the remaining plan when execution evidence invalidates a material assumption.,True,PASS,ok
-rel_auth_07d0218c1ce3954a23d9,concepts/harnessability.md,concepts/harnessability#assessment,requirement,"A highly harnessable workflow has stable inputs, explicit authority, deterministic or inspectable effects, typed failure",True,PASS,ok
-rel_auth_0e15c0f1e70e267bb19a,provenance.json,concepts/request-boundary,component,layer,True,PASS,ok
 rel_auth_0e4d75784ada026a3b76,concepts/agent-execution-paths.md,concepts/agent-execution-paths#pipeline,temporal,A pipeline divides work into a predetermined sequence of stages.,True,PASS,ok
 rel_auth_13ca90e3303fe4451381,concepts/headless-harness-service.md,concepts/headless-harness-service#role,tradeoff,while,True,PASS,ok
 rel_auth_14d33539f282c12d7afc,daniel_blog_en__pm-user-research-fieldwork-01,section_0f428df1d419b40aab43,relationship,Research should help,True,PASS,ok
-rel_auth_182bb56caf8358623579,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#selection-sequence,effect,change,True,PASS,ok
 rel_auth_1b109e9999793eba4d70,concepts/completion-gate.md,concepts/completion-gate#source-adoption,relationship,accounts for,True,PASS,ok
 rel_auth_1d8cf35c619479996bca,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#item-turn-thread-protocol,component,separates,True,PASS,ok
 rel_auth_1e0a207d8a1165ff725a,concepts/completion-gate.md,concepts/completion-gate#completion-gate,role,decides,True,PASS,ok
-rel_auth_20a46bcfd432fa75aef4,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should include,True,PASS,ok
 rel_auth_213a326c5d19b0d5f0fc,concepts/harness-verification.md,concepts/harness-verification#edited-adoption,requirement,required,True,PASS,ok
-rel_auth_245fbf19629e0fba0290,concepts/agent-execution-paths.md,concepts/agent-execution-paths#selection-sequence,role,control,True,PASS,ok
-rel_auth_26d0965b134334fec986,graph_v2:edge_066cda73130d3f1a7cc6dde6ac4897c5,pilot/m24/canonical-release/artifacts/graph-v2.json,requirement,"""edge_id"": ""edge_066cda73130d3f1a7cc6dde6ac4897c5""",True,PASS,ok
-rel_auth_2809e09c8c91aa5bd5e5,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#selection-sequence,effect,"Use the least flexible mechanism that can reliably complete the task:
-
-1.",True,PASS,ok
-rel_auth_2b3e1649428327e15574,concepts/harness-agent-loop.md,concepts/harness-agent-loop#harness-agent-loop,capability,may,True,PASS,ok
-rel_auth_2c8e27bae4f9072d843e,concepts/durable-thread-state.md,concepts/durable-thread-state#durable-thread-state,requirement,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough",True,PASS,ok
-rel_auth_2ceaa67c7b6284974056,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should include,True,PASS,ok
+rel_auth_261736c5be0d9dd9ee72,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-validation,requirement,should,True,PASS,ok
+rel_auth_281c1acf3be7fd2e01b7,concepts/durable-thread-state.md,concepts/durable-thread-state#contents,factual,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.",True,PASS,ok
+rel_auth_2ceaa67c7b6284974056,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should,True,PASS,ok
 rel_auth_2eb0f15dc04750b572b9,concepts/durable-thread-state.md,concepts/durable-thread-state#recovery,capability,supports,True,PASS,ok
 rel_auth_2ec045f6d050dea72ce4,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#production-hybrid,factual,"A robust production architecture commonly combines the strategies:
 
 1.",True,PASS,ok
-rel_auth_30b6871c88abf21745e1,concepts/goal-drift.md,concepts/goal-drift#source-adoption,temporal,This canonical concept accounts for Source PR #19 review item `m23review_0df0b6cb698712b98425cc2b05265565` with Daniel's,True,PASS,ok
-rel_auth_312b98095551891d6a14,concepts/harness.md,concepts/harness#operational-role,factual,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible ",True,PASS,ok
+rel_auth_30b6871c88abf21745e1,concepts/goal-drift.md,concepts/goal-drift#source-adoption,temporal,This canonical concept accounts for Source PR #19 review item `m23review_0df0b6cb698712b98425cc2b05265565` with Daniel's `approve_new` decision. Source PR #19 remains a draft review surface and was not merged as-is.,True,PASS,ok
+rel_auth_312b98095551891d6a14,concepts/harness.md,concepts/harness#operational-role,factual,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible as governed state.",True,PASS,ok
+rel_auth_327a04fb9842d792e061,concepts/completion-gate.md,concepts/completion-gate#gate-behavior,factual,"The gate may accept, reject, request repair, defer for human decision, or mark the task blocked.",True,PASS,ok
 rel_auth_33676ff99f5c8e86872c,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#protocol-roles,definition,"Items carry messages, tool proposals, approvals, observations, evidence, or status updates.",True,PASS,ok
 rel_auth_345043b4a9829fda7d5a,concepts/harness-agent-loop.md,concepts/harness-agent-loop#narrowed-scope,process,lifecycle,True,PASS,ok
 rel_auth_38d33a8ed8b52c107d21,concepts/tool-call-proposal.md,concepts/tool-call-proposal#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_3c2b37023ba8a4a2099c,concepts/headless-harness-service.md,concepts/headless-harness-service#headless-harness-service,role,A headless harness service is a UI-independent execution core that exposes harness operations through a stable protocol ,True,PASS,ok
-rel_auth_41102adb345bec8ce678,provenance.json,concepts/agent-execution-paths,capability,may,True,PASS,ok
-rel_auth_41c0044e3c354327c689,concepts/goal-drift.md,concepts/goal-drift#source-adoption,capability,This canonical concept accounts for Source PR #19 review item `m23review_0df0b6cb698712b98425cc2b05265565` with Daniel's,True,PASS,ok
+rel_auth_3ad338300aa2f7cde2d9,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,factual,"A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context.",True,PASS,ok
+rel_auth_3c2b37023ba8a4a2099c,concepts/headless-harness-service.md,concepts/headless-harness-service#headless-harness-service,role,A headless harness service is a UI-independent execution core that exposes harness operations through a stable protocol rather than tying them to one chat client or browser surface.,True,PASS,ok
 rel_auth_429d8688ccdafcf41edf,concepts/harness.md,concepts/harness#source-adoption,relationship,accounts for,True,PASS,ok
 rel_auth_42cfa376a52e78e349ec,concepts/task-contract.md,concepts/task-contract#source-adoption,relationship,accounts for,True,PASS,ok
 rel_auth_431b95bdfe8d72d25ded,concepts/stopping-policy.md,concepts/stopping-policy#anti-loop-role,causal,"prevents repeated observation, blind reruns, and open-ended repair loops by",True,PASS,ok
-rel_auth_4349185ed7691ff2aa85,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#step-contract,requirement,should receive,True,PASS,ok
+rel_auth_431bbcf4ccad442fbb90,concepts/harness-agent-loop.md,concepts/harness-agent-loop#harness-agent-loop,role,decides,True,PASS,ok
+rel_auth_4349185ed7691ff2aa85,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#step-contract,requirement,should,True,PASS,ok
 rel_auth_436cba306d9361b195c2,concepts/harness-verification.md,concepts/harness-verification#narrowed-scope,definition,is the,True,PASS,ok
 rel_auth_459a2af6b90f82842c54,concepts/agent-execution-paths.md,concepts/agent-execution-paths#direct,temporal,"A direct path uses one bounded operation when the information, tools, and output contract are already known.",True,PASS,ok
-rel_auth_4671fe4df76bce43f21c,concepts/agent-execution-paths.md,concepts/agent-execution-paths#human-in-the-loop,component,"Human-in-the-loop is a governed pause and resume point, not a separate reasoning method or topology.",True,PASS,ok
 rel_auth_4d0c2b152d26906e178f,concepts/harnessability.md,concepts/harnessability#narrowed-scope,capability,can,True,PASS,ok
-rel_auth_507e9c401c9f7a5f2a1d,concepts/durable-thread-state.md,concepts/durable-thread-state#durable-thread-state,requirement,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough",True,PASS,ok
 rel_auth_50c3a002a8d59fb42dd5,concepts/six-dimensional-map-of-llm-agent-architectures.md,concepts/six-dimensional-map-of-llm-agent-architectures#reviewed-synthesis-dec-1f9025c488e9c83356e402ec4f859d11,causal,because,True,PASS,ok
 rel_auth_50cba6be5a84c9e0549e,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#hierarchical-planning,role,decomposes,True,PASS,ok
-rel_auth_538486a27c58c4fc8993,concepts/steering-control-plane.md,concepts/steering-control-plane#boundary,factual,Steering is not a hidden prompt trick. It is an explicit product and governance interface for decisions that remain huma,True,PASS,ok
+rel_auth_538486a27c58c4fc8993,concepts/steering-control-plane.md,concepts/steering-control-plane#boundary,factual,Steering is not a hidden prompt trick. It is an explicit product and governance interface for decisions that remain human-owned.,True,PASS,ok
 rel_auth_5429d55dab473d9efba6,daniel_blog_en__pm-user-research-fieldwork-01,section_0f428df1d419b40aab43,relationship,Research should help,True,PASS,ok
 rel_auth_551ca067c674036f2747,concepts/headless-harness-service.md,concepts/headless-harness-service#headless-harness-service,definition,is a,True,PASS,ok
 rel_auth_5a9dee34f515524be674,concepts/request-boundary.md,concepts/request-boundary#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_5afc733d95846f86d8af,concepts/canonical-run-authority.md,concepts/canonical-run-authority#reconciliation,factual,A later operator should be able to reconstruct the run from the authoritative state and attached evidence without trusti,True,PASS,ok
-rel_auth_5d49651f70879a21632b,concepts/steering-control-plane.md,concepts/steering-control-plane#function,effect,change,True,PASS,ok
-rel_auth_5e67b0f2106ffe9d5a33,concepts/goal-drift.md,concepts/goal-drift#source-adoption,capability,This canonical concept accounts for Source PR #19 review item `m23review_0df0b6cb698712b98425cc2b05265565` with Daniel's,True,PASS,ok
-rel_auth_5e7bf07780545d45de6f,concepts/harness.md,concepts/harness#operational-role,factual,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible ",True,PASS,ok
+rel_auth_60d2d557372ceedfdd0b,concepts/harness-agent-loop.md,concepts/harness-agent-loop#control,requirement,should,True,PASS,ok
 rel_auth_655b6abc5fc96ce4cac8,concepts/request-boundary.md,concepts/request-boundary#admission-checks,effect,prevent,True,PASS,ok
 rel_auth_6753b0c39257b24a520d,concepts/steering-control-plane.md,concepts/steering-control-plane#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_6d555e5ed8da7d801cd2,concepts/goal-drift.md,concepts/goal-drift#goal-drift,effect,change,True,PASS,ok
+rel_auth_6bfbb6e01733f5f83520,concepts/durable-thread-state.md,concepts/durable-thread-state#durable-thread-state,factual,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.",True,PASS,ok
 rel_auth_6ef0035a05667b03043d,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#protocol-roles,factual,"Items carry messages, tool proposals, approvals, observations, evidence, or status updates.",True,PASS,ok
 rel_auth_7027f8130aae8cac78d6,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#bounded-react,process,next,True,PASS,ok
 rel_auth_7240766e408c1aa6dbe7,daniel_blog_en__harness-theory-part-5,section_23030cd5331ceb4938af,requirement,should,True,PASS,ok
+rel_auth_72a60d2183c1e2a513e7,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#selection-sequence,process,next,True,PASS,ok
 rel_auth_74f859618a6cee20f661,provenance.json,concepts/agent-execution-paths,provenance,dec_5e65310b419c0c66a498b255aa6e3fca,True,PASS,ok
-rel_auth_75c5dc984ed35116e72b,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#use,factual,"The separation helps a harness resume interrupted work, display progress, request authority, and preserve evidence witho",True,PASS,ok
-rel_auth_768c1742dd44ba048329,concepts/agent-execution-paths.md,concepts/agent-execution-paths#selection-sequence,process,"Use the smallest structure that satisfies the control requirements:
-
-1.",True,PASS,ok
-rel_auth_77218a4ff3d45f6dd375,concepts/harnessability.md,concepts/harnessability#harnessability,requirement,"Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution.",True,PASS,ok
-rel_auth_77c72652dae0f504c552,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#fixed-decision-logic,effect,keeps,True,PASS,ok
+rel_auth_75c5dc984ed35116e72b,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#use,factual,"The separation helps a harness resume interrupted work, display progress, request authority, and preserve evidence without collapsing every action into a single chat transcript.",True,PASS,ok
 rel_auth_77cf00c5ec945bdad057,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#selection-sequence,capability,can,True,PASS,ok
-rel_auth_78dd24513b03edf44df8,graph_v2:edge_0cc19496d16008c4250c1ddf5c91ad9d,pilot/m24/canonical-release/artifacts/graph-v2.json,component,"""edge_id"": ""edge_0cc19496d16008c4250c1ddf5c91ad9d""",True,PASS,ok
 rel_auth_792452f8521d0bac7ec8,provenance.json,concepts/goal-drift,provenance,m23review_0df0b6cb698712b98425cc2b05265565,True,PASS,ok
-rel_auth_7af77c0943a20224de40,concepts/completion-gate.md,concepts/completion-gate#gate-behavior,capability,may,True,PASS,ok
 rel_auth_7d2cd7874684e0e64a54,concepts/harnessability.md,concepts/harnessability#edited-adoption,requirement,required,True,PASS,ok
-rel_auth_81c3c08ac0f461cc4d66,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#agent-decision-and-planning-strategies,component,layers,True,PASS,ok
 rel_auth_81c4591e7d49dc071f8d,concepts/canonical-run-authority.md,concepts/canonical-run-authority#source-adoption,relationship,accounts for,True,PASS,ok
 rel_auth_81c5d78040cb79388d65,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#goals-and-policies,tradeoff,but,True,PASS,ok
 rel_auth_82075f7ace520349c9df,daniel_blog_en__pm-product-data-and-experimentation-07,section_62e85bad0c00e0029df3,causal,because,True,PASS,ok
 rel_auth_861ba241e0037869a099,concepts/tool-call-proposal.md,concepts/tool-call-proposal#edited-adoption,requirement,required,True,PASS,ok
 rel_auth_86af23f77bed82fc0917,concepts/stopping-policy.md,concepts/stopping-policy#stopping-policy,role,decides,True,PASS,ok
-rel_auth_87413b455cbf0cd8eea5,provenance.json,concepts/agent-execution-paths,capability,may,True,PASS,ok
-rel_auth_89ae46601a0725b4d989,concepts/harness-verification.md,concepts/harness-verification#harness-verification,requirement,"Harness verification is the set of harness-owned checks that decide whether an agent result, state transition, or side e",True,PASS,ok
-rel_auth_8c320cfcc3c6b81ee9cf,concepts/headless-harness-service.md,concepts/headless-harness-service#interoperability,factual,"Headless operation lets a CLI, web app, background worker, or review console share one governed execution record instead",True,PASS,ok
-rel_auth_8ee88159831615c8213a,concepts/harness-agent-loop.md,concepts/harness-agent-loop#control,factual,"The loop should expose allowed tools, per-step evidence, retry bounds, duplicate detection, escalation, and completion c",True,PASS,ok
+rel_auth_8c320cfcc3c6b81ee9cf,concepts/headless-harness-service.md,concepts/headless-harness-service#interoperability,factual,"Headless operation lets a CLI, web app, background worker, or review console share one governed execution record instead of creating disconnected task memories.",True,PASS,ok
 rel_auth_902c50c421327c604725,concepts/candidate-delivery-controls.md,concepts/candidate-delivery-controls#candidate-delivery-controls,definition,is the,True,PASS,ok
 rel_auth_90810abb827d76cf2a85,concepts/tool-call-proposal.md,concepts/tool-call-proposal#narrowed-scope,relationship,replaces,True,PASS,ok
 rel_auth_936891273354cd300feb,concepts/agent-execution-paths.md,concepts/agent-execution-paths#state-machine,definition,represents,True,PASS,ok
-rel_auth_937af557f2186d31df2e,concepts/harness-verification.md,concepts/harness-verification#outcomes,requirement,"Verification may pass, fail, request repair, require human review, or trigger governed defer.",True,PASS,ok
-rel_auth_93db9c8e5e4cdac9a51d,concepts/durable-thread-state.md,concepts/durable-thread-state#contents,requirement,should include,True,PASS,ok
 rel_auth_963b783070ef7b60ff31,concepts/agent-execution-paths.md,concepts/agent-execution-paths#controls-shared-by-every-structure,effect,produces,True,PASS,ok
-rel_auth_97fb29c3f6b8ba010e30,concepts/stopping-policy.md,concepts/stopping-policy#stop-conditions,requirement,should include,True,PASS,ok
+rel_auth_97fb29c3f6b8ba010e30,concepts/stopping-policy.md,concepts/stopping-policy#stop-conditions,requirement,should,True,PASS,ok
 rel_auth_983e7c78af32f291a135,concepts/harnessability.md,concepts/harnessability#narrowed-scope,factual,"In this Source adoption, harnessability is not a general quality word.",True,PASS,ok
-rel_auth_99eedc2aab346d6a3b7f,concepts/agent-execution-paths.md,concepts/agent-execution-paths#direct,definition,are,True,PASS,ok
+rel_auth_98c627dd956757fc4ec3,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-and-execute,process,lifecycle,True,PASS,ok
+rel_auth_993230c0e10d3867d7f4,concepts/goal-drift.md,concepts/goal-drift#control,requirement,should,True,PASS,ok
 rel_auth_9d84b174d11f4297627e,concepts/task-contract.md,concepts/task-contract#task-contract,requirement,required,True,PASS,ok
+rel_auth_9e870f701ad6f8de0907,daniel_blog_en__harness-theory-part-5,section_23030cd5331ceb4938af,causal,because,True,PASS,ok
 rel_auth_9f85e067125a3bfa4b84,concepts/six-dimensional-map-of-llm-agent-architectures.md,concepts/six-dimensional-map-of-llm-agent-architectures#approved-claims,causal,because,True,PASS,ok
 rel_auth_9ff4e695d5fe25e94698,concepts/stopping-policy.md,concepts/stopping-policy#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_a124bedba2ed2f6d209d,concepts/completion-gate.md,concepts/completion-gate#gate-behavior,capability,may,True,PASS,ok
-rel_auth_a336e0e663c7693131ae,concepts/goal-drift.md,concepts/goal-drift#signals,effect,changes,True,PASS,ok
-rel_auth_a826c2b023c90bb16750,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should include,True,PASS,ok
-rel_auth_a8b9ea1cea8d22043381,provenance.json,concepts/harness,role,control,True,PASS,ok
+rel_auth_a2ef13fbcfefbabba1d1,concepts/durable-thread-state.md,concepts/durable-thread-state#contents,factual,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.",True,PASS,ok
 rel_auth_ab04f2ca575d5513be51,concepts/source-governance.md,concepts/source-governance#knowledge-source-governance,definition,is the,True,PASS,ok
-rel_auth_ab864481ccbcb8690bb2,provenance.json,concepts/request-boundary,component,layer,True,PASS,ok
-rel_auth_ae9d06fd3499a4737313,concepts/agent-execution-paths.md,concepts/agent-execution-paths#human-in-the-loop,component,"Human-in-the-loop is a governed pause and resume point, not a separate reasoning method or topology.",True,PASS,ok
 rel_auth_b270b6504dc3c2bf0dcb,concepts/harness-verification.md,concepts/harness-verification#harness-verification,role,decide,True,PASS,ok
 rel_auth_b27efc3f8126af30db40,concepts/item-turn-thread-protocol.md,concepts/item-turn-thread-protocol#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_b4798c91f09f13557631,concepts/tool-call-proposal.md,concepts/tool-call-proposal#edited-adoption,requirement,required,True,PASS,ok
-rel_auth_b56e82a4013a47795805,concepts/goal-drift.md,concepts/goal-drift#control,factual,"Drift should be handled by re-contracting the task, recording a new decision, or stopping. It should not be hidden insid",True,PASS,ok
 rel_auth_b6c3367a16878ca7fe58,graph-v2.json,graph-v2#edge_f55a979c704bddcf552b4e9e713428db,graph,edge_f55a979c704bddcf552b4e9e713428db,True,PASS,ok
 rel_auth_b734db55815ed519ffb0,concepts/request-boundary.md,concepts/request-boundary#security-role,process,first,True,PASS,ok
-rel_auth_b816cb7202ff90ec219d,concepts/agent-execution-paths.md,concepts/agent-execution-paths#pipeline,process,sequence,True,PASS,ok
+rel_auth_b7bf0d09b57bbcf18859,concepts/goal-drift.md,concepts/goal-drift#goal-drift,factual,"Goal drift is uncontrolled movement away from the accepted task contract, authority boundary, or authorized change process.",True,PASS,ok
 rel_auth_b9accaa35f7e0fc88b71,concepts/canonical-run-authority.md,concepts/canonical-run-authority#canonical-run-authority,role,owns,True,PASS,ok
 rel_auth_bc221b6aed2b66cbbece,concepts/request-boundary.md,concepts/request-boundary#request-boundary,component,layer,True,PASS,ok
 rel_auth_bcee6eb0921a95e2dcc3,concepts/agent-execution-paths.md,concepts/agent-execution-paths#agent-execution-paths,definition,defines,True,PASS,ok
-rel_auth_bdae7bd2224db209fec4,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should include,True,PASS,ok
+rel_auth_bdae7bd2224db209fec4,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,requirement,should,True,PASS,ok
 rel_auth_be6a6ff01ac67e793d1f,daniel_blog_en__pm-product-data-and-experimentation-06,article_19e366642b6399741e71,causal,because,True,PASS,ok
-rel_auth_c1b953dd713fc70c9518,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-and-execute,effect,changes,True,PASS,ok
-rel_auth_c20a1b1c8d0e20868c2c,graph_v2:edge_0cc19496d16008c4250c1ddf5c91ad9d,pilot/m24/canonical-release/artifacts/graph-v2.json,component,"""edge_id"": ""edge_0cc19496d16008c4250c1ddf5c91ad9d""",True,PASS,ok
 rel_auth_c2b0af3df5b8ea34a5fa,daniel_blog_en__pm-product-data-and-experimentation-05,section_ef280e44c12bb9559b47,causal,so that,True,PASS,ok
 rel_auth_c3915d86babfe280e5ae,daniel_blog_en__pm-user-research-fieldwork-01,section_42aebd472af535953afb,tradeoff,but,True,PASS,ok
+rel_auth_c76ecbe22ac4e87de31e,concepts/tool-call-proposal.md,concepts/tool-call-proposal#authority,factual,"A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context.",True,PASS,ok
+rel_auth_c8b7c893b1c9a84f5373,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#fixed-decision-logic,process,next,True,PASS,ok
 rel_auth_c8d6034139f65f29a450,concepts/agent-execution-paths.md,concepts/agent-execution-paths#directed-acyclic-graph,definition,represents,True,PASS,ok
-rel_auth_cac516e2fbcb0b0dc9c8,provenance.json,concepts/harness,process,"A harness is the governed execution and control system around an LLM or agent runtime. It defines the request boundary, ",True,PASS,ok
+rel_auth_ca059f891a0d67ab105c,concepts/harness-verification.md,concepts/harness-verification#outcomes,factual,"Verification may pass, fail, request repair, require human review, or trigger governed defer.",True,PASS,ok
+rel_auth_cb39148af6fc07fdbf02,concepts/canonical-run-authority.md,concepts/canonical-run-authority#reconciliation,requirement,should,True,PASS,ok
 rel_auth_cc8fda3c488520a58718,graph-v2.json,graph-v2#edge_066cda73130d3f1a7cc6dde6ac4897c5,graph,edge_066cda73130d3f1a7cc6dde6ac4897c5,True,PASS,ok
 rel_auth_ccecb298335c7860fe7c,concepts/headless-harness-service.md,concepts/headless-harness-service#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_cdf79006a6c3321e986f,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-validation,capability,can,True,PASS,ok
-rel_auth_cff88e80133b1ae7deda,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-and-execute,effect,Plan-and-Execute creates a global task structure before carrying out individual steps.,True,PASS,ok
 rel_auth_d0abb50a9b0a56029774,concepts/harnessability.md,concepts/harnessability#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_d6904693aa90cbdb2190,concepts/goal-drift.md,concepts/goal-drift#source-adoption,capability,This canonical concept accounts for Source PR #19 review item `m23review_0df0b6cb698712b98425cc2b05265565` with Daniel's,True,PASS,ok
 rel_auth_d8dabce3c76358d42bb1,concepts/harnessability.md,concepts/harnessability#harnessability,definition,is the,True,PASS,ok
-rel_auth_d95075b00b2f46b365d8,concepts/completion-gate.md,concepts/completion-gate#gate-behavior,capability,may,True,PASS,ok
 rel_auth_d96e4c7092119db6c515,concepts/task-contract.md,concepts/task-contract#drift-control,definition,is a,True,PASS,ok
-rel_auth_ddbd504daaa71e14709e,concepts/harnessability.md,concepts/harnessability#narrowed-scope,capability,"In this Source adoption, harnessability is not a general quality word.",True,PASS,ok
-rel_auth_ddef442571454c156ead,concepts/goal-drift.md,concepts/goal-drift#control,requirement,"Drift should be handled by re-contracting the task, recording a new decision, or stopping.",True,PASS,ok
+rel_auth_db33fe79e54ae7b3ec72,concepts/canonical-run-authority.md,concepts/canonical-run-authority#state-ownership,factual,"The authority records what has been admitted, attempted, observed, accepted, deferred, failed, or cancelled.",True,PASS,ok
+rel_auth_dcc362f3a44d8c231303,concepts/harnessability.md,concepts/harnessability#harnessability,factual,"Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution.",True,PASS,ok
+rel_auth_ddb09078f93e22296a4c,concepts/goal-drift.md,concepts/goal-drift#signals,factual,"Drift appears when the run optimizes for a different outcome, adds unapproved scope, changes gates to force completion, treats diagnostics as product work, or uses later observations to rewrite the original authority.",True,PASS,ok
 rel_auth_e2c9731bf2088a35f720,concepts/task-contract.md,concepts/task-contract#contents,requirement,required,True,PASS,ok
 rel_auth_e5173237d512186325af,concepts/harness.md,concepts/harness#harness,role,control,True,PASS,ok
-rel_auth_e51cebbf252d79314fea,concepts/harnessability.md,concepts/harnessability#assessment,factual,"A highly harnessable workflow has stable inputs, explicit authority, deterministic or inspectable effects, typed failure",True,PASS,ok
+rel_auth_e51cebbf252d79314fea,concepts/harnessability.md,concepts/harnessability#assessment,factual,"A highly harnessable workflow has stable inputs, explicit authority, deterministic or inspectable effects, typed failures, replayable evidence, and clear completion gates.",True,PASS,ok
 rel_auth_e53e868212a71bad87ac,concepts/durable-thread-state.md,concepts/durable-thread-state#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_e6d62c33f8efe08f182a,concepts/agent-execution-paths.md,concepts/agent-execution-paths#router,requirement,required,True,PASS,ok
 rel_auth_e74a87a46c4590ea0476,graph-v2.json,graph-v2#edge_0cc19496d16008c4250c1ddf5c91ad9d,graph,edge_0cc19496d16008c4250c1ddf5c91ad9d,True,PASS,ok
-rel_auth_e7d91b78b5af20a3cd71,concepts/harness-agent-loop.md,concepts/harness-agent-loop#harness-agent-loop,requirement,"A harness agent loop is a governed loop in which a model may propose actions, the harness checks authority, tools execut",True,PASS,ok
 rel_auth_ea33ae015757b742067b,concepts/steering-control-plane.md,concepts/steering-control-plane#steering-control-plane,component,layer,True,PASS,ok
 rel_auth_eb2d5d7d83efc404342c,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#plan-and-execute,factual,Plan-and-Execute creates a global task structure before carrying out individual steps.,True,PASS,ok
 rel_auth_edec11f56c5717945bc4,concepts/agent-execution-paths.md,concepts/agent-execution-paths#controls-shared-by-every-structure,process,stage,True,PASS,ok
 rel_auth_ee6622690dc2ba55aaea,concepts/harness.md,concepts/harness#boundary,factual,A harness is not the model itself and is not the generated answer.,True,PASS,ok
-rel_auth_ee783682c30271febde6,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#agent-decision-and-planning-strategies,component,layers,True,PASS,ok
 rel_auth_f358d509f13e4391e7b3,concepts/tool-call-proposal.md,concepts/tool-call-proposal#tool-call-proposal,role,perform,True,PASS,ok
 rel_auth_f3754b288559bb7465f5,concepts/agent-planning-strategies.md,concepts/agent-planning-strategies#hierarchical-task-network-planning,definition,is a,True,PASS,ok
-rel_auth_f6fdaff2e0973e417e5b,concepts/harness.md,concepts/harness#operational-role,factual,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible ",True,PASS,ok
-rel_auth_f713d45444bcd0731de5,concepts/agent-execution-paths.md,concepts/agent-execution-paths#controls-shared-by-every-structure,effect,"Every execution structure should define:
-
-- trace and correlation identifiers;
-- persisted state when interruption or re",True,PASS,ok
-rel_auth_f72cc2d38fadf894567e,concepts/durable-thread-state.md,concepts/durable-thread-state#contents,requirement,should include,True,PASS,ok
+rel_auth_f6fdaff2e0973e417e5b,concepts/harness.md,concepts/harness#operational-role,factual,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible as governed state. It gives an operator a stable place to inspect and steer work without granting the agent unrestricted authority.",True,PASS,ok
 rel_auth_f79f5266cbad4923f8b9,concepts/completion-gate.md,concepts/completion-gate#authority,role,Completion is a state transition owned by the harness or by an explicitly named reviewer.,True,PASS,ok
 rel_auth_fbd15859329af8c67f2a,concepts/six-dimensional-map-of-llm-agent-architectures.md,concepts/six-dimensional-map-of-llm-agent-architectures#six-dimensional-map-of-llm-agent-architectures,causal,because,True,PASS,ok
-rel_auth_fe5ff40b7f5eabf418a4,concepts/canonical-run-authority.md,concepts/canonical-run-authority#state-ownership,effect,"The authority records what has been admitted, attempted, observed, accepted, deferred, failed, or cancelled.",True,PASS,ok
+rel_auth_fd2383f69b009b960aa7,concepts/steering-control-plane.md,concepts/steering-control-plane#function,component,separate,True,PASS,ok
 rel_auth_febfe950191a032e879f,concepts/harness-verification.md,concepts/harness-verification#source-adoption,relationship,accounts for,True,PASS,ok
-rel_auth_ff57a212da527bbd5063,provenance.json,concepts/agent-execution-paths,capability,may,True,PASS,ok
