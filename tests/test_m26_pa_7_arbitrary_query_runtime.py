@@ -558,6 +558,163 @@ def test_uncited_provider_prose_survives_when_structured_claims_verify() -> None
     assert response["unsupported_accepted_claims"] == 0
 
 
+def test_contextual_definition_query_splits_head_and_context_facets() -> None:
+    question = "What is a skill in an AI agent architecture?"
+
+    parts = runtime_module._contextual_definition_query_parts(question)
+    assert parts == {
+        "definition_head": "skill",
+        "context_modifier": "ai agent architecture",
+        "question_prefix": "what is",
+    }
+
+    facets = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )["required_facets"]
+    assert [item["facet_id"] for item in facets] == [
+        "definition_head",
+        "context_modifier",
+    ]
+
+
+def test_contextual_definition_query_accepts_source_backed_predicate() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            evidence_id="ev_skill",
+            concept_id="skill",
+        ),
+        _tesc_evidence(
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            evidence_id="ev_context",
+            concept_id="architecture",
+            source_identity="src_context",
+        ),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "A skill is a method the agent follows for a class of task in an AI agent "
+                "architecture [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "facet_ids": [
+                        "definition_head",
+                        "context_modifier",
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": support_refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="definition_positive",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["covered_facets"] == ["context_modifier", "definition_head"]
+
+
+def test_contextual_definition_query_rejects_unbacked_category_mutation_even_with_review() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            evidence_id="ev_skill",
+            concept_id="skill",
+        ),
+        _tesc_evidence(
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            evidence_id="ev_context",
+            concept_id="architecture",
+            source_identity="src_context",
+        ),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "A skill is a mechanism or module in an AI agent architecture [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "facet_ids": [
+                        "definition_head",
+                        "context_modifier",
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": support_refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="definition_negative",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+            semantic_review={
+                "schema_version": runtime_module.SEMANTIC_REVIEW_SCHEMA_VERSION,
+                "claim_judgments": [
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["ev_skill", "ev_context"],
+                    }
+                ],
+                "visible_coverage": {
+                    "verdict": "COVERED",
+                    "uncovered_assertions": [],
+                },
+            },
+        )
+
+    assert exc.value.code == "M26-PA7-ME-071"
+
+
 def test_owner_admission_blocks_retrieval_and_provider_for_public_or_non_owner() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,

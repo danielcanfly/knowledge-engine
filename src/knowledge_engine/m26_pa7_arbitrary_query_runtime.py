@@ -338,6 +338,8 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
             " mean " not in f" {body} "
         ):
             return None
+        if " used " in f" {body} ":
+            return None
         if " which " in f" {body} " or ("," in body and " mean " not in f" {body} "):
             return None
         head = body
@@ -3584,7 +3586,7 @@ def _verify_definition_claim_surface(
         raise _verification_failure(
             "M26-PA7-ME-071",
             "definition claim omits the contextual modifier",
-        )
+    )
 
 
 def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> bool:

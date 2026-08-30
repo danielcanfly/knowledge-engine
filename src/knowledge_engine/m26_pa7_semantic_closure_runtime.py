@@ -3571,71 +3571,35 @@ def _provider_evidence_order(
         "tool",
         "uses",
     }
+
+    def _item_terms(item: Mapping[str, Any]) -> set[str]:
+        return legacy._meaningful_terms(
+            " ".join(
+                str(item.get(key, ""))
+                for key in (
+                    "title",
+                    "section_title",
+                    "passage_text",
+                    "concept_id",
+                )
+            )
+        )
+
+    def _definition_priority(item: Mapping[str, Any]) -> tuple[int, int]:
+        item_terms = _item_terms(item)
+        return (
+            -int(bool(definition_head_terms and item_terms & definition_head_terms and item_terms & definition_predicate_terms)),
+            -int(bool(definition_head_terms and item_terms & definition_head_terms)),
+        )
+
     return sorted(
         evidence,
-        key=lambda item: (
-            -int(
-                bool(
-                    (
-                        definition_head_terms
-                        & legacy._meaningful_terms(
-                            " ".join(
-                                str(item.get(key, ""))
-                                for key in (
-                                    "title",
-                                    "section_title",
-                                    "passage_text",
-                                    "concept_id",
-                                )
-                            )
-                        )
-                    )
-                    and (
-                        legacy._meaningful_terms(
-                            " ".join(
-                                str(item.get(key, ""))
-                                for key in (
-                                    "title",
-                                    "section_title",
-                                    "passage_text",
-                                    "concept_id",
-                                )
-                            )
-                        )
-                        & definition_predicate_terms
-                    )
-                )
-            ),
-            -int(
-                bool(
-                    definition_head_terms
-                    & legacy._meaningful_terms(
-                        " ".join(
-                            str(item.get(key, ""))
-                            for key in (
-                                "title",
-                                "section_title",
-                                "passage_text",
-                                "concept_id",
-                            )
-                        )
-                    )
-                )
-            ),
-            -max(
-                [
-                    _requirement_evidence_score(req, item)
-                    for req in requirements
-                ]
-                or [0.0]
-            ),
-            -legacy._text_term_overlap_score(
-                qterms,
-                str(item.get("passage_text", "")),
-            ),
-            0 if item.get("evidence_type") == "graph_edge" else 1,
-            legacy._is_article_root_evidence(item),
-            str(item.get("evidence_id", "")),
+        key=lambda item: _definition_priority(item)
+        + _provider_evidence_order_key(
+            item=item,
+            requirements=requirements,
+            question=question,
+            qterms=qterms,
         ),
     )
 

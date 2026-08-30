@@ -2210,6 +2210,129 @@ def test_semantic_review_invalid_cloudflare_fallback_fails_closed_without_second
     assert telemetry["semantic_reviewer_fallback_blocked_reason"] == ""
 
 
+def test_contextual_definition_query_derives_head_and_context_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = [item.requirement_id for item in requirements]
+
+    assert {"definition_head", "context_modifier"}.issubset(ids)
+    assert ids[0] == "definition_head"
+    assert ids[1] == "context_modifier"
+
+
+def test_contextual_definition_query_prioritizes_head_definition_in_compact_projection() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+        _passage(
+            "skill",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
+            "skill-note",
+        ),
+    ]
+    payload, label_map, snippet_map = _compact_provider_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        repair=False,
+        previous_failures=[],
+    )
+    task = json.loads(payload["messages"][0]["content"])
+    first_item = task["evidence"][0]
+
+    assert "skill" in first_item["text"].casefold()
+    assert "method" in first_item["text"].casefold()
+    assert label_map[first_item["id"]]["passage_text"].casefold().startswith("skill")
+    assert snippet_map[label_map[first_item["id"]]["evidence_id"]]
+
+
+def test_contextual_definition_query_rejects_unbacked_category_mutation_even_with_review() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _passage(
+            "ev_skill",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
+            "skill-note",
+        ),
+        _passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "A skill is a mechanism or module in an AI agent architecture [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "facet_ids": [
+                        "definition_head",
+                        "context_modifier",
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": support_refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(legacy.VerifiedAnswerGateError) as exc:
+        legacy._verify_multi_evidence_provider_output(
+            trace_id="definition_negative",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+            semantic_review={
+                "schema_version": "m26-claim-entailment-review/v1",
+                "claim_judgments": [
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["ev_skill", "ev_context"],
+                    }
+                ],
+                "visible_coverage": {
+                    "verdict": "COVERED",
+                    "uncovered_assertions": [],
+                },
+            },
+        )
+
+    assert exc.value.code == "M26-PA7-ME-071"
+
+
 def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     question = "Explain router snapshots."
     evidence = [
