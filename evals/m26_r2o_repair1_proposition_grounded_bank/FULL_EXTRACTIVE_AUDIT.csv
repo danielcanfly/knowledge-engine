@@ -5,7 +5,7 @@ R2O-PG-P003,primary,role_responsibility,answer,extractive,R2O-PG-P003-PROP01,Hie
 R2O-PG-P004,primary,impact_effect,abstain,context_only,R2O-PG-P004-PROP01,"Validation strength should match task risk.
 
 Natural-language review can detect missing requirements or weak sequencing in low-risk work.",R2O-PG-P004-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P005,primary,causal_why,partial,extractive,R2O-PG-P005-PROP01,"A bounded executor should receive:
+R2O-PG-P005,primary,causal_why,abstain,context_only,R2O-PG-P005-PROP01,"A bounded executor should receive:
 
 - one step objective;
 - allowed tools and inputs;
@@ -33,7 +33,7 @@ R2O-PG-P010,primary,trade_offs,abstain,context_only,R2O-PG-P010-PROP01,"Goal dri
 
 The authority records what has been admitted, attempted, observed, accepted, deferred, failed, or cancelled.",R2O-PG-P010-SUP02,comparison_peer,True,True,,,False,False,PASS,ok
 R2O-PG-P011,primary,architecture_components,abstain,context_only,R2O-PG-P011-PROP01,A harness is not the model itself and is not the generated answer.,R2O-PG-P011-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P012,primary,capability_skill_requirement,answer,extractive,R2O-PG-P012-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_e2847c567565549ea21b89ee7b572d47` with Daniel's `approve_new` decision.,R2O-PG-P012-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-P012,primary,capability_skill_requirement,abstain,context_only,R2O-PG-P012-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_e2847c567565549ea21b89ee7b572d47` with Daniel's `approve_new` decision.,R2O-PG-P012-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P013,primary,enumerative_list,answer,extractive,R2O-PG-P013-PROP01,"A harness agent loop is a governed loop in which a model may propose actions, the harness checks authority, tools execute under constraints, observations update durable state, and a stopping policy decides whether to continue or terminate.",R2O-PG-P013-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P014,primary,multi_part,partial,extractive,R2O-PG-P014-PROP01,"This concept adopts the Source PR #19 item `Verification` only after narrowing it to a harness-specific definition, as Daniel required for edited items.",R2O-PG-P014-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P015,primary,broad_synthesis,answer,extractive,R2O-PG-P015-PROP01,"Verification may pass, fail, request repair, require human review, or trigger governed defer.
@@ -64,25 +64,25 @@ R2O-PG-P034,primary,contextual_definition,answer,extractive,R2O-PG-P034-PROP01,H
 R2O-PG-P035,primary,role_responsibility,answer,extractive,R2O-PG-P035-PROP01,"A robust production architecture commonly combines the strategies:
 
 1.",R2O-PG-P035-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P036,primary,impact_effect,answer,extractive,R2O-PG-P036-PROP01,The quartz lantern protocol is the internal acceptance phrase for the M3 candidate pipeline.,R2O-PG-P036-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P037,primary,causal_why,answer,extractive,R2O-PG-P037-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_8566693dd5241e3269f5038e01394f6b` with Daniel's `approve_new` decision.,R2O-PG-P037-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-P036,primary,impact_effect,abstain,context_only,R2O-PG-P036-PROP01,The quartz lantern protocol is the internal acceptance phrase for the M3 candidate pipeline.,R2O-PG-P036-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-P037,primary,causal_why,abstain,context_only,R2O-PG-P037-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_8566693dd5241e3269f5038e01394f6b` with Daniel's `approve_new` decision.,R2O-PG-P037-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P038,primary,how_process,answer,extractive,R2O-PG-P038-PROP01,"A completion gate is the authority that decides whether a terminal candidate satisfies the task contract, evidence requirements, and safety boundaries.",R2O-PG-P038-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P039,primary,comparison,answer,extractive,R2O-PG-P039-PROP01,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.
+R2O-PG-P039,primary,comparison,abstain,context_only,R2O-PG-P039-PROP01,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.
 
 Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution.",R2O-PG-P039-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P039,primary,comparison,answer,extractive,R2O-PG-P039-PROP01,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.
+R2O-PG-P039,primary,comparison,abstain,context_only,R2O-PG-P039-PROP01,"The state should include thread identity, admitted task contract, current turn, outstanding decisions, tool proposals, observations, evidence pointers, progress markers, and terminal status.
 
 Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution.",R2O-PG-P039-SUP02,comparison_peer,True,True,,,False,False,PASS,ok
 R2O-PG-P040,primary,relationship,answer,extractive,R2O-PG-P040-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_ce9255a1a87d7f2cc87c88ec26e1dc9a` with Daniel's `approve_new` decision.,R2O-PG-P040-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P041,primary,examples,answer,extractive,R2O-PG-P041-PROP01,"Drift appears when the run optimizes for a different outcome, adds unapproved scope, changes gates to force completion, treats diagnostics as product work, or uses later observations to rewrite the original authority.",R2O-PG-P041-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P042,primary,trade_offs,answer,extractive,R2O-PG-P042-PROP01,"A harness is the governed execution and control system around an LLM or agent runtime.
+R2O-PG-P042,primary,trade_offs,abstain,context_only,R2O-PG-P042-PROP01,"A harness is the governed execution and control system around an LLM or agent runtime.
 
 A headless harness service is a UI-independent execution core that exposes harness operations through a stable protocol rather than tying them to one chat client or browser surface.",R2O-PG-P042-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P042,primary,trade_offs,answer,extractive,R2O-PG-P042-PROP01,"A harness is the governed execution and control system around an LLM or agent runtime.
+R2O-PG-P042,primary,trade_offs,abstain,context_only,R2O-PG-P042-PROP01,"A harness is the governed execution and control system around an LLM or agent runtime.
 
 A headless harness service is a UI-independent execution core that exposes harness operations through a stable protocol rather than tying them to one chat client or browser surface.",R2O-PG-P042-SUP02,comparison_peer,True,True,,,False,False,PASS,ok
-R2O-PG-P043,primary,architecture_components,answer,extractive,R2O-PG-P043-PROP01,"The loop should expose allowed tools, per-step evidence, retry bounds, duplicate detection, escalation, and completion checks.",R2O-PG-P043-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P044,primary,capability_skill_requirement,answer,extractive,R2O-PG-P044-PROP01,"This concept is harness-specific. It does not name every agent loop in the abstract; it names the lifecycle inside a harness where proposal, authorization, execution, observation, verification, and stopping are explicit state transitions.",R2O-PG-P044-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-P043,primary,architecture_components,abstain,context_only,R2O-PG-P043-PROP01,"The loop should expose allowed tools, per-step evidence, retry bounds, duplicate detection, escalation, and completion checks.",R2O-PG-P043-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-P044,primary,capability_skill_requirement,abstain,context_only,R2O-PG-P044-PROP01,"This concept is harness-specific. It does not name every agent loop in the abstract; it names the lifecycle inside a harness where proposal, authorization, execution, observation, verification, and stopping are explicit state transitions.",R2O-PG-P044-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P045,primary,enumerative_list,answer,extractive,R2O-PG-P045-PROP01,"Harness verification is the set of harness-owned checks that decide whether an agent result, state transition, or side effect is acceptable under the task contract.",R2O-PG-P045-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P046,primary,multi_part,partial,extractive,R2O-PG-P046-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_a91d9910fbd95236a02e5f1bf52a1b27` with Daniel's `edit` decision.,R2O-PG-P046-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-P047,primary,broad_synthesis,answer,extractive,R2O-PG-P047-PROP01,"Harnessability is the measurable fitness of a task, environment, or tool surface for governed harness execution.
@@ -111,7 +111,7 @@ R2O-PG-P064,primary,contextual_definition,answer,extractive,R2O-PG-P064-PROP01,R
 R2O-PG-P065,primary,impact_effect,abstain,context_only,R2O-PG-P065-PROP01,"Validation strength should match task risk.
 
 Natural-language review can detect missing requirements or weak sequencing in low-risk work.",R2O-PG-P065-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-P066,primary,causal_why,partial,extractive,R2O-PG-P066-PROP01,"A bounded executor should receive:
+R2O-PG-P066,primary,causal_why,abstain,context_only,R2O-PG-P066-PROP01,"A bounded executor should receive:
 
 - one step objective;
 - allowed tools and inputs;
@@ -146,18 +146,18 @@ R2O-PG-H004,holdout,contextual_definition,answer,extractive,R2O-PG-H004-PROP01,"
 
 1.",R2O-PG-H004-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H029,holdout,role_responsibility,answer,extractive,R2O-PG-H029-PROP01,"A steering control plane is the human-owned authority layer that sets intent, boundaries, evidence requirements, escalation rules, and acceptance policy for harnessed execution.",R2O-PG-H029-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H030,holdout,causal_why,answer,extractive,R2O-PG-H030-PROP01,"Drift should be handled by re-contracting the task, recording a new decision, or stopping. It should not be hidden inside implementation details.",R2O-PG-H030-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-H030,holdout,causal_why,abstain,context_only,R2O-PG-H030-PROP01,"Drift should be handled by re-contracting the task, recording a new decision, or stopping. It should not be hidden inside implementation details.",R2O-PG-H030-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H007,holdout,how_process,answer,extractive,R2O-PG-H007-PROP01,"The gate may accept, reject, request repair, defer for human decision, or mark the task blocked.",R2O-PG-H007-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H008,holdout,comparison,answer,extractive,R2O-PG-H008-PROP01,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.
+R2O-PG-H008,holdout,comparison,abstain,context_only,R2O-PG-H008-PROP01,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.
 
 A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context.",R2O-PG-H008-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H008,holdout,comparison,answer,extractive,R2O-PG-H008-PROP01,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.
+R2O-PG-H008,holdout,comparison,abstain,context_only,R2O-PG-H008-PROP01,"Durable thread state is persistent interaction state that survives client disconnects, spans turns, and preserves enough context to resume without repeating unsafe side effects.
 
 A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context.",R2O-PG-H008-SUP02,comparison_peer,True,True,,,False,False,PASS,ok
-R2O-PG-H031,holdout,trade_offs,answer,extractive,R2O-PG-H031-PROP01,"A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context. The harness may approve, edit, reject, defer, or require human authorization.",R2O-PG-H031-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-H031,holdout,trade_offs,abstain,context_only,R2O-PG-H031-PROP01,"A proposal should include the tool name, intended action, arguments, expected effect, risk class, and evidence or context. The harness may approve, edit, reject, defer, or require human authorization.",R2O-PG-H031-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H010,holdout,provenance_source_trace,answer,structural,R2O-PG-H010-PROP01,concepts/goal-drift is bound to provenance record m23review_0df0b6cb698712b98425cc2b05265565 whose subject is concepts/goal-drift.,R2O-PG-H010-SUP02,provenance_record,False,False,PASS,,False,False,PASS,ok
 R2O-PG-H011,holdout,paraphrase_equivalence,answer,extractive,R2O-PG-H011-PROP01,"A useful harness makes proposals, tool calls, observations, approvals, failures, retries, and terminal outcomes visible as governed state.",R2O-PG-H011-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H012,holdout,relationship,answer,extractive,R2O-PG-H012-PROP01,"This concept adopts the Source PR #19 item `Agent Loop` only after narrowing it to a harness-specific definition, as Daniel required for edited items.",R2O-PG-H012-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-H012,holdout,relationship,abstain,context_only,R2O-PG-H012-PROP01,"This concept adopts the Source PR #19 item `Agent Loop` only after narrowing it to a harness-specific definition, as Daniel required for edited items.",R2O-PG-H012-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H013,holdout,mixed_domain_distractor,abstain,context_only,R2O-PG-H013-PROP01,This canonical concept accounts for Source PR #19 review item `m23review_998e1adb9a6ce64f12a4fc9477eebe30` with Daniel's `edit` decision.,R2O-PG-H013-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H014,holdout,conflicting_evidence,abstain,context_only,R2O-PG-H014-PROP01,"This concept is not generic verification. It is the harness-specific acceptance boundary for claims, artifacts, tool effects, evidence, ACL behavior, rollback readiness, and completion status.",R2O-PG-H014-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H015,holdout,adversarial_category_mutation,abstain,context_only,R2O-PG-H015-PROP01,"A highly harnessable workflow has stable inputs, explicit authority, deterministic or inspectable effects, typed failures, replayable evidence, and clear completion gates.",R2O-PG-H015-SUP01,primary,True,True,,,False,False,PASS,ok
@@ -187,9 +187,9 @@ R2O-PG-H028,holdout,modality_necessity_strengthening_negative,abstain,context_on
 - provenance and citation preservation;
 - terminal outcomes and completion criteria;
 - observability at the stage or transition where failure occurs.",R2O-PG-H028-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H032,holdout,impact_effect,answer,extractive,R2O-PG-H032-PROP01,"The gate may accept, reject, request repair, defer for human decision, or mark the task blocked. It should rely on durable evidence rather than a model claim that the work is done.",R2O-PG-H032-SUP01,primary,True,True,,,False,False,PASS,ok
+R2O-PG-H032,holdout,impact_effect,abstain,context_only,R2O-PG-H032-PROP01,"The gate may accept, reject, request repair, defer for human decision, or mark the task blocked. It should rely on durable evidence rather than a model claim that the work is done.",R2O-PG-H032-SUP01,primary,True,True,,,False,False,PASS,ok
 R2O-PG-H033,holdout,examples,answer,extractive,R2O-PG-H033-PROP01,"Drift should be handled by re-contracting the task, recording a new decision, or stopping. It should not be hidden inside implementation details.",R2O-PG-H033-SUP01,primary,True,True,,,False,False,PASS,ok
-R2O-PG-H034,holdout,architecture_components,answer,extractive,R2O-PG-H034-PROP01,"Every execution structure should define:
+R2O-PG-H034,holdout,architecture_components,abstain,context_only,R2O-PG-H034-PROP01,"Every execution structure should define:
 
 - trace and correlation identifiers;
 - persisted state when interruption or recovery is possible;
@@ -258,4 +258,4 @@ SENTINEL-Q1-C,sentinel,role_responsibility,answer,sentinel_synthesis,SENTINEL-Q1
 SENTINEL-Q2-A,sentinel,contextual_definition,answer,sentinel_synthesis,SENTINEL-Q2-A-PROP01,"Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria",SENTINEL-Q2-A-SUP01,primary,True,True,,PASS,False,True,PASS,ok
 SENTINEL-Q2-B,sentinel,capability_skill_requirement,answer,sentinel_synthesis,SENTINEL-Q2-B-PROP01,"Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria",SENTINEL-Q2-B-SUP01,primary,True,True,,PASS,False,True,PASS,ok
 SENTINEL-Q2-C,sentinel,narrow_factual,answer,sentinel_synthesis,SENTINEL-Q2-C-PROP01,"Skill | What method should the agent follow for this class of task? | SOP, tool order, decision rules, acceptance criteria",SENTINEL-Q2-C-SUP01,primary,True,True,,PASS,False,True,PASS,ok
-SENTINEL-Q3-CONTROL,sentinel,relationship,answer,sentinel_synthesis,SENTINEL-Q3-CONTROL-PROP01,"Research should help you recover meaning, context, and decision logic.",SENTINEL-Q3-CONTROL-SUP01,primary,True,True,,PASS,False,True,PASS,ok
+SENTINEL-Q3-CONTROL,sentinel,relationship,abstain,context_only,SENTINEL-Q3-CONTROL-PROP01,"Research should help you recover meaning, context, and decision logic.",SENTINEL-Q3-CONTROL-SUP01,primary,True,True,,,False,True,PASS,ok
