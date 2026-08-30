@@ -83,7 +83,7 @@ def test_r2o_broad_bank_schema_counts_and_families() -> None:
     assert pools["holdout"] >= 24
     assert pools["sentinel"] == 7
     assert len(ids) == len(set(ids))
-    assert REQUIRED_FAMILIES <= set(families)
+    assert set(families) >= REQUIRED_FAMILIES
     assert all(families[family] >= 2 for family in REQUIRED_FAMILIES)
 
 

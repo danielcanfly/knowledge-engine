@@ -1343,7 +1343,10 @@ def _compact_partial_claim(
         "surface_text": str(claim.get("surface_text", "")),
         "facet_ids": [
             str(item)
-            for item in legacy._list(claim.get("facet_ids", []), "partial facets")
+            for item in legacy._list(
+                claim.get("facet_ids") or claim.get("covers") or [],
+                "partial facets",
+            )
             if str(item)
         ],
         "support_mode": str(claim.get("support_mode", "exact_quote")),

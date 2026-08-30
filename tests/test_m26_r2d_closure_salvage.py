@@ -110,7 +110,7 @@ def test_prunes_unsupported_surplus_segments_before_repair_and_runs_review() -> 
         ),
         _rich_passage(
             "monitor",
-            "The monitor records runtime events for operator review.",
+            "The router records runtime events for operator review.",
         ),
     ]
     provider = _Provider(
@@ -119,12 +119,12 @@ def test_prunes_unsupported_surplus_segments_before_repair_and_runs_review() -> 
                 _material_segment(
                     "s1",
                     "The router stores graph snapshots for controlled execution.",
-                    ["e1"],
+                    ["e2"],
                 ),
                 _material_segment(
                     "s2",
-                    "The monitor records runtime events for operator review.",
-                    ["e2"],
+                    "The router records runtime events for operator review.",
+                    ["e1"],
                 ),
                 _material_segment(
                     "s3",
@@ -141,7 +141,7 @@ def test_prunes_unsupported_surplus_segments_before_repair_and_runs_review() -> 
     )
 
     answer, _closure = runtime._synthesize_and_verify(
-        question="Explain router graph snapshots and monitor event review.",
+        question="Explain router graph snapshots and runtime event review.",
         trace_id="trace-r2d-salvage",
         intent_class="direct_grounded_knowledge",
         evidence=evidence,

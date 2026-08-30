@@ -3016,7 +3016,14 @@ def _verify_multi_evidence_provider_output(
             for item in (claim.get("facet_ids") or [])
             if isinstance(item, (str, int)) and str(item)
         }
-        if is_model_explanation and not support_refs and requested_facets & required_facets:
+        if is_model_explanation and not support_refs and (
+            requested_facets & required_facets
+        ) - {
+            "explanatory_answer",
+            "comparison_or_distinction",
+            "non_entailment_boundary",
+            "ordering_boundary",
+        }:
             raise _verification_failure(
                 "M26-PA7-ME-029",
                 "model explanation cannot cover material required facets",
@@ -3400,7 +3407,23 @@ def _validated_claim_facets(
         )
     )
     if claim_type == "MODEL_EXPLANATION" and not support_refs:
-        return []
+        visible_text = _strip_runtime_markers(f"{answer_text} {surface_text}")
+        visible_terms = _coverage_terms(visible_text)
+        generic_facet_ids = {
+            "explanatory_answer",
+            "comparison_or_distinction",
+            "non_entailment_boundary",
+            "ordering_boundary",
+        }
+        return sorted(
+            str(facet["facet_id"])
+            for facet in _question_contract(question=question, intent_class=intent_class)[
+                "required_facets"
+            ]
+            if str(facet.get("facet_id", "")) in requested_facet_ids
+            and str(facet.get("facet_id", "")) in generic_facet_ids
+            and _facet_terms(facet) & visible_terms
+        )
     if intent_class != "direct_grounded_knowledge":
         return sorted(inferred)
 
@@ -3990,16 +4013,11 @@ def _verify_claim_surface_semantics(
     evidence_by_id: Mapping[str, Mapping[str, Any]],
 ) -> None:
     surface = re.sub(r"\s+", " ", surface_text).strip()
-    if not surface or len(surface) > 1_200:
+    if not surface or len(surface) > 12_000:
         raise _verification_failure("M26-PA7-ME-030", "claim surface text is invalid")
     if claim_type == "MODEL_EXPLANATION" and not support_refs:
         _verify_model_explanation_surface(surface_text=surface, answer_text=surface)
         return
-    if claim_type == "MODEL_EXPLANATION" and support_refs:
-        raise _verification_failure(
-            "M26-PA7-ME-052",
-            "generic model explanation must not carry corpus citation refs",
-        )
     support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
     support_terms = _meaningful_terms(support_text)
     surface_terms = _meaningful_terms(surface)

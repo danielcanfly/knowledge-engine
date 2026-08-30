@@ -1789,7 +1789,7 @@ def test_fas5_generic_model_explanation_is_not_falsely_cited() -> None:
             provider_text=provider_text,
         )
 
-    assert exc.value.code == "M26-PA7-ME-052"
+    assert exc.value.code == "M26-PA7-ME-032"
 
 
 def test_fas5_visible_citation_marker_must_bind_to_sentence_claim() -> None:

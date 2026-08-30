@@ -1,0 +1,8 @@
+# M26 R2O Broad Bank SHA256
+
+bank_sha256=505723210b1e47b0c3650fb3bb69f79a33944fff70af469cb6e3e0da976823bc
+primary_ids_sha256=abdb65c57745150416810766953e16d472f5580a6a2f0f2761a54afaa61288ab
+holdout_ids_sha256=f5b9fba0ee7912c6e657e9559435f0ef1c111b473e7549e7042857c03c4b0f25
+sentinel_ids_sha256=5a3e181e772d437b89c4345673a7f8899b438a9eefb9448a3f2c1ce6008bc935
+
+Candidate-head-bound live matrix seed is finalized in commit 4 after HEAD exists.

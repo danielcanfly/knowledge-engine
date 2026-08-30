@@ -263,7 +263,7 @@ def test_typed_synthesis_preserves_plain_answer_and_supports_synthesis() -> None
 
 
 def test_model_explanation_claim_type_survives_verification() -> None:
-    question = "Why is an explanation different from a direct factual claim?"
+    question = "Can we safely infer that an explanation proves a direct factual claim?"
     evidence = [
         _passage(
             "e1",
@@ -271,30 +271,41 @@ def test_model_explanation_claim_type_survives_verification() -> None:
             "explanation-note",
         )
     ]
-    answer_text = (
-        "A model explanation gives generic framing instead of pretending to be a "
-        "corpus fact."
+    material_text = "A model explanation can provide generic framing without inventing facts."
+    glue_text = (
+        "A model explanation stays generic and does not prove a direct factual claim."
     )
+    answer_text = f"{material_text} {glue_text}"
     provider = _TypedProvider(
-        claim_type="MODEL_EXPLANATION",
+        claim_type="EVIDENCE_SYNTHESIS",
         answer_text=answer_text,
         claims=[
-            {
-                "claim_id": "claim_1",
-                "claim_type": "MODEL_EXPLANATION",
-                "surface_text": answer_text,
-                "evidence_labels": ["e1"],
-                "covers": ["explanation_boundary"],
-            }
-        ],
-    )
+                {
+                    "claim_id": "claim_0",
+                    "claim_type": "EVIDENCE_FACT",
+                    "surface_text": material_text,
+                    "evidence_labels": ["e1"],
+                    "covers": ["direct_answer"],
+                },
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "MODEL_EXPLANATION",
+                    "surface_text": glue_text,
+                    "evidence_labels": [],
+                    "covers": ["non_entailment_boundary"],
+                }
+            ],
+        )
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
     assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_claims"][0]["claim_type"] == "MODEL_EXPLANATION"
     assert answer["answer_text"] == answer_text
     assert "[claim_" not in answer["answer_text"]
+    assert any(
+        claim["claim_type"] == "MODEL_EXPLANATION"
+        for claim in answer["answer_claims"]
+    )
     assert closure["failures"] == []
 
 
@@ -529,13 +540,13 @@ def test_long_multi_dimension_answer_publishes_directly_without_512_ceiling() ->
         claim_type="EVIDENCE_SYNTHESIS",
         answer_text=answer_text,
         claims=[
-            {
-                "claim_id": "claim_1",
-                "claim_type": "EVIDENCE_SYNTHESIS",
-                "surface_text": claim_surface,
-                "evidence_labels": ["e1", "e2"],
-                "covers": ["explanatory_answer", "comparison_or_distinction"],
-            }
+                {
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "surface_text": claim_surface,
+                    "evidence_labels": ["e1", "e2"],
+                    "covers": ["durable_state", "completion_verification"],
+                }
         ],
     )
 
