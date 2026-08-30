@@ -277,6 +277,11 @@ def load_provenance_map() -> dict[str, dict[str, Any]]:
     return {rec["subject"]["concept_id"]: rec for rec in obj["records"]}
 
 
+def load_graph_map() -> dict[str, dict[str, Any]]:
+    obj = load_json(GRAPH)
+    return {edge["edge_id"]: edge for edge in obj["edges"]}
+
+
 def load_r2f_payloads() -> dict[str, Any]:
     return load_json(R2F_EVIDENCE)
 
@@ -289,7 +294,39 @@ def make_support_id(case_id: str, index: int) -> str:
     return f"{case_id}-SUP{index:02d}"
 
 
-def make_forbidden(case_id: str, text: str) -> list[dict[str, str]]:
+def concept_id_from_section(section_id: str) -> str:
+    return section_id.split("#", 1)[0]
+
+
+def section_locator(section_id: str) -> str:
+    return section_id.rsplit("#", 1)[-1].replace("-", " ").title()
+
+
+def support_refs_for_required_props(supports: list[dict[str, Any]]) -> list[str]:
+    return [support["support_id"] for support in supports if support.get("support_role") != "context"]
+
+
+def make_forbidden(case_id: str, family: str, question: str, behavior: str) -> list[dict[str, str]]:
+    if case_id.startswith("SENTINEL-Q1"):
+        text = "Do not contaminate the PM skill answer with agent-architecture or venture claims."
+    elif case_id.startswith("SENTINEL-Q2"):
+        text = "Do not equate skill with a mechanism, routing step, or unsupported trade-off."
+    elif case_id.startswith("SENTINEL-Q3"):
+        text = "Do not import agent or RAG infrastructure into the user-research answer."
+    elif family == "graph_relationship":
+        text = "Do not reverse the edge direction or replace the relation type with a stronger claim."
+    elif family == "provenance_source_trace":
+        text = "Do not assign the provenance record to the wrong concept or treat context as the authority record."
+    elif family == "temporal_version":
+        text = "Do not infer chronology from a single record."
+    elif family == "mixed_domain_distractor":
+        text = "Do not turn the source passage into a finance or medical claim."
+    elif behavior == "partial":
+        text = "Do not invent the unanswered dimension from unstated evidence."
+    elif behavior == "clarify-compatible":
+        text = "Do not collapse an ambiguous request into a forced answer."
+    else:
+        text = "Do not strengthen the cited passage into an unsupported causal or universal claim."
     return [
         {
             "inference_id": f"{case_id}-F01",
@@ -297,6 +334,107 @@ def make_forbidden(case_id: str, text: str) -> list[dict[str, str]]:
             "reason": "The source does not explicitly support this inference.",
         }
     ]
+
+
+def build_optional_propositions(case_id: str, supports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    optional: list[dict[str, Any]] = []
+    context_supports = [support for support in supports if support.get("support_role") == "context"]
+    for index, support in enumerate(context_supports, start=1):
+        optional.append(
+            {
+                "proposition_id": f"{case_id}-CTX{index:02d}",
+                "proposition_text": support["exact_support_snippet"].strip(),
+                "relation_type": "context_support",
+                "support_refs": [support["support_id"]],
+                "entailment_note": "Context only; not required for the main claim.",
+            }
+        )
+    return optional
+
+
+def make_provenance_support(
+    case_id: str,
+    index: int,
+    record: dict[str, Any],
+    *,
+    support_id: str | None = None,
+) -> dict[str, Any]:
+    concept_id = str(record["subject"]["concept_id"])
+    return {
+        "support_id": support_id or make_support_id(case_id, index),
+        "source_identity": "provenance.json",
+        "section_id": concept_id,
+        "locator": str(record.get("review_decision_id") or record.get("synthesis_id") or record.get("resolution_id") or concept_id.rsplit("/", 1)[-1]),
+        "exact_support_snippet": json.dumps(record, ensure_ascii=False, sort_keys=True),
+        "support_role": "provenance_record",
+        "provenance_certificate": {
+            "record_id": str(record.get("review_decision_id") or record.get("synthesis_id") or record.get("resolution_id") or ""),
+            "subject_concept_id": concept_id,
+        },
+    }
+
+
+def make_graph_support(
+    case_id: str,
+    index: int,
+    edge: dict[str, Any],
+    *,
+    support_id: str | None = None,
+) -> dict[str, Any]:
+    certificate = {
+        "edge_id": str(edge["edge_id"]),
+        "source_node_id": str(edge["source"]),
+        "source_label_or_concept": str(edge["source"]),
+        "target_node_id": str(edge["target"]),
+        "target_label_or_concept": str(edge["target"]),
+        "relation_type": str(edge["relation_type"]),
+        "directed": bool(edge["directed"]),
+    }
+    return {
+        "support_id": support_id or make_support_id(case_id, index),
+        "source_identity": "graph-v2.json",
+        "section_id": f"graph-v2#{edge['edge_id']}",
+        "locator": str(edge["edge_id"]),
+        "exact_support_snippet": json.dumps(certificate, ensure_ascii=False, sort_keys=True),
+        "support_role": "graph_edge",
+        "graph_certificate": certificate,
+    }
+
+
+def build_certificate_bundle(
+    *,
+    primary_support: dict[str, Any],
+    provenance_support: dict[str, Any] | None = None,
+    graph_support: dict[str, Any] | None = None,
+    temporal_mode: str | None = None,
+    minimum_required_for_positive: int | None = None,
+    observed_temporal_record_count: int | None = None,
+    explicit_mapping_note: str | None = None,
+) -> dict[str, Any]:
+    bundle: dict[str, Any] = {
+        "primary_concept_id": concept_id_from_section(str(primary_support["section_id"])),
+        "primary_section_id": str(primary_support["section_id"]),
+        "primary_source_identity": str(primary_support["source_identity"]),
+    }
+    if provenance_support is not None:
+        bundle["provenance_record_id"] = provenance_support["provenance_certificate"]["record_id"]
+        bundle["provenance_subject_concept_id"] = provenance_support["provenance_certificate"]["subject_concept_id"]
+        bundle["subject_match"] = (
+            bundle["primary_concept_id"] == bundle["provenance_subject_concept_id"]
+        )
+        if explicit_mapping_note:
+            bundle["explicit_mapping_note"] = explicit_mapping_note
+    if graph_support is not None:
+        bundle["graph_edge_id"] = graph_support["graph_certificate"]["edge_id"]
+        bundle["graph_relation_type"] = graph_support["graph_certificate"]["relation_type"]
+        bundle["graph_directed"] = graph_support["graph_certificate"]["directed"]
+    if temporal_mode is not None:
+        bundle["temporal_evidence_mode"] = temporal_mode
+        if minimum_required_for_positive is not None:
+            bundle["minimum_required_for_positive"] = minimum_required_for_positive
+        if observed_temporal_record_count is not None:
+            bundle["observed_temporal_record_count"] = observed_temporal_record_count
+    return bundle
 
 
 def proposition_text_from_support(supports: list[dict[str, Any]]) -> str:
@@ -312,13 +450,18 @@ def relation_type_for_behavior(behavior: str) -> str:
     return {
         "answer": "direct_support",
         "partial": "partial_support",
-        "abstain": "forbidden_inference",
+        "abstain": "context_only",
         "clarify-compatible": "clarify_compatible",
     }[behavior]
 
 
-def build_required_propositions(case_id: str, behavior: str, supports: list[dict[str, Any]], proposition_text: str | None = None) -> list[dict[str, Any]]:
-    refs = [support["support_id"] for support in supports]
+def build_required_propositions(
+    case_id: str,
+    behavior: str,
+    supports: list[dict[str, Any]],
+    proposition_text: str | None = None,
+) -> list[dict[str, Any]]:
+    refs = support_refs_for_required_props(supports)
     return [
         {
             "proposition_id": f"{case_id}-PROP01",
@@ -328,6 +471,8 @@ def build_required_propositions(case_id: str, behavior: str, supports: list[dict
             "entailment_note": (
                 "Directly supported by the quoted source passages."
                 if behavior == "answer"
+                else "Context only; the cited source does not answer the requested unsupported bridge."
+                if behavior == "abstain"
                 else "The source supports only a bounded or negative conclusion; the answer must not overreach."
             ),
         }
@@ -362,18 +507,8 @@ def build_case_from_source(
                 "support_role": support["support_role"],
             }
         )
-    forbidden_raw = source_case.get("forbidden_inferences", [])
-    if forbidden_raw and isinstance(forbidden_raw[0], str):
-        forbidden = [
-            {
-                "inference_id": f"{case_id}-F{idx:02d}",
-                "forbidden_text_or_relation": text,
-                "reason": "The source does not explicitly support this inference.",
-            }
-            for idx, text in enumerate(forbidden_raw, start=1)
-        ]
-    else:
-        forbidden = forbidden_raw
+    direct_supports = [support for support in supports if support["support_role"] != "context"]
+    optional = build_optional_propositions(case_id, supports)
     record = {
         "case_id": case_id,
         "family": family or source_case["family"],
@@ -385,9 +520,16 @@ def build_case_from_source(
         "expected_terminal_set": expected_terminal_set or source_case["expected_terminal_set"],
         "minimum_material_claims": 0 if behavior in {"abstain", "clarify-compatible"} else 1,
         "maximum_unsupported_claims": 0,
-        "required_propositions": build_required_propositions(case_id, behavior, supports, proposition_text),
-        "optional_propositions": [],
-        "forbidden_inferences": forbidden or make_forbidden(case_id, question or source_case["question"]),
+        "required_propositions": build_required_propositions(
+            case_id, behavior, direct_supports, proposition_text
+        ),
+        "optional_propositions": optional,
+        "forbidden_inferences": make_forbidden(
+            case_id,
+            family or source_case["family"],
+            question or source_case["question"],
+            behavior,
+        ),
         "gold_support": supports,
         "unanswered_dimensions_expected": list(source_case.get("unanswered_dimensions_expected", [])),
         "distinct_source_minimum": int(source_case["distinct_source_minimum"]),
@@ -396,6 +538,9 @@ def build_case_from_source(
         "temporal_versions_required": int(temporal_versions_required if temporal_versions_required is not None else source_case["temporal_versions_required"]),
         "paraphrase_group": paraphrase_group if paraphrase_group is not None else source_case.get("paraphrase_group", ""),
         "negative_control_of": negative_control_of if negative_control_of is not None else source_case.get("negative_control_of", ""),
+        "graph_certificate": {},
+        "provenance_certificate": {},
+        "temporal_certificate": {},
         "derivation_notes": source_case["derivation_notes"] + " Reconstructed into proposition-grounded schema.",
     }
     return record
@@ -416,28 +561,48 @@ def build_holdout_replacement(case_id: str, family: str, question: str, source_i
         "pool": "holdout",
         "risk_tags": [family],
         "question": question,
-        "expected_behavior": "answer" if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else "partial",
-        "expected_behavior_set": ["answer" if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else "partial"],
-        "expected_terminal_set": ["verified_answer_ready_candidate", "owner_only_cited_answer"] if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else ["verified_answer_ready_candidate", "owner_only_cited_answer", "owner_only_safe_abstention"],
-        "minimum_material_claims": 1 if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else 0,
+        "expected_behavior": "abstain" if family == "temporal_version" else ("answer" if family not in {"ambiguous_clarification", "partially_sufficient_evidence"} else "partial"),
+        "expected_behavior_set": ["abstain" if family == "temporal_version" else ("answer" if family not in {"ambiguous_clarification", "partially_sufficient_evidence"} else "partial")],
+        "expected_terminal_set": ["safe_abstention", "owner_only_safe_abstention"] if family == "temporal_version" else ["verified_answer_ready_candidate", "owner_only_cited_answer", "owner_only_safe_abstention"] if family in {"ambiguous_clarification", "partially_sufficient_evidence"} else ["verified_answer_ready_candidate", "owner_only_cited_answer"],
+        "minimum_material_claims": 0 if family in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else 1,
         "maximum_unsupported_claims": 0,
         "required_propositions": [
             {
                 "proposition_id": f"{case_id}-PROP01",
                 "proposition_text": proposition_text,
-                "relation_type": "direct_support" if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else "partial_support",
+                "relation_type": "direct_support"
+                if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"}
+                else "context_only"
+                if family == "temporal_version"
+                else "partial_support",
                 "support_refs": [support["support_id"]],
-                "entailment_note": "Directly supported by the reconstructed source passage." if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"} else "The source supports only a bounded or partial conclusion.",
+                "entailment_note": "Directly supported by the reconstructed source passage."
+                if family not in {"ambiguous_clarification", "partially_sufficient_evidence", "temporal_version"}
+                else "Context only; one source record is insufficient for a newer-version comparison."
+                if family == "temporal_version"
+                else "The source supports only a bounded or partial conclusion.",
             }
         ],
         "optional_propositions": [],
-        "forbidden_inferences": make_forbidden(case_id, question),
+        "forbidden_inferences": make_forbidden(
+            case_id,
+            family,
+            question,
+            "abstain"
+            if family == "temporal_version"
+            else "partial"
+            if family in {"ambiguous_clarification", "partially_sufficient_evidence"}
+            else "answer",
+        ),
         "gold_support": [support],
         "unanswered_dimensions_expected": ["newer_version"] if family == "temporal_version" else ([] if family not in {"ambiguous_clarification", "partially_sufficient_evidence"} else ["specific_resolution"]),
         "distinct_source_minimum": 1,
         "graph_edge_required": False,
         "provenance_required": False,
-        "temporal_versions_required": 0 if family != "temporal_version" else 2,
+        "temporal_versions_required": 0,
+        "graph_certificate": {},
+        "provenance_certificate": {},
+        "temporal_certificate": {},
         "paraphrase_group": "",
         "negative_control_of": "",
         "derivation_notes": "Reconstructed from pool-local accepted corpus material into proposition-grounded schema.",
@@ -481,13 +646,16 @@ def build_sentinel_records() -> list[dict[str, Any]]:
                     }
                 ],
                 "optional_propositions": [],
-                "forbidden_inferences": make_forbidden(spec["case_id"], spec["question"]),
+                "forbidden_inferences": make_forbidden(spec["case_id"], spec["family"], spec["question"], "answer"),
                 "gold_support": supports,
                 "unanswered_dimensions_expected": [],
                 "distinct_source_minimum": 2 if spec["case_id"] == "SENTINEL-Q1-A" else 1,
                 "graph_edge_required": False,
                 "provenance_required": False,
                 "temporal_versions_required": 0,
+                "graph_certificate": {},
+                "provenance_certificate": {},
+                "temporal_certificate": {},
                 "paraphrase_group": f"PG-{spec['family']}",
                 "negative_control_of": "",
                 "derivation_notes": "Restored known regression sentinel from accepted PM / skill evidence.",
@@ -504,6 +672,7 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
     holdout_new: list[dict[str, Any]] = []
     lex = load_lexical()
     prov = load_provenance_map()
+    graph = load_graph_map()
     primary_by_id = {r["case_id"]: r for r in primary}
     holdout_by_id = {r["case_id"]: r for r in holdout}
 
@@ -695,106 +864,204 @@ def build_primary_holdout_bank() -> tuple[list[dict[str, Any]], list[dict[str, A
         *build_sentinel_records(),
     ]
 
-    # Fix specific provenance records after conversion.
-    provenance_subject_to_section = {
-        "concepts/agent-execution-paths": "concepts/agent-execution-paths#human-in-the-loop",
-        "concepts/agent-planning-strategies": "concepts/agent-planning-strategies#selection-sequence",
-        "concepts/goal-drift": "concepts/goal-drift#source-adoption",
-    }
-    provenance_supports = {
-        "concepts/agent-execution-paths": {
-            "support_id": "R2O-PG-P030-SUP02",
-            "source_identity": "provenance.json",
-            "section_id": "concepts/agent-execution-paths",
-            "locator": "agent-execution-paths provenance",
-            "exact_support_snippet": json.dumps(prov["concepts/agent-execution-paths"], ensure_ascii=False),
-            "support_role": "provenance_record",
-        },
-        "concepts/agent-planning-strategies": {
-            "support_id": "R2O-PG-P062-SUP02",
-            "source_identity": "provenance.json",
-            "section_id": "concepts/agent-planning-strategies",
-            "locator": "agent-planning-strategies provenance",
-            "exact_support_snippet": json.dumps(prov["concepts/agent-planning-strategies"], ensure_ascii=False),
-            "support_role": "provenance_record",
-        },
-        "concepts/goal-drift": {
-            "support_id": "R2O-PG-H013-SUP02",
-            "source_identity": "provenance.json",
-            "section_id": "concepts/goal-drift",
-            "locator": "goal-drift provenance",
-            "exact_support_snippet": json.dumps(prov["concepts/goal-drift"], ensure_ascii=False),
-            "support_role": "provenance_record",
-        },
-        "concepts/harness-agent-loop": {
-            "support_id": "R2O-PG-P030-SUP03",
-            "source_identity": "provenance.json",
-            "section_id": "concepts/harness-agent-loop",
-            "locator": "harness-agent-loop provenance",
-            "exact_support_snippet": json.dumps(prov["concepts/harness-agent-loop"], ensure_ascii=False),
-            "support_role": "provenance_record",
-        },
-    }
-    for rec in records:
-        if rec["case_id"] == "R2O-PG-P030":
-            rec["provenance_required"] = True
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"], provenance_supports["concepts/harness-agent-loop"]["support_id"]]
-            rec["gold_support"] = [rec["gold_support"][0], provenance_supports["concepts/harness-agent-loop"]]
-            rec["required_propositions"][0]["proposition_text"] = "Human-in-the-loop is a supported execution-path concept in the reviewed corpus, and the provenance record points to the same concept."
-            rec["required_propositions"][0]["relation_type"] = "direct_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        elif rec["case_id"] == "R2O-PG-P062":
-            rec["provenance_required"] = True
-            planning_support = {
-                **provenance_supports["concepts/agent-planning-strategies"],
-                "support_id": "R2O-PG-P062-SUP03",
-            }
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"], planning_support["support_id"]]
-            rec["gold_support"].append(planning_support)
+    record_by_id = {rec["case_id"]: rec for rec in records}
+
+    def case_from_source(
+        source_case_id: str,
+        *,
+        case_id: str,
+        family: str,
+        question: str,
+        proposition_text: str,
+        expected_behavior: str = "answer",
+        expected_terminal_set: list[str] | None = None,
+        paraphrase_group: str = "",
+        provenance_required: bool = False,
+        graph_edge_required: bool = False,
+    ) -> dict[str, Any]:
+        source = primary_by_id.get(source_case_id) or holdout_by_id.get(source_case_id)
+        assert source is not None
+        return build_case_from_source(
+            source,
+            case_id=case_id,
+            family=family,
+            question=question,
+            expected_behavior=expected_behavior,
+            expected_terminal_set=expected_terminal_set,
+            proposition_text=proposition_text,
+            paraphrase_group=paraphrase_group,
+            provenance_required=provenance_required,
+            graph_edge_required=graph_edge_required,
+            temporal_versions_required=0,
+        )
+
+    provenance_specs = [
+        (
+            "R2O-PG-P030",
+            "BROAD-0030",
+            "Which provenance source supports Human-in-the-loop?",
+            "Human-in-the-loop is supported by the agent-execution-paths provenance record.",
+            "concepts/agent-execution-paths",
+            None,
+        ),
+        (
+            "R2O-PG-P062",
+            "BROAD-0062",
+            "Which provenance source supports Selection sequence?",
+            "Selection sequence is supported by the agent-planning-strategies provenance record.",
+            "concepts/agent-execution-paths",
+            None,
+        ),
+        (
+            "R2O-PG-H010",
+            "BROAD-0072",
+            "Which provenance source supports Source adoption?",
+            "Source adoption is supported by the goal-drift provenance record.",
+            "concepts/goal-drift",
+            None,
+        ),
+    ]
+    for case_id, source_case_id, question, proposition_text, provenance_concept_id, mapping_note in provenance_specs:
+        rec = case_from_source(
+            source_case_id,
+            case_id=case_id,
+            family="provenance_source_trace",
+            question=question,
+            proposition_text=proposition_text,
+            expected_behavior="answer",
+            expected_terminal_set=["verified_answer_ready_candidate", "owner_only_cited_answer"],
+            paraphrase_group="PG-provenance_source_trace-intent",
+            provenance_required=True,
+        )
+        primary_support = rec["gold_support"][0]
+        provenance_record = prov[provenance_concept_id]
+        provenance_support = make_provenance_support(case_id, 2, provenance_record)
+        rec["gold_support"] = [primary_support, provenance_support]
+        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"], provenance_support["support_id"]]
+        rec["required_propositions"][0]["relation_type"] = "direct_support"
+        rec["required_propositions"][0]["entailment_note"] = "Directly supported by the quoted source passage and the matching provenance record."
+        rec["provenance_certificate"] = build_certificate_bundle(
+            primary_support=primary_support,
+            provenance_support=provenance_support,
+            explicit_mapping_note=mapping_note,
+        )
+        rec["graph_certificate"] = {}
+        rec["temporal_certificate"] = {}
+        if case_id == "R2O-PG-P062":
             rec["required_propositions"][0]["proposition_text"] = "Selection sequence is supported by the same agent-planning-strategies provenance record."
-            rec["required_propositions"][0]["relation_type"] = "direct_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        elif rec["case_id"] == "R2O-PG-H010":
-            rec["provenance_required"] = True
-            goal_drift_support = {
-                **provenance_supports["concepts/goal-drift"],
-                "support_id": "R2O-PG-H010-SUP02",
-            }
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"], goal_drift_support["support_id"]]
-            rec["gold_support"] = [rec["gold_support"][0], goal_drift_support]
-            rec["required_propositions"][0]["proposition_text"] = "Source adoption is supported by the same goal-drift provenance record."
-            rec["required_propositions"][0]["relation_type"] = "direct_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        elif rec["case_id"] == "R2O-PG-H033":
-            rec["gold_support"] = [rec["gold_support"][0]]
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"]]
-            rec["required_propositions"][0]["proposition_text"] = "Goal drift can be handled by re-contracting the task, recording a new decision, or stopping."
-            rec["required_propositions"][0]["relation_type"] = "direct_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        elif rec["case_id"] == "R2O-PG-H013":
-            rec["provenance_required"] = True
-            goal_drift_support = {
-                **provenance_supports["concepts/goal-drift"],
-                "support_id": "R2O-PG-H013-SUP02",
-            }
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"], goal_drift_support["support_id"]]
-            rec["gold_support"].append(goal_drift_support)
-            rec["required_propositions"][0]["proposition_text"] = "Source adoption is supported by the same goal-drift provenance record."
-            rec["required_propositions"][0]["relation_type"] = "direct_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        elif rec["case_id"] == "R2O-PG-H044":
-            rec["provenance_required"] = True
-            goal_drift_support = {
-                **provenance_supports["concepts/goal-drift"],
-                "support_id": "R2O-PG-H044-SUP02",
-            }
-            rec["required_propositions"][0]["support_refs"] = [rec["gold_support"][0]["support_id"], goal_drift_support["support_id"]]
-            rec["gold_support"] = [rec["gold_support"][0], goal_drift_support]
-            rec["required_propositions"][0]["proposition_text"] = "The source-adoption state is traceable to the goal-drift provenance record and the draft review surface."
-            rec["required_propositions"][0]["relation_type"] = "partial_support"
-            rec["forbidden_inferences"] = make_forbidden(rec["case_id"], rec["question"])
-        if rec["family"] == "temporal_version":
-            rec["temporal_versions_required"] = 1
+        record_by_id[case_id].clear()
+        record_by_id[case_id].update(rec)
+
+    graph_specs = [
+        (
+            "R2O-PG-P031",
+            "BROAD-0013",
+            "What graph relationship is recorded for Harness Agent Loop?",
+            "Harness Agent Loop requires Stopping Policy.",
+            "edge_066cda73130d3f1a7cc6dde6ac4897c5",
+            "PG-graph_relationship-intent",
+        ),
+        (
+            "R2O-PG-H001",
+            "BROAD-0045",
+            "What graph relationship is recorded for Harness Verification?",
+            "Harness requires Harness Verification.",
+            "edge_0cc19496d16008c4250c1ddf5c91ad9d",
+            "PG-graph_relationship-intent",
+        ),
+        (
+            "R2O-PG-P070",
+            "BROAD-0063",
+            "What graph relationship is recorded for Agent decision and planning strategies?",
+            "Agent decision and planning strategies complements Agent execution paths.",
+            "edge_f55a979c704bddcf552b4e9e713428db",
+            "PG-graph_relationship-intent",
+        ),
+    ]
+    for case_id, source_case_id, question, proposition_text, edge_id, paraphrase_group in graph_specs:
+        rec = case_from_source(
+            source_case_id,
+            case_id=case_id,
+            family="graph_relationship",
+            question=question,
+            proposition_text=proposition_text,
+            expected_behavior="answer",
+            expected_terminal_set=["verified_answer_ready_candidate", "owner_only_cited_answer"],
+            paraphrase_group=paraphrase_group,
+            graph_edge_required=True,
+        )
+        primary_support = rec["gold_support"][0]
+        graph_support = make_graph_support(case_id, 2, graph[edge_id])
+        rec["gold_support"] = [primary_support, graph_support]
+        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"], graph_support["support_id"]]
+        rec["required_propositions"][0]["relation_type"] = "direct_support"
+        rec["required_propositions"][0]["entailment_note"] = "Directly supported by the quoted source passage and the structured graph edge certificate."
+        rec["graph_certificate"] = build_certificate_bundle(
+            primary_support=primary_support,
+            graph_support=graph_support,
+        )
+        rec["provenance_certificate"] = {}
+        rec["temporal_certificate"] = {}
+        record_by_id[case_id].clear()
+        record_by_id[case_id].update(rec)
+
+    temporal_case_specs = [
+        ("R2O-PG-P029", "Direct", "Which version is newer for Direct?"),
+        ("R2O-PG-P061", "Pipeline", "Which version is newer for Pipeline?"),
+        ("R2O-PG-P072", "Pipeline", "Which version is newer for Pipeline?"),
+        ("R2O-PG-H044", "source-adoption", "Which source-adoption state is newer?"),
+    ]
+    for case_id, label, question in temporal_case_specs:
+        rec = record_by_id[case_id]
+        primary_support = rec["gold_support"][0]
+        rec["question"] = question
+        rec["expected_behavior"] = "abstain"
+        rec["expected_behavior_set"] = ["abstain"]
+        rec["expected_terminal_set"] = ["safe_abstention", "owner_only_safe_abstention"]
+        rec["minimum_material_claims"] = 0
+        rec["required_propositions"][0]["relation_type"] = "context_only"
+        rec["required_propositions"][0]["entailment_note"] = "Context only; one source record is insufficient for a newer-version comparison."
+        rec["required_propositions"][0]["proposition_text"] = f"The source provides only one {label} record, so no newer version can be determined."
+        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
+        rec["provenance_required"] = False
+        rec["provenance_certificate"] = {}
+        rec["temporal_versions_required"] = 0
+        rec["temporal_certificate"] = build_certificate_bundle(
+            primary_support=primary_support,
+            temporal_mode="insufficient",
+            minimum_required_for_positive=2,
+            observed_temporal_record_count=1,
+        )
+        if case_id == "R2O-PG-H044":
+            rec["gold_support"] = [primary_support]
+        rec["forbidden_inferences"] = make_forbidden(case_id, "temporal_version", question, "abstain")
+
+    negative_context_specs = [
+        (
+            "R2O-PG-H013",
+            "Does Source adoption prove a finance or medical claim?",
+            "Source adoption is a harness-specific edited concept, so finance or medical claims are out of scope.",
+        ),
+    ]
+    for case_id, question, proposition_text in negative_context_specs:
+        rec = record_by_id[case_id]
+        primary_support = rec["gold_support"][0]
+        rec["question"] = question
+        rec["required_propositions"][0]["relation_type"] = "context_only"
+        rec["required_propositions"][0]["entailment_note"] = "Context only; the source passage cannot justify the requested mixed-domain bridge."
+        rec["required_propositions"][0]["proposition_text"] = proposition_text
+        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
+        rec["provenance_required"] = False
+        rec["provenance_certificate"] = {}
+        rec["temporal_certificate"] = {}
+        rec["gold_support"] = [primary_support]
+        rec["forbidden_inferences"] = make_forbidden(case_id, "mixed_domain_distractor", question, "abstain")
+
+    if "R2O-PG-H033" in record_by_id:
+        rec = record_by_id["R2O-PG-H033"]
+        primary_support = rec["gold_support"][0]
+        rec["gold_support"] = [primary_support]
+        rec["required_propositions"][0]["support_refs"] = [primary_support["support_id"]]
 
     return records, primary_new, holdout_new
 
