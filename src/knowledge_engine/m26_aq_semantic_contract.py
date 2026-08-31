@@ -11,6 +11,7 @@ from typing import Any
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
+from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
@@ -887,7 +888,7 @@ def canonical_question_entities(question: str) -> list[str]:
 
 
 def _contract_compat_module() -> Any:
-    return runtime
+    return compatibility_v2
 
 
 def synthesize_and_verify(
@@ -3018,6 +3019,17 @@ def run_owner_arbitrary_query(
         provider_client=provider,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
+    )
+    verification, closure = _publish_support_proof_recovered_answer(
+        compatibility=_contract_compat_module(),
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
     )
     legacy._emit_runtime_event(
         event_sink,

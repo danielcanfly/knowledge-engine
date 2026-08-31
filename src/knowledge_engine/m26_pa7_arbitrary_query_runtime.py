@@ -1571,6 +1571,7 @@ def _deterministic_provider_candidate(
     role = "direct"
     selected: list[Mapping[str, Any]]
     claims: list[dict[str, Any]]
+    definition_parts = _contextual_definition_query_parts(question)
     if intent_class == "direct_grounded_knowledge":
         return _deterministic_direct_provider_candidate(question=question, evidence=evidence)
     if intent_class in {"cross_document_comparison", "complementary_synthesis"}:
@@ -1647,8 +1648,58 @@ def _deterministic_direct_provider_candidate(
     question: str,
     evidence: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any] | None:
+    definition_parts = _contextual_definition_query_parts(question)
+    used_evidence_ids: set[str] = set()
     raw_claims: list[dict[str, Any]] = []
     selected_ids: list[str] = []
+    if definition_parts is not None:
+        required_facets = _question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"]
+        refs: list[dict[str, Any]] = []
+        for facet in required_facets:
+            item = _best_evidence_for_direct_facet(
+                question=question,
+                facet=facet,
+                evidence=evidence,
+                exclude_evidence_ids=used_evidence_ids,
+            )
+            if item is None:
+                return None
+            ref = _deterministic_support_ref_for_facet(item, facet)
+            if ref is None:
+                return None
+            refs.append(ref)
+            selected_ids.append(str(item["evidence_id"]))
+            used_evidence_ids.add(str(item["evidence_id"]))
+        surface_text = _deterministic_definition_surface_text(
+            question=question,
+            definition_parts=definition_parts,
+            refs=refs,
+        )
+        if not surface_text:
+            return None
+        claims = [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "surface_text": surface_text,
+                "facet_ids": [str(facet.get("facet_id", "")) for facet in required_facets],
+                "support_mode": "exact_quote",
+                "support_refs": refs,
+            }
+        ]
+        return {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
+            "answer_text": _deterministic_answer_text(claims),
+            "claims": claims,
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
     for index, facet in enumerate(
         _question_contract(
             question=question,
@@ -1656,7 +1707,11 @@ def _deterministic_direct_provider_candidate(
         )["required_facets"],
         start=1,
     ):
-        item = _best_evidence_for_direct_facet(question=question, facet=facet, evidence=evidence)
+        item = _best_evidence_for_direct_facet(
+            question=question,
+            facet=facet,
+            evidence=evidence,
+        )
         if item is None:
             return None
         ref = _deterministic_support_ref_for_facet(item, facet)
@@ -1813,10 +1868,32 @@ def _best_evidence_for_direct_facet(
     question: str,
     facet: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
+    exclude_evidence_ids: set[str] | None = None,
 ) -> Mapping[str, Any] | None:
     passages = [item for item in evidence if item.get("evidence_type") == "passage"]
     if not passages:
         return None
+    definition_parts = _contextual_definition_query_parts(question)
+    facet_id = str(facet.get("facet_id", ""))
+    if definition_parts is not None and facet_id == "definition_head":
+        head_terms = _coverage_terms(definition_parts["definition_head"])
+        passages = [
+            item
+            for item in passages
+            if head_terms & _coverage_terms(str(item.get("passage_text", "")))
+            and _coverage_terms(str(item.get("passage_text", "")))
+            & DEFINITION_PREDICATE_TERMS
+        ]
+        if not passages:
+            return None
+    if exclude_evidence_ids:
+        passages = [
+            item
+            for item in passages
+            if str(item.get("evidence_id", "")) not in exclude_evidence_ids
+        ]
+        if not passages:
+            return None
     facet_terms = _facet_terms(facet)
     if not facet_terms:
         return _single_responsive_fallback_passage(question=question, evidence=passages)
@@ -1844,6 +1921,43 @@ def _best_evidence_for_direct_facet(
         if _direct_facet_match_score(facet, str(best.get("passage_text", ""))) >= 1
         else None
     )
+
+
+def _deterministic_definition_surface_text(
+    *,
+    question: str,
+    definition_parts: Mapping[str, str],
+    refs: Sequence[Mapping[str, Any]],
+) -> str:
+    head = re.sub(r"\s+", " ", str(definition_parts.get("definition_head", ""))).strip()
+    context = re.sub(r"\s+", " ", str(definition_parts.get("context_modifier", ""))).strip()
+    quotes = [
+        re.sub(r"\s+", " ", str(ref.get("exact_quote", ""))).strip(" .")
+        for ref in refs
+        if str(ref.get("exact_quote", "")).strip()
+    ]
+    if not quotes:
+        return ""
+    head_terms = _coverage_terms(head)
+    predicate_terms = DEFINITION_PREDICATE_TERMS
+    chosen = next(
+        (
+            quote
+            for quote in quotes
+            if head_terms & _coverage_terms(quote)
+            and _coverage_terms(quote) & predicate_terms
+        ),
+        quotes[0],
+    )
+    surface = chosen.strip()
+    if head and head.casefold() not in surface.casefold():
+        surface = f"{head} {surface}".strip()
+    if context and context.casefold() not in surface.casefold():
+        surface = f"{surface} in {context}".strip()
+    surface = re.sub(r"\s+", " ", surface).strip(" .;:")
+    if surface and not surface.endswith((".", "!", "?")):
+        surface += "."
+    return surface
 
 
 def _deterministic_relation_surface_text(

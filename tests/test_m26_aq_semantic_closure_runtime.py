@@ -4,11 +4,13 @@ import inspect
 import json
 import time
 from typing import Any
+from pathlib import Path
 
 import pytest
 
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine import m26_pa7_semantic_closure_runtime as closure_runtime
+from knowledge_engine import m26_aq_semantic_contract as contract
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
     _publish_support_proof_recovered_answer,
@@ -33,7 +35,14 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _visible_semantic_failures,
 )
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
+from knowledge_engine.m26_production_promotion_closure import load_json
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
+
+ROOT = Path(__file__).resolve().parents[1]
+PILOT = ROOT / "pilot" / "m26"
+GATE_PATH = PILOT / "m26-pa-7-resolved-production-gate.json"
+OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 
 SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 
@@ -3518,6 +3527,163 @@ def test_support_proof_recovery_publishes_two_facet_lifecycle_response() -> None
         "durable",
         "completion",
     }
+
+
+def _stub_public_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    evidence: list[dict[str, Any]],
+    dense_http_status: int = 429,
+) -> None:
+    lexical_result = {
+        "backend_identity": {
+            "backend": "test_lexical_primary",
+            "availability": "available",
+            "degraded": False,
+        },
+        "results": [],
+    }
+    dense_result = {
+        "backend_identity": {
+            "backend": "test_dense",
+            "availability": "unavailable",
+            "degraded": True,
+            "reason_code": "DENSE_TRANSIENT_UNAVAILABLE",
+            "http_status": dense_http_status,
+        },
+        "candidates": [],
+    }
+    monkeypatch.setattr(
+        contract.legacy,
+        "_run_lexical_primary_retrieval",
+        lambda **kwargs: (lexical_result, dense_result),
+    )
+    monkeypatch.setattr(
+        contract.legacy,
+        "_select_evidence",
+        lambda **kwargs: list(evidence),
+    )
+    monkeypatch.setattr(
+        contract.runtime,
+        "_strengthen_evidence",
+        lambda **kwargs: (list(evidence), {"required": False, "matched": False}),
+    )
+    monkeypatch.setattr(
+        contract,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
+
+
+def test_public_contract_recovers_supported_answer_after_provider_abstention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    evidence = [
+        _rich_passage(
+            "ev_durable",
+            "Persisted server-side state preserves run progress after a client disconnect.",
+            "durable-note",
+        ),
+        _rich_passage(
+            "ev_completion",
+            "Completion verification and acceptance checks happen before the system declares terminal success.",
+            "completion-note",
+        ),
+        _rich_passage(
+            "ev_observability",
+            "Observability exposes status and reattachment for the continuing run.",
+            "observability-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["provider_call_count"] == 2
+    assert response["safe_abstention"] is False
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["evidence_utilization_trace"]["selected_evidence_count"] == 3
+    assert response["evidence_utilization_trace"]["used_evidence_count"] > 0
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"]
+    lowered = response["answer_text"].casefold()
+    assert "persisted run state matters after a client disconnect" in lowered
+    assert "durable server-side state preserves run progress" in lowered
+
+
+def test_public_contract_recovers_definition_answer_after_provider_abstention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            "skill-note",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["provider_call_count"] == 2
+    assert response["safe_abstention"] is False
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["evidence_utilization_trace"]["selected_evidence_count"] == 2
+    assert response["evidence_utilization_trace"]["used_evidence_count"] > 0
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"]
+    lowered = response["answer_text"].casefold()
+    assert "skill" in lowered
+    assert "architecture" in lowered
+
+
+def test_public_contract_preserves_safe_abstention_without_selected_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    _stub_public_retrieval(monkeypatch, evidence=[])
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_call_count"] == 0
+    assert response["reason_codes"] == ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"]
+    assert response["selected_evidence_count"] == 0
+    assert response["semantic_closure"]["support_proof"] == []
 
 
 def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:
