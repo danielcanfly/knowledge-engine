@@ -282,6 +282,10 @@ def _response_from_verification(
     intent_class: str,
     semantic_closure: Mapping[str, Any],
 ) -> dict[str, Any]:
+    semantic_closure = _mirror_verified_support_proof(
+        verification=verification,
+        semantic_closure=semantic_closure,
+    )
     response = {
         **legacy._base_response(
             gate=gate,
@@ -339,6 +343,63 @@ def _response_from_verification(
         int((time.monotonic() - started) * 1000),
     )
     return response
+
+
+def _mirror_verified_support_proof(
+    *,
+    verification: Mapping[str, Any],
+    semantic_closure: Mapping[str, Any],
+) -> dict[str, Any]:
+    closure = dict(semantic_closure)
+    if closure.get("support_proof"):
+        return closure
+    if str(verification.get("status", "")) != "owner_only_cited_answer":
+        return closure
+    citations = [
+        item for item in verification.get("citations", []) if isinstance(item, Mapping)
+    ]
+    if not citations:
+        return closure
+    support_proof: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for citation in citations:
+        evidence_id = str(citation.get("evidence_id", ""))
+        locator_id = str(citation.get("locator_id", ""))
+        exact_quote_sha256 = str(citation.get("exact_quote_sha256", ""))
+        key = (evidence_id, locator_id, exact_quote_sha256)
+        if not evidence_id or key in seen:
+            continue
+        seen.add(key)
+        support_proof.append(
+            {
+                "claim_id": str(citation.get("claim_id", "")),
+                "citation_id": str(citation.get("citation_id", "")),
+                "evidence_id": evidence_id,
+                "locator_id": locator_id,
+                "source_id": str(citation.get("source_id", "")),
+                "source_identity": str(citation.get("source_identity", "")),
+                "section_id": str(citation.get("section_id", "")),
+                "concept_id": str(citation.get("concept_id", "")),
+                "release_id": str(citation.get("release_id", "")),
+                "source_locator": str(citation.get("source_locator", "")),
+                "support_text_sha256": str(citation.get("support_text_sha256", "")),
+                "exact_quote_sha256": exact_quote_sha256,
+                "source_artifact_sha256": str(
+                    citation.get("source_artifact_sha256", "")
+                ),
+                "provenance_record_sha256": str(
+                    citation.get("provenance_record_sha256", "")
+                ),
+                "runtime_owned_locator": bool(
+                    citation.get("runtime_owned_locator", False)
+                ),
+                "supported": True,
+            }
+        )
+    if support_proof:
+        closure["support_proof"] = support_proof
+        closure["mirrored_verified_support_proof"] = True
+    return closure
 
 
 def _synthesize_and_verify(

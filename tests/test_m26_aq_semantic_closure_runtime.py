@@ -3463,6 +3463,83 @@ def test_support_proof_recovery_publishes_into_final_response_envelope() -> None
     }
 
 
+def test_response_from_verification_mirrors_verified_citations_into_support_proof() -> None:
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            "A skill is a task method for an AI agent architecture.",
+            "skill-note",
+        ),
+    ]
+    verification = {
+        "status": "owner_only_cited_answer",
+        "terminal_status": "verified_answer_ready_candidate",
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+        "safe_abstention": False,
+        "reason_codes": [],
+        "unsupported_accepted_claims": 0,
+        "citation_locator_valid": True,
+        "material_claim_support_verified": True,
+        "answer_text": "A skill is a task method for an AI agent architecture.",
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "support_ref_count": 1,
+            }
+        ],
+        "citations": [
+            {
+                "citation_id": "claim_1_ref_1",
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "evidence_id": "ev_skill",
+                "evidence_type": "passage",
+                "locator_id": evidence[0]["locator_id"],
+                "source_id": evidence[0]["source_id"],
+                "source_identity": evidence[0]["source_identity"],
+                "section_id": evidence[0]["section_id"],
+                "concept_id": evidence[0]["concept_id"],
+                "release_id": evidence[0]["release_id"],
+                "source_locator": f"{evidence[0]['artifact_key']}#{evidence[0]['section_id']}",
+                "support_text_sha256": evidence[0]["passage_text_sha256"],
+                "exact_quote_sha256": sha256_bytes(
+                    evidence[0]["passage_text"].encode("utf-8")
+                ),
+                "source_artifact_sha256": evidence[0]["artifact_sha256"],
+                "provenance_record_sha256": evidence[0]["provenance_record_sha256"],
+                "runtime_owned_locator": True,
+            }
+        ],
+        "multi_evidence_verification": {"support_ref_count": 1},
+    }
+
+    response = _response_from_verification(
+        gate={"self_sha256": "gate-sha"},
+        bundle=None,
+        dense_result=None,
+        lexical_result=None,
+        evidence=evidence,
+        verification=verification,
+        trace_id="trace-support-proof-mirror",
+        question_sha="q" * 64,
+        started=time.monotonic(),
+        intent_class="direct_grounded_knowledge",
+        semantic_closure={
+            "failures": [],
+            "support_proof": [],
+            "semantic_contract": {"fingerprint": "fixture-fingerprint"},
+        },
+    )
+
+    assert response["semantic_closure"]["mirrored_verified_support_proof"] is True
+    assert response["semantic_closure"]["support_proof"]
+    assert response["semantic_closure"]["support_proof"][0]["evidence_id"] == "ev_skill"
+    assert response["semantic_closure"]["support_proof"][0]["exact_quote_sha256"] == sha256_bytes(
+        evidence[0]["passage_text"].encode("utf-8")
+    )
+
+
 def test_support_proof_recovery_publishes_two_facet_lifecycle_response() -> None:
     question = (
         "How should a long-running controlled agent recover after a client disconnect "
@@ -3663,6 +3740,36 @@ def test_public_contract_recovers_definition_answer_after_provider_abstention(
     lowered = response["answer_text"].casefold()
     assert "skill" in lowered
     assert "architecture" in lowered
+
+
+def test_public_contract_preserves_safe_abstention_without_source_backed_definition_predicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            "Skill is a broad label used in this article.",
+            "skill-note",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["semantic_closure"]["support_proof"] == []
 
 
 def test_public_contract_preserves_safe_abstention_without_selected_evidence(

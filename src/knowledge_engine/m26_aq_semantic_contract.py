@@ -952,6 +952,19 @@ def _publish_support_proof_recovered_answer(
     )
     if recovered is not None:
         return recovered
+    definition_recovered = _recover_definition_fallback_answer(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
+    )
+    if definition_recovered is not None:
+        return definition_recovered
     return dict(verification), dict(closure)
 
 
@@ -1092,6 +1105,134 @@ def _recover_supported_semantic_answer(
         "pre_recovery_failures": pre_recovery_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v3",
         "broad_deterministic_fallback_used": False,
+        "runtime_bound_semantic_repair_used": True,
+        "semantic_synthesis_recovery": {
+            "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
+            "case_specific": False,
+            "candidate_claim_count": len(candidate.get("claims", [])),
+            "internal_reference_leak_checked": True,
+            "unsupported_accepted_claims": int(
+                answer.get("unsupported_accepted_claims", 0)
+            ),
+        },
+    }
+
+
+def _recover_definition_fallback_answer(
+    *,
+    compatibility: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if str(verification.get("status")) != "owner_only_safe_abstention":
+        return None
+    if legacy._contextual_definition_query_parts(question) is None:
+        return None
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    if not evidence:
+        return None
+    if int(verification.get("unsupported_accepted_claims", 0)) != 0:
+        return None
+    if not bool(verification.get("citation_locator_valid", True)):
+        return None
+    try:
+        candidate = legacy._deterministic_provider_candidate(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+        )
+    except Exception:
+        return None
+    if not isinstance(candidate, Mapping):
+        return None
+    try:
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=[],
+            repair_attempted=True,
+        )
+        compatibility._use_verified_natural_surface(
+            answer,
+            _public_candidate_surface(candidate, answer),
+        )
+    except Exception:
+        return None
+    if answer.get("status") != "owner_only_cited_answer":
+        return None
+    visible_failures = evaluate_visible_semantics(
+        str(answer.get("answer_text", "")),
+        requirements,
+        question,
+    )
+    if visible_failures:
+        return None
+    if _internal_reference_leaks(str(answer.get("answer_text", "")), question):
+        return None
+
+    support_failures, support_proof = (
+        compatibility._endpoint_aware_requirement_support_failures(
+            runtime=_RUNTIME_FACADE,
+            requirements=requirements,
+            evidence=_candidate_evidence(candidate, evidence),
+            endpoint_proof=endpoint_proof,
+        )
+    )
+    if support_failures:
+        return None
+    previous_mve = verification.get("multi_evidence_verification", {})
+    previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
+    pre_recovery_failures = _failure_codes(verification, closure)
+    answer["provider_call_count"] = int(verification.get("provider_call_count", 0))
+    answer["payg_equivalent_cost_usd"] = str(
+        verification.get("payg_equivalent_cost_usd", "0")
+    )
+    answer["repair_attempted"] = True
+    answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
+    answer["multi_evidence_verification"] = {
+        **dict(answer.get("multi_evidence_verification", {})),
+        "provider_attempt_telemetry": list(
+            previous_mve.get("provider_attempt_telemetry", [])
+        ),
+        "verification_failure_codes_by_attempt": pre_recovery_failures,
+        "repair_trigger": pre_recovery_failures,
+        "repair_result": "verified_definition_fallback",
+        "deterministic_evidence_synthesis_used": True,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "runtime_bound_semantic_repair_used": True,
+        "served_answer_surface": "verified_definition_fallback_surface",
+    }
+    recovered_closure = dict(closure)
+    recovered_closure.pop("local_repair_rejection_codes", None)
+    return answer, {
+        **recovered_closure,
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": support_proof,
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_recovery_failures": pre_recovery_failures,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "broad_deterministic_fallback_used": False,
+        "definition_fallback_used": True,
         "runtime_bound_semantic_repair_used": True,
         "semantic_synthesis_recovery": {
             "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
