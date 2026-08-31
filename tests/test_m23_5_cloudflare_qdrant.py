@@ -406,6 +406,136 @@ def test_cloudflare_transient_embedding_errors_retry_then_succeed(monkeypatch):
     assert sleeps == [1.0, 2.0]
 
 
+def test_cloudflare_429_quota_exhausted_returns_immediately(monkeypatch):
+    calls = []
+    sleeps = []
+
+    monkeypatch.setattr(
+        cloudflare_qdrant.time,
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        return httpx.Response(
+            429,
+            json={
+                "success": False,
+                "errors": [
+                    {
+                        "code": 4006,
+                        "message": "daily free allocation of 10,000 neurons exhausted",
+                    }
+                ],
+            },
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.HTTPStatusError):
+            embed_sections(
+                _sections(),
+                CloudflareConfig(account_id="account", api_token="secret"),
+                client=client,
+            )
+
+    assert len(calls) == 1
+    assert sleeps == []
+
+
+def test_cloudflare_generic_429_retries_unchanged(monkeypatch):
+    calls = []
+    sleeps = []
+
+    monkeypatch.setattr(
+        cloudflare_qdrant.time,
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        if len(calls) < 3:
+            return httpx.Response(429, json={"success": False, "errors": []})
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"data": _vectors()}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections(),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert vectors == _vectors()
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_cloudflare_503_retries_unchanged(monkeypatch):
+    calls = []
+    sleeps = []
+
+    monkeypatch.setattr(
+        cloudflare_qdrant.time,
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        if len(calls) < 3:
+            return httpx.Response(503, json={"success": False, "errors": []})
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"data": _vectors()}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections(),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert vectors == _vectors()
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_cloudflare_malformed_429_stays_transient(monkeypatch):
+    calls = []
+    sleeps = []
+
+    monkeypatch.setattr(
+        cloudflare_qdrant.time,
+        "sleep",
+        lambda delay: sleeps.append(delay),
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content)["text"])
+        if len(calls) < 3:
+            return httpx.Response(429, content=b"not json")
+        return httpx.Response(
+            200,
+            json={"success": True, "result": {"data": _vectors()}},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        vectors = embed_sections(
+            _sections(),
+            CloudflareConfig(account_id="account", api_token="secret"),
+            client=client,
+        )
+
+    assert vectors == _vectors()
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+
+
 def test_cloudflare_non_context_http_error_remains_fail_closed():
     calls = []
 

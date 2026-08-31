@@ -336,6 +336,26 @@ def _is_context_limit_response(response: httpx.Response) -> bool:
     return False
 
 
+def _is_cloudflare_quota_exhausted_response(response: httpx.Response) -> bool:
+    if getattr(response, "status_code", 200) != 429:
+        return False
+    try:
+        payload = response.json()
+    except ValueError:
+        return False
+    if not isinstance(payload, Mapping):
+        return False
+    errors = payload.get("errors")
+    if not isinstance(errors, list):
+        return False
+    for item in errors:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("code")) == "4006":
+            return True
+    return False
+
+
 def _post_embedding_batch_with_transient_retry(
     http: httpx.Client,
     *,
@@ -350,6 +370,8 @@ def _post_embedding_batch_with_transient_retry(
     for delay in (*EMBED_TRANSIENT_RETRY_DELAYS_SECONDS, None):
         response = http.post(url, **request)
         status_code = getattr(response, "status_code", 200)
+        if _is_cloudflare_quota_exhausted_response(response):
+            return response
         if status_code not in EMBED_TRANSIENT_STATUS_CODES or delay is None:
             return response
         time.sleep(delay)
