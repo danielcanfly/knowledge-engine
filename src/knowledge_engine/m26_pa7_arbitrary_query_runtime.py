@@ -689,6 +689,86 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
     return LocalDenseProjectionChannel()
 
 
+_DENSE_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+_DENSE_TRANSIENT_REASON_CODE = "DENSE_TRANSIENT_UNAVAILABLE"
+
+
+def _degraded_dense_result(
+    dense_backend: DenseChannel,
+    *,
+    http_status: int | None,
+) -> dict[str, Any]:
+    return {
+        "backend_identity": {
+            "backend": dense_backend.__class__.__name__,
+            "availability": "unavailable",
+            "degraded": True,
+            "reason_code": _DENSE_TRANSIENT_REASON_CODE,
+            "http_status": http_status,
+        },
+        "candidates": [],
+    }
+
+
+def _dense_http_status(exc: httpx.HTTPStatusError) -> int | None:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    return status_code if isinstance(status_code, int) else None
+
+
+def _run_lexical_primary_retrieval(
+    *,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    dense_channel: DenseChannel | None,
+    require_remote_dense: bool,
+    top_k: int,
+    event_sink: RuntimeEventSink | None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    lexical = retrieve_wiki_first(
+        query=question,
+        allowed_audiences={"public", "internal"},
+        lexical_index=bundle.lexical_index,
+        graph=bundle.graph,
+        relation_graph=bundle.graph_v2,
+        relation_aware_expansion=True,
+        provenance=bundle.provenance,
+        semantic_index=None,
+        limit=8,
+    )
+    dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
+    try:
+        dense = dense_backend.search(
+            question=question,
+            bundle=bundle,
+            top_k=top_k,
+        )
+    except (httpx.TimeoutException, httpx.NetworkError):
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            http_status=None,
+        )
+        dense = _degraded_dense_result(dense_backend, http_status=None)
+    except httpx.HTTPStatusError as exc:
+        http_status = _dense_http_status(exc)
+        if http_status not in _DENSE_TRANSIENT_HTTP_STATUSES:
+            raise
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            http_status=http_status,
+        )
+        dense = _degraded_dense_result(dense_backend, http_status=http_status)
+    return lexical, dense
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -815,21 +895,13 @@ def run_owner_arbitrary_query(
             "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
             "answer runtime is not bound to the accepted full production release",
         )
-    dense = (dense_channel or dense_channel_from_env(require_remote=require_remote_dense)).search(
+    lexical, dense = _run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
         top_k=8,
-    )
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+        event_sink=event_sink,
     )
     evidence = _select_evidence(
         bundle=bundle,

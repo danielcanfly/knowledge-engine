@@ -8,6 +8,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -93,6 +94,16 @@ class ExplodingProvider:
 class ExplodingDense:
     def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
         raise AssertionError("retrieval must not run before owner admission")
+
+
+class FailingDense:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+        self.calls = 0
+
+    def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+        self.calls += 1
+        raise self.exc
 
 
 class InvalidMultiEvidenceProvider:
@@ -328,6 +339,16 @@ def _task(payload: dict[str, Any]) -> dict[str, Any]:
     return json.loads(text)
 
 
+def _http_status_error(status_code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://dense.invalid/search")
+    response = httpx.Response(status_code, request=request)
+    return httpx.HTTPStatusError(
+        f"{status_code} from dense backend",
+        request=request,
+        response=response,
+    )
+
+
 def _first_sentence(passage: str) -> str:
     for delimiter in (". ", "\n"):
         if delimiter in passage:
@@ -555,6 +576,139 @@ def test_uncited_provider_prose_survives_when_structured_claims_verify() -> None
     assert "[claim_1_ref_1]" in response["answer_text"]
     assert response["citations"]
     assert response["unsupported_accepted_claims"] == 0
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected_http_status"),
+    [
+        (
+            httpx.ReadTimeout(
+                "dense timed out",
+                request=httpx.Request("GET", "https://dense.invalid/search"),
+            ),
+            None,
+        ),
+        (
+            httpx.ConnectError(
+                "dense network down",
+                request=httpx.Request("GET", "https://dense.invalid/search"),
+            ),
+            None,
+        ),
+        (_http_status_error(429), 429),
+        (_http_status_error(503), 503),
+    ],
+)
+def test_dense_transient_failures_degrade_without_blocking_lexical_primary_path(
+    exc: Exception,
+    expected_http_status: int | None,
+) -> None:
+    events: list[dict[str, Any]] = []
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=FailingDense(exc),
+        event_sink=events.append,
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["provider_invoked"] is True
+    assert response["candidate_count_by_channel"]["lexical"] > 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
+    assert response["retrieval_backend_identity"]["dense"]["availability"] == "unavailable"
+    assert response["retrieval_backend_identity"]["dense"]["degraded"] is True
+    assert response["retrieval_backend_identity"]["dense"]["reason_code"] == (
+        "DENSE_TRANSIENT_UNAVAILABLE"
+    )
+    assert response["unsupported_accepted_claims"] == 0
+    assert any(
+        event.get("type") == "stage.degraded"
+        and event.get("stage") == "retrieval"
+        and event.get("channel") == "dense"
+        and event.get("reason_code") == "DENSE_TRANSIENT_UNAVAILABLE"
+        and event.get("http_status") == expected_http_status
+        for event in events
+    )
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    [401, 403],
+)
+def test_dense_authority_errors_propagate(status_code: int) -> None:
+    with pytest.raises(httpx.HTTPStatusError):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=FailingDense(_http_status_error(status_code)),
+        )
+
+
+def test_dense_pa7_errors_propagate() -> None:
+    with pytest.raises(PA7ArbitraryQueryError, match="PA7_DENSE_BACKEND_INVALID"):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=FailingDense(
+                PA7ArbitraryQueryError("PA7_DENSE_BACKEND_INVALID", "bad dense payload")
+            ),
+        )
+
+
+def test_require_remote_dense_missing_config_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    keys = [
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_AI_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "QDRANT_URL",
+        "QDRANT_API_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY",
+        "QDRANT_API_KEY",
+        "M26_PA7_DENSE_COLLECTION",
+        "QDRANT_COLLECTION",
+        "QDRANT_COLLECTION_NAME",
+    ]
+    for key in keys:
+        monkeypatch.delenv(key, raising=False)
+
+    with pytest.raises(PA7ArbitraryQueryError, match="PA7_REMOTE_DENSE_CONFIG_MISSING"):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=None,
+            require_remote_dense=True,
+        )
+
+
+def test_lexical_only_insufficient_evidence_abstains_when_dense_unavailable() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What checksum proves zxqv nonexistent quasar asparagus ledger?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExplodingProvider(),
+        dense_channel=FailingDense(_http_status_error(429)),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_invoked"] is False
+    assert response["reason_codes"] == ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"]
+    assert response["candidate_count_by_channel"]["lexical"] == 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
 
 
 def test_contextual_definition_query_splits_head_and_context_facets() -> None:

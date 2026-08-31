@@ -11,7 +11,6 @@ from typing import Any
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
-from .m14_retrieval import retrieve_wiki_first
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
@@ -2936,19 +2935,13 @@ def run_owner_arbitrary_query(
     legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     runtime._assert_full_production_graph(bundle)
-    dense = (
-        dense_channel or legacy.dense_channel_from_env(require_remote=require_remote_dense)
-    ).search(question=normalized_question, bundle=bundle, top_k=8)
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+    lexical, dense = legacy._run_lexical_primary_retrieval(
+        question=normalized_question,
+        bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        top_k=8,
+        event_sink=event_sink,
     )
     evidence = legacy._select_evidence(
         bundle=bundle,

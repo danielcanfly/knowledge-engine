@@ -12,7 +12,6 @@ from typing import Any
 import httpx
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
-from .m14_retrieval import retrieve_wiki_first
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_EDGE_COUNT,
@@ -169,24 +168,13 @@ def run_owner_arbitrary_query(
 
     bundle = answer_bundle or load_production_answer_bundle()
     _assert_full_production_graph(bundle)
-
-    dense = (
-        dense_channel or legacy.dense_channel_from_env(require_remote=require_remote_dense)
-    ).search(
+    lexical, dense = legacy._run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
         top_k=8,
-    )
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+        event_sink=None,
     )
     evidence = legacy._select_evidence(
         bundle=bundle,
