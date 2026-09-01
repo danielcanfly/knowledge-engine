@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from knowledge_engine import m26_aq_semantic_contract
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _semantic_requirements,
@@ -609,6 +610,65 @@ def test_incomplete_answer_gets_one_bounded_repair() -> None:
     assert answer["answer_text"] == complete
     assert answer["repair_attempted"] is True
     assert closure["failures"] == []
+
+
+def test_fast_answer_contract_does_not_semantic_retry_incomplete_answer() -> None:
+    question = "Why do durable state and verification solve different reliability problems?"
+    evidence = [
+        _passage(
+            "e1",
+            "Durable state preserves progress after a disconnect.",
+            "durable-note",
+        ),
+        _passage(
+            "e2",
+            "Completion verification checks the final result before acceptance.",
+            "verification-note",
+        ),
+    ]
+    incomplete = "Durable state preserves progress after a disconnect."
+    provider = _SequenceTypedProvider(
+        [
+            _typed_body(
+                status="answer",
+                answer_text=incomplete,
+                claims=[
+                    {
+                        "claim_id": "claim_1",
+                        "claim_type": "EVIDENCE_FACT",
+                        "surface_text": incomplete,
+                        "evidence_labels": ["e1"],
+                        "covers": ["explanatory_answer"],
+                    }
+                ],
+            ),
+            _typed_body(
+                status="answer",
+                answer_text="A second semantic repair would be wrong for the hot path.",
+                claims=[],
+            ),
+        ]
+    )
+
+    answer, closure = m26_aq_semantic_contract.synthesize_and_verify(
+        question=question,
+        trace_id="trace-fast-answer-one-shot",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=_semantic_requirements(question, "direct_grounded_knowledge"),
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert [call["call_class"] for call in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
+    ]
+    assert len(_synthesis_calls(provider)) == 1
+    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["repair_attempted"] is False
+    assert answer["multi_evidence_verification"]["partial_answer"] is True
+    assert closure["partial_answer"] is True
 
 
 def test_repeated_incomplete_answer_does_not_recursive_repair() -> None:

@@ -43,11 +43,29 @@ MAX_BODY_BYTES = 4096
 HEARTBEAT_SECONDS = 10
 HARD_DEADLINE_SECONDS = 90
 PER_IP_DAILY_LIMIT = 10
-BURST_PER_MINUTE_LIMIT = 2
+
+
+def _positive_int_from_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+DEFAULT_BURST_PER_MINUTE_LIMIT = 10
+BURST_PER_MINUTE_LIMIT = _positive_int_from_env(
+    "M26_PUBLIC_BURST_PER_MINUTE_LIMIT",
+    DEFAULT_BURST_PER_MINUTE_LIMIT,
+)
 ACTIVE_PER_IP_LIMIT = 1
 GLOBAL_ACTIVE_LIMIT = 3
 GLOBAL_DAILY_LIMIT = 50
 FALLBACK_DAILY_LIMIT = 10
+PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS = 2
 PUBLIC_REQUEST_SCHEMA = "danielcanfly-answers-request/v1"
 PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"
 
@@ -566,6 +584,7 @@ async def _answer_event_stream(
                 request_payload={"question": question},
                 owner_subject_hash=os.environ["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"],
                 event_sink=sink,
+                max_provider_calls=PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS,
                 **kwargs,
             )
             event_queue.put({"type": "_dto", "dto": dto})
@@ -671,6 +690,11 @@ def _sanitize_runtime_event(event: Mapping[str, Any]) -> dict[str, Any]:
         "reason_codes",
         "terminal_status",
         "selected_evidence_count",
+        "channel",
+        "reason_code",
+        "http_status",
+        "deadline_ms",
+        "elapsed_ms",
     }
     return {key: value for key, value in event.items() if key in allowed_keys}
 
@@ -692,7 +716,11 @@ def _model_events_from_dto(dto: Mapping[str, Any]) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
     for index, attempt in enumerate(attempts, start=1):
         call_class = str(attempt.get("call_class", ""))
-        role = "semantic_reviewer" if "semantic" in call_class else "closure"
+        role = (
+            "semantic_reviewer"
+            if call_class == "aq_claim_semantic_entailment"
+            else "answer_synthesizer"
+        )
         provider = str(
             attempt.get("provider")
             or (
@@ -728,17 +756,6 @@ def _model_events_from_dto(dto: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "latency_ms": attempt.get("latency_ms"),
                 "fallback_used": bool(provider_routing.get("fallback_used")),
                 "fallback_reason": str(provider_routing.get("fallback_reason", "")),
-            }
-        )
-    if not any(event.get("role") == "semantic_reviewer" for event in events):
-        events.append(
-            {
-                "type": "model.completed",
-                "role": "semantic_reviewer",
-                "provider": MINIMAX_PROVIDER,
-                "model": MINIMAX_MODEL,
-                "attempt": 1,
-                "status": "observed_or_not_required",
             }
         )
     return events

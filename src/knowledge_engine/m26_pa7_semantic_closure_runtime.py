@@ -32,7 +32,7 @@ PA7ArbitraryQueryError = legacy.PA7ArbitraryQueryError
 MAX_QUERY_CHARS = legacy.MAX_QUERY_CHARS
 RESPONSE_SCHEMA = legacy.RESPONSE_SCHEMA
 
-MAX_PROVIDER_EVIDENCE = 10
+MAX_PROVIDER_EVIDENCE = 6
 MAX_PROVIDER_SNIPPET_CHARS = 420
 MAX_PROVIDER_ANSWER_CHARS = 4096
 MIN_PROVIDER_OUTPUT_TOKENS = 1024
@@ -448,13 +448,19 @@ def _synthesize_and_verify(
     requirements: Sequence[SemanticRequirement],
     endpoint_proof: Mapping[str, Any],
     allow_deterministic_recovery: bool = False,
+    max_attempts: int = 2,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     failures: list[str] = []
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
 
-    for attempt in (1, 2):
+    max_attempts = max(1, min(int(max_attempts), 2))
+
+    def can_retry(current_attempt: int) -> bool:
+        return current_attempt < max_attempts
+
+    for attempt in range(1, max_attempts + 1):
         compact_payload, label_map, snippet_map = _compact_provider_payload(
             question=question,
             intent_class=intent_class,
@@ -485,14 +491,14 @@ def _synthesize_and_verify(
                     failures.append(COMPACT_PROVIDER_TRUNCATED)
                 else:
                     failures.append(COMPACT_PROVIDER_PARSE_FAILED)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
             if parsed["status"] == "abstain":
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
@@ -525,7 +531,7 @@ def _synthesize_and_verify(
                 requirements=requirements,
             ):
                 failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
@@ -535,7 +541,7 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
             ):
                 failures.append("PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
@@ -557,14 +563,14 @@ def _synthesize_and_verify(
                 claim_by_id,
             ):
                 failures.append("M26-PA7-ME-065")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 partial = _verified_supported_review_partial(
@@ -599,7 +605,7 @@ def _synthesize_and_verify(
                 )
             except legacy.VerifiedAnswerGateError as exc:
                 failures.append(exc.code)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 partial = _verified_supported_review_partial(
@@ -673,7 +679,7 @@ def _synthesize_and_verify(
         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
             code = getattr(exc, "code", type(exc).__name__)
             failures.append(str(code))
-            if attempt == 1:
+            if can_retry(attempt):
                 repair_attempted = True
                 continue
         except (LiveGateError, httpx.HTTPError) as exc:

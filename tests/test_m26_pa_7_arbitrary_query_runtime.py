@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -104,6 +105,18 @@ class FailingDense:
     def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
         self.calls += 1
         raise self.exc
+
+
+class SlowDense:
+    def __init__(self, sleep_seconds: float) -> None:
+        self.sleep_seconds = sleep_seconds
+        self.calls = 0
+
+    def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+        del question, bundle, top_k
+        self.calls += 1
+        time.sleep(self.sleep_seconds)
+        return {"backend_identity": {"backend": "too_slow"}, "candidates": []}
 
 
 class InvalidMultiEvidenceProvider:
@@ -630,6 +643,38 @@ def test_dense_transient_failures_degrade_without_blocking_lexical_primary_path(
         and event.get("channel") == "dense"
         and event.get("reason_code") == "DENSE_TRANSIENT_UNAVAILABLE"
         and event.get("http_status") == expected_http_status
+        for event in events
+    )
+
+
+def test_dense_deadline_degrades_without_blocking_lexical_primary_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("M26_DENSE_SEARCH_DEADLINE_SECONDS", "0.01")
+    events: list[dict[str, Any]] = []
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=SlowDense(0.2),
+        event_sink=events.append,
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["candidate_count_by_channel"]["lexical"] > 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
+    dense_identity = response["retrieval_backend_identity"]["dense"]
+    assert dense_identity["availability"] == "unavailable"
+    assert dense_identity["degraded"] is True
+    assert dense_identity["reason_code"] == "DENSE_SEARCH_DEADLINE_EXCEEDED"
+    assert dense_identity["deadline_ms"] == 10
+    assert any(
+        event.get("type") == "stage.degraded"
+        and event.get("stage") == "retrieval"
+        and event.get("channel") == "dense"
+        and event.get("reason_code") == "DENSE_SEARCH_DEADLINE_EXCEEDED"
         for event in events
     )
 

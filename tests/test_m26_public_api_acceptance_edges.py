@@ -120,6 +120,27 @@ def test_burst_boundary_returns_locked_public_code(
     assert problem.retry_after_seconds == 48
 
 
+def test_default_public_burst_allows_fast_launch_sequential_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert m26_public_api.DEFAULT_BURST_PER_MINUTE_LIMIT >= 10
+    monkeypatch.setattr(m26_public_api, "PER_IP_DAILY_LIMIT", 100)
+    monkeypatch.setattr(m26_public_api, "BURST_PER_MINUTE_LIMIT", 10)
+    assert m26_public_api.ACTIVE_PER_IP_LIMIT == 1
+    assert m26_public_api.GLOBAL_ACTIVE_LIMIT == 3
+    ledger = PublicQuotaLedger(tmp_path / "quota.sqlite3")
+    now = datetime(2026, 8, 16, 3, 10, 12, tzinfo=UTC)
+
+    for _ in range(10):
+        assert ledger.admit(ip_key="ip-a", now=now) is None
+        ledger.release(ip_key="ip-a")
+
+    problem = ledger.admit(ip_key="ip-a", now=now)
+    assert problem is not None
+    assert problem.code == "BURST_RATE_LIMIT_EXCEEDED"
+
+
 def test_global_concurrency_boundary_returns_locked_public_code(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -313,6 +334,41 @@ def test_late_runtime_event_after_dto_cannot_escape_after_terminal(
     assert terminals[0]["type"] == "answer.completed"
     terminal_index = events.index(terminals[0])
     assert terminal_index == len(events) - 1
+
+
+def test_public_model_audit_distinguishes_synthesizer_from_reviewer() -> None:
+    dto = {
+        "provider_routing": {
+            "closure_provider_final": "cloudflare",
+            "fallback_used": False,
+            "fallback_reason": "NONE",
+            "provider_attempts": [
+                {
+                    "provider": "cloudflare",
+                    "model": "@cf/openai/gpt-oss-120b",
+                    "call_class": "aq_semantic_closure",
+                    "latency_ms": 10,
+                },
+                {
+                    "provider": "minimax-m3",
+                    "model": "MiniMax-M3",
+                    "call_class": "aq_claim_semantic_entailment",
+                    "latency_ms": 5,
+                },
+            ],
+        }
+    }
+
+    completed = [
+        event
+        for event in m26_public_api._model_events_from_dto(dto)  # noqa: SLF001
+        if event["type"] == "model.completed"
+    ]
+
+    assert [event["role"] for event in completed] == [
+        "answer_synthesizer",
+        "semantic_reviewer",
+    ]
 
 
 def test_independent_requests_have_independent_request_ids(

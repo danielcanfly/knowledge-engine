@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import re
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -56,6 +58,7 @@ MAX_BUNDLE_EVIDENCE_ITEMS = 5
 MAX_CANDIDATE_POOL_ITEMS = 40
 MAX_DYNAMIC_EVIDENCE_ITEMS = 16
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
+DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS = 2.0
 LOCAL_DENSE_DIMENSION = 64
 PA4_POLICY_PATH = Path("pilot/m26/m26-pa-4-verified-answer-policy.json")
 PA7_OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-7-owner-final-decision.json")
@@ -695,21 +698,48 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
 
 _DENSE_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
 _DENSE_TRANSIENT_REASON_CODE = "DENSE_TRANSIENT_UNAVAILABLE"
+_DENSE_TIMEOUT_REASON_CODE = "DENSE_SEARCH_DEADLINE_EXCEEDED"
+
+
+def _float_from_env(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _dense_search_deadline_seconds() -> float:
+    return _float_from_env(
+        "M26_DENSE_SEARCH_DEADLINE_SECONDS",
+        DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS,
+    )
 
 
 def _degraded_dense_result(
     dense_backend: DenseChannel,
     *,
     http_status: int | None,
+    reason_code: str = _DENSE_TRANSIENT_REASON_CODE,
+    deadline_ms: int | None = None,
+    elapsed_ms: int | None = None,
 ) -> dict[str, Any]:
+    backend_identity: dict[str, Any] = {
+        "backend": dense_backend.__class__.__name__,
+        "availability": "unavailable",
+        "degraded": True,
+        "reason_code": reason_code,
+        "http_status": http_status,
+    }
+    if deadline_ms is not None:
+        backend_identity["deadline_ms"] = deadline_ms
+    if elapsed_ms is not None:
+        backend_identity["elapsed_ms"] = elapsed_ms
     return {
-        "backend_identity": {
-            "backend": dense_backend.__class__.__name__,
-            "availability": "unavailable",
-            "degraded": True,
-            "reason_code": _DENSE_TRANSIENT_REASON_CODE,
-            "http_status": http_status,
-        },
+        "backend_identity": backend_identity,
         "candidates": [],
     }
 
@@ -718,6 +748,63 @@ def _dense_http_status(exc: httpx.HTTPStatusError) -> int | None:
     response = getattr(exc, "response", None)
     status_code = getattr(response, "status_code", None)
     return status_code if isinstance(status_code, int) else None
+
+
+def _run_dense_search_with_deadline(
+    *,
+    dense_backend: DenseChannel,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    top_k: int,
+    deadline_seconds: float,
+    event_sink: RuntimeEventSink | None,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    results: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            results.put(
+                (
+                    "ok",
+                    dense_backend.search(
+                        question=question,
+                        bundle=bundle,
+                        top_k=top_k,
+                    ),
+                ),
+                block=False,
+            )
+        except Exception as exc:
+            results.put(("error", exc), block=False)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(deadline_seconds)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    deadline_ms = int(deadline_seconds * 1000)
+    if thread.is_alive():
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            http_status=None,
+            deadline_ms=deadline_ms,
+            elapsed_ms=elapsed_ms,
+        )
+        return _degraded_dense_result(
+            dense_backend,
+            http_status=None,
+            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            deadline_ms=deadline_ms,
+            elapsed_ms=elapsed_ms,
+        )
+    status, payload = results.get_nowait()
+    if status == "error":
+        raise payload
+    return payload
 
 
 def _run_lexical_primary_retrieval(
@@ -742,10 +829,13 @@ def _run_lexical_primary_retrieval(
     )
     dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
     try:
-        dense = dense_backend.search(
+        dense = _run_dense_search_with_deadline(
+            dense_backend=dense_backend,
             question=question,
             bundle=bundle,
             top_k=top_k,
+            deadline_seconds=_dense_search_deadline_seconds(),
+            event_sink=event_sink,
         )
     except (httpx.TimeoutException, httpx.NetworkError):
         _emit_runtime_event(
@@ -892,6 +982,7 @@ def run_owner_arbitrary_query(
             }
             return response
 
+    retrieval_started = time.monotonic()
     _emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
@@ -920,6 +1011,7 @@ def run_owner_arbitrary_query(
         "stage.completed",
         stage="retrieval",
         selected_evidence_count=len(evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
     )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
         return {
@@ -5462,9 +5554,7 @@ def _candidate_is_answer_bearing(
         return subject_coverage >= 0.5 and relation_met
     if not relation_met or subject_coverage < 0.5:
         return False
-    if focus.context_terms and context_coverage < 0.5:
-        return False
-    return True
+    return not (focus.context_terms and context_coverage < 0.5)
 
 
 def _answer_bearing_selection_required(focus: _AnswerBearingQueryFocus) -> bool:

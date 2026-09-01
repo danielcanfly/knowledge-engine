@@ -915,6 +915,7 @@ def synthesize_and_verify(
         requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
         allow_deterministic_recovery=allow_deterministic_recovery,
+        max_attempts=1,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {
@@ -3146,6 +3147,7 @@ def run_owner_arbitrary_query(
                 )
             )
 
+    retrieval_started = time.monotonic()
     legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     runtime._assert_full_production_graph(bundle)
@@ -3180,6 +3182,7 @@ def run_owner_arbitrary_query(
         "stage.completed",
         stage="retrieval",
         selected_evidence_count=len(evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
     )
 
     if not evidence or not legacy._has_meaningful_overlap(normalized_question, evidence):
