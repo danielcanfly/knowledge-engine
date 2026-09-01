@@ -901,9 +901,10 @@ def synthesize_and_verify(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    runtime_requirements = _runtime_semantic_requirements(requirements)
     allow_deterministic_recovery = _definition_fallback_requirements_present(
         question=question,
-        requirements=requirements,
+        requirements=runtime_requirements,
     )
     verification, closure = runtime._synthesize_and_verify(
         question=question,
@@ -911,7 +912,7 @@ def synthesize_and_verify(
         intent_class=intent_class,
         evidence=evidence,
         provider_client=provider_client,
-        requirements=requirements,
+        requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
         allow_deterministic_recovery=allow_deterministic_recovery,
     )
@@ -939,15 +940,63 @@ def _definition_fallback_requirements_present(
     definition_parts = legacy._contextual_definition_query_parts(question)
     if definition_parts is None:
         return False
-    requirement_ids = {
-        str(getattr(item, "requirement_id", ""))
-        for item in requirements
-    }
+    requirement_ids = {_semantic_requirement_id(item) for item in requirements}
     if "definition_head" not in requirement_ids:
         return False
     if definition_parts.get("context_modifier"):
         return "context_modifier" in requirement_ids
     return True
+
+
+def _runtime_semantic_requirements(
+    requirements: Sequence[Any],
+) -> tuple[Any, ...]:
+    return tuple(
+        converted
+        for item in requirements
+        if (converted := _runtime_semantic_requirement(item)) is not None
+    )
+
+
+def _runtime_semantic_requirement(item: Any) -> Any | None:
+    if not isinstance(item, Mapping):
+        return item
+    requirement_id = _semantic_requirement_id(item)
+    if not requirement_id:
+        return None
+    return SemanticRequirement(
+        requirement_id=requirement_id,
+        instruction=_optional_text(item.get("instruction")),
+        evidence_terms=_optional_text_tuple(item.get("evidence_terms")),
+        visible_patterns=_optional_text_tuple(item.get("visible_patterns")),
+        exact_phrase=_optional_text(item.get("exact_phrase")),
+    )
+
+
+def _semantic_requirement_id(item: Any) -> str:
+    if isinstance(item, Mapping):
+        if "requirement_id" not in item:
+            return ""
+        value = item.get("requirement_id")
+    else:
+        value = getattr(item, "requirement_id", "")
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _optional_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _optional_text_tuple(value: Any) -> tuple[str, ...]:
+    if value is None or isinstance(value, (str, bytes)):
+        return ()
+    if not isinstance(value, Sequence):
+        return ()
+    return tuple(str(item) for item in value if item is not None)
 
 
 def _publish_support_proof_recovered_answer(

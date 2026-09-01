@@ -2936,6 +2936,166 @@ def test_contract_routes_definition_fallback_from_semantic_requirements() -> Non
     )
 
 
+def test_definition_fallback_requirement_bridge_accepts_mapping_shape() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    object_requirements = derive_semantic_requirements(
+        question, "direct_grounded_knowledge"
+    )
+    mapping_requirements = [
+        {"requirement_id": "definition_head", "exact_phrase": "skill"},
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+        },
+    ]
+
+    assert contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=object_requirements,
+    )
+    assert contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=mapping_requirements,
+    )
+    assert not contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=[{"exact_phrase": "skill"}],
+    )
+    assert not contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=[{"requirement_id": "definition_head"}],
+    )
+
+
+def test_contract_routes_definition_fallback_from_mapping_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill is a task-level capability wrapper."
+    requirements = [
+        {
+            "requirement_id": "definition_head",
+            "exact_phrase": "skill",
+            "instruction": (
+                "State skill with a source-backed definitional predicate rather than "
+                "an invented category."
+            ),
+        },
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+            "instruction": "Keep the contextual modifier ai agent architecture explicit.",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_predicate", predicate, "skill-predicate"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_mapping_requirement_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["multi_evidence_verification"]["support_ref_count"] > 0
+    assert answer["citations"]
+    assert answer["unsupported_accepted_claims"] == 0
+    assert answer["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_contract_mapping_definition_fallback_accepts_function_predicate() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill tells the agent how to carry out a class of work."
+    requirements = [
+        {"requirement_id": "definition_head", "exact_phrase": "skill"},
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_function_predicate", predicate, "skill-note"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_mapping_function_predicate_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["citations"][0]["evidence_id"] == "ev_skill_function_predicate"
+    assert answer["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_contract_mapping_definition_fallback_preserves_negative_guards() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    base = {
+        "question": question,
+        "intent_class": "direct_grounded_knowledge",
+        "provider_client": _AbstainingProvider(),
+        "endpoint_proof": {"required": False, "matched": False},
+    }
+    cases = [
+        (
+            [{"requirement_id": "context_modifier", "exact_phrase": "ai agent architecture"}],
+            [_rich_passage("ev_skill", "A skill is a task-level capability wrapper.", "skill")],
+        ),
+        (
+            [{"requirement_id": "definition_head", "exact_phrase": "skill"}],
+            [_rich_passage("ev_skill", "A skill is a task-level capability wrapper.", "skill")],
+        ),
+        (
+            [
+                {"requirement_id": "definition_head", "exact_phrase": "skill"},
+                {
+                    "requirement_id": "context_modifier",
+                    "exact_phrase": "ai agent architecture",
+                },
+            ],
+            [_rich_passage("ev_skill", "Skill is a broad label used in this article.", "skill")],
+        ),
+    ]
+
+    for index, (requirements, evidence) in enumerate(cases):
+        answer, closure = contract.synthesize_and_verify(
+            trace_id=f"q1c_mapping_guard_{index}",
+            evidence=evidence,
+            requirements=requirements,
+            **base,
+        )
+
+        assert answer["status"] == "owner_only_safe_abstention"
+        assert closure["broad_deterministic_fallback_used"] is False
+        assert answer["safe_abstention"] is True
+
+
 def test_contract_does_not_route_direct_intent_without_definition_requirements() -> None:
     answer, closure = contract.synthesize_and_verify(
         question="What operational guard keeps production unchanged?",
@@ -3813,6 +3973,61 @@ def test_public_contract_recovers_definition_answer_after_provider_abstention(
     lowered = response["answer_text"].casefold()
     assert "skill" in lowered
     assert "architecture" in lowered
+
+
+def test_public_contract_definition_fallback_accepts_mapping_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill is a task-level capability wrapper."
+    requirements = [
+        {
+            "requirement_id": "definition_head",
+            "exact_phrase": "skill",
+            "instruction": (
+                "State skill with a source-backed definitional predicate rather than "
+                "an invented category."
+            ),
+        },
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+            "instruction": "Keep the contextual modifier ai agent architecture explicit.",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_predicate", predicate, "skill-predicate"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+    monkeypatch.setattr(
+        contract,
+        "derive_semantic_requirements",
+        lambda *_args, **_kwargs: list(requirements),
+    )
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert response["safe_abstention"] is False
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
 
 
 def test_public_contract_preserves_safe_abstention_without_source_backed_definition_predicate(
