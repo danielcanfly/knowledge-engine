@@ -247,6 +247,9 @@ DEFINITION_PREDICATE_TERMS = {
     "acceptance",
     "behavior",
     "capability",
+    "carry",
+    "carries",
+    "carrying",
     "criteria",
     "decision",
     "follow",
@@ -262,6 +265,7 @@ DEFINITION_PREDICATE_TERMS = {
     "rules",
     "sop",
     "task",
+    "tells",
     "tool",
     "uses",
 }
@@ -1571,7 +1575,6 @@ def _deterministic_provider_candidate(
     role = "direct"
     selected: list[Mapping[str, Any]]
     claims: list[dict[str, Any]]
-    definition_parts = _contextual_definition_query_parts(question)
     if intent_class == "direct_grounded_knowledge":
         return _deterministic_direct_provider_candidate(question=question, evidence=evidence)
     if intent_class in {"cross_document_comparison", "complementary_synthesis"}:

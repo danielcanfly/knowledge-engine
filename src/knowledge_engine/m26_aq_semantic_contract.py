@@ -9,9 +9,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
-from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
@@ -901,6 +901,10 @@ def synthesize_and_verify(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    allow_deterministic_recovery = _definition_fallback_requirements_present(
+        question=question,
+        requirements=requirements,
+    )
     verification, closure = runtime._synthesize_and_verify(
         question=question,
         trace_id=trace_id,
@@ -909,7 +913,7 @@ def synthesize_and_verify(
         provider_client=provider_client,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
-        allow_deterministic_recovery=False,
+        allow_deterministic_recovery=allow_deterministic_recovery,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {
@@ -925,6 +929,25 @@ def synthesize_and_verify(
         "semantic_contract_fingerprint": fingerprint,
     }
     return verification, closure
+
+
+def _definition_fallback_requirements_present(
+    *,
+    question: str,
+    requirements: Sequence[Any],
+) -> bool:
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    if definition_parts is None:
+        return False
+    requirement_ids = {
+        str(getattr(item, "requirement_id", ""))
+        for item in requirements
+    }
+    if "definition_head" not in requirement_ids:
+        return False
+    if definition_parts.get("context_modifier"):
+        return "context_modifier" in requirement_ids
+    return True
 
 
 def _publish_support_proof_recovered_answer(

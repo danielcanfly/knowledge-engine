@@ -3293,6 +3293,9 @@ def _provider_evidence_order(
     definition_predicate_terms = {
         "acceptance",
         "behavior",
+        "carry",
+        "carries",
+        "carrying",
         "capability",
         "criteria",
         "decision",
@@ -3307,6 +3310,7 @@ def _provider_evidence_order(
         "rules",
         "sop",
         "task",
+        "tells",
         "tool",
         "uses",
     }
@@ -3399,6 +3403,9 @@ def _provider_snippet(
     definition_predicate_terms = {
         "acceptance",
         "behavior",
+        "carry",
+        "carries",
+        "carrying",
         "capability",
         "criteria",
         "decision",
@@ -3413,6 +3420,7 @@ def _provider_snippet(
         "rules",
         "sop",
         "task",
+        "tells",
         "tool",
         "uses",
     }

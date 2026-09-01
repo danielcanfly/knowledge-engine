@@ -3,14 +3,14 @@ from __future__ import annotations
 import inspect
 import json
 import time
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from knowledge_engine import m26_aq_semantic_contract as contract
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine import m26_pa7_semantic_closure_runtime as closure_runtime
-from knowledge_engine import m26_aq_semantic_contract as contract
 from knowledge_engine.m26_aq_semantic_contract import (
     _contract_compat_module,
     _publish_support_proof_recovered_answer,
@@ -2897,6 +2897,73 @@ def test_contextual_definition_query_prioritizes_head_definition_in_compact_proj
     assert snippet_map[label_map[first_item["id"]]["evidence_id"]]
 
 
+def test_contract_routes_definition_fallback_from_semantic_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _rich_passage(
+            "ev_skill_predicate",
+            "A skill is a task-level capability wrapper.",
+            "skill-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_requirement_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["multi_evidence_verification"]["support_ref_count"] > 0
+    assert answer["citations"]
+    assert any(
+        citation["exact_quote_sha256"]
+        == sha256_bytes(b"A skill is a task-level capability wrapper.")
+        for citation in answer["citations"]
+    )
+
+
+def test_contract_does_not_route_direct_intent_without_definition_requirements() -> None:
+    answer, closure = contract.synthesize_and_verify(
+        question="What operational guard keeps production unchanged?",
+        trace_id="direct_no_definition_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            _rich_passage(
+                "ev_guard",
+                "The production guard keeps canonical writes at zero.",
+                "guard-note",
+            )
+        ],
+        provider_client=_AbstainingProvider(),
+        requirements=[
+            SemanticRequirement(
+                requirement_id="production_guard",
+                instruction="State the production guard.",
+                evidence_terms=("production", "guard"),
+                visible_patterns=("production", "guard"),
+            )
+        ],
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert closure["broad_deterministic_fallback_used"] is False
+
+
 def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     question = (
         "Why is persisted run state important when a client disconnects before "
@@ -3667,7 +3734,10 @@ def test_public_contract_recovers_supported_answer_after_provider_abstention(
         ),
         _rich_passage(
             "ev_completion",
-            "Completion verification and acceptance checks happen before the system declares terminal success.",
+            (
+                "Completion verification and acceptance checks happen before the system "
+                "declares terminal success."
+            ),
             "completion-note",
         ),
         _rich_passage(
@@ -3708,7 +3778,10 @@ def test_public_contract_recovers_definition_answer_after_provider_abstention(
     evidence = [
         _rich_passage(
             "ev_skill",
-            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
             "skill-note",
         ),
         _rich_passage(
@@ -3728,7 +3801,7 @@ def test_public_contract_recovers_definition_answer_after_provider_abstention(
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
     assert response["provider_call_count"] == 2
     assert response["safe_abstention"] is False
     assert response["unsupported_accepted_claims"] == 0
@@ -3799,24 +3872,90 @@ def test_public_contract_definition_fallback_uses_selected_predicate_support_pro
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
     assert response["semantic_closure"]["support_proof"]
     support = response["semantic_closure"]["support_proof"][0]
     assert support["evidence_id"] == "ev_skill_predicate"
     assert support["locator_id"] == evidence[0]["locator_id"]
     assert support["exact_quote_sha256"] == sha256_bytes(
-        "A skill is a task-level capability wrapper.".encode("utf-8")
+        b"A skill is a task-level capability wrapper."
     )
     assert response["citations"]
     assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
-        "A skill is a task-level capability wrapper.".encode("utf-8")
+        b"A skill is a task-level capability wrapper."
     )
+
+
+def test_public_contract_definition_fallback_accepts_function_predicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill tells the agent how to carry out a class of work."
+    evidence = [
+        _rich_passage(
+            "ev_skill_function_predicate",
+            predicate,
+            "skill-function-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"][0]["evidence_id"] == "ev_skill_function_predicate"
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_public_contract_definition_fallback_rejects_article_title_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    article_title = _rich_passage("ev_title", "Skill", "skill-title")
+    article_title["section_id"] = article_title["concept_id"]
+    evidence = [
+        article_title,
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["semantic_closure"]["support_proof"] == []
 
 
 def test_public_contract_preserves_safe_abstention_without_selected_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    question = "Why is persisted run state important when a client disconnects before a long-running workflow has finished?"
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
     _stub_public_retrieval(monkeypatch, evidence=[])
 
     response = contract.run_owner_arbitrary_query(
