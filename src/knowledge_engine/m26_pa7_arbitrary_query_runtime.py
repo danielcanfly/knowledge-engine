@@ -26,7 +26,7 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
-from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
+from .m26_pa5_v8_live import LiveGateError, MiniMaxClient, MODEL as MINIMAX_MODEL
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_ADMISSION_SHA256,
     FULL_PRODUCTION_QDRANT_COLLECTION,
@@ -60,6 +60,7 @@ MAX_DYNAMIC_EVIDENCE_ITEMS = 16
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
 DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS = 2.0
 LOCAL_DENSE_DIMENSION = 64
+FAST_SYNTHESIS_CALL_CLASS = "aq_fast_answer_synthesis"
 PA4_POLICY_PATH = Path("pilot/m26/m26-pa-4-verified-answer-policy.json")
 PA7_OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-7-owner-final-decision.json")
 RELATIONAL_INTENTS = {
@@ -815,6 +816,7 @@ def _run_lexical_primary_retrieval(
     require_remote_dense: bool,
     top_k: int,
     event_sink: RuntimeEventSink | None,
+    relation_aware_expansion: bool = True,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     lexical = retrieve_wiki_first(
         query=question,
@@ -822,7 +824,7 @@ def _run_lexical_primary_retrieval(
         lexical_index=bundle.lexical_index,
         graph=bundle.graph,
         relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
+        relation_aware_expansion=relation_aware_expansion,
         provenance=bundle.provenance,
         semantic_index=None,
         limit=8,
@@ -878,6 +880,21 @@ def run_owner_arbitrary_query(
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
+    return _run_fast_public_query(
+        root=root,
+        gate=gate,
+        question=question,
+        owner_subject_hash=owner_subject_hash,
+        public_request=public_request,
+        provider_client=provider_client,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        max_provider_calls=max_provider_calls,
+        max_cost=max_cost,
+        answer_bundle=answer_bundle,
+        event_sink=event_sink,
+    )
+
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
@@ -1369,6 +1386,642 @@ def _selected_item_relation_types(item: Mapping[str, Any]) -> list[str]:
             if isinstance(edge, Mapping) and edge.get("relation_type"):
                 relation_types.append(str(edge.get("relation_type")))
     return relation_types
+
+
+def _run_fast_public_query(
+    *,
+    root: Path,
+    gate: Mapping[str, Any],
+    question: str,
+    owner_subject_hash: str,
+    public_request: bool = False,
+    provider_client: ProviderClient | None = None,
+    dense_channel: DenseChannel | None = None,
+    require_remote_dense: bool = False,
+    max_provider_calls: int = 2,
+    max_cost: Decimal = Decimal("0.10"),
+    answer_bundle: ProductionAnswerBundle | None = None,
+    event_sink: RuntimeEventSink | None = None,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    normalized_question = _normalize_request_question(question)
+    question_sha = canonical_sha256(normalized_question)
+    intent_class = _intent_class(normalized_question)
+    validated_gate = _validate_gate(root, gate)
+    identities = _object(
+        validated_gate.get("production_identities"), "gate.production_identities"
+    )
+    _emit_runtime_event(event_sink, "stage.started", stage="admission")
+    admission = evaluate_owner_admission(
+        validated_gate,
+        {
+            "resolved_gate_self_sha256": validated_gate.get("self_sha256"),
+            "owner_subject_hash": owner_subject_hash,
+            "owner_only_route": identities.get("owner_only_route"),
+            "public_request": public_request,
+        },
+    )
+    trace_id = "m26pa7aq_" + canonical_sha256(
+        {
+            "gate": validated_gate.get("self_sha256"),
+            "question_sha256": question_sha,
+            "owner_subject_hash": owner_subject_hash,
+        }
+    )[:32]
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="admission",
+        status="admitted" if admission["admitted"] else "denied",
+    )
+    if not admission["admitted"]:
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="denied_non_owner_or_public_request",
+            terminal_status="denied_before_retrieval",
+            reason_codes=admission["reason_codes"],
+        )
+    if _looks_like_prompt_injection(normalized_question):
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_safe_abstention",
+            terminal_status="safe_abstention",
+            reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+        )
+    if _looks_like_underspecified_workflow_question(normalized_question):
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_safe_abstention",
+            terminal_status="safe_abstention",
+            reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+        )
+
+    provider = provider_client
+    if provider is None:
+        try:
+            provider = MiniMaxClient(
+                os.environ.get("MINIMAX_API_KEY", ""),
+                max_calls=max_provider_calls,
+                max_cost=max_cost,
+            )
+        except LiveGateError as exc:
+            return _fast_abstention_response(
+                gate=validated_gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                reason_codes=[type(exc).__name__, "PROVIDER_CONFIGURATION_MISSING"],
+            )
+
+    retrieval_started = time.monotonic()
+    _emit_runtime_event(event_sink, "stage.started", stage="retrieval")
+    bundle = answer_bundle or load_production_answer_bundle()
+    lexical, dense = _run_lexical_primary_retrieval(
+        question=normalized_question,
+        bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        top_k=8,
+        event_sink=event_sink,
+        relation_aware_expansion=False,
+    )
+    selected_evidence = _select_evidence(
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        trace_id=trace_id,
+        question=normalized_question,
+        intent_class=intent_class,
+        allow_graph_expansion=False,
+    )[:6]
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="retrieval",
+        selected_evidence_count=len(selected_evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
+    )
+    if not selected_evidence or not _has_meaningful_overlap(normalized_question, selected_evidence):
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[
+                "NO_AUTHORIZED_PRODUCTION_EVIDENCE"
+                if not selected_evidence
+                else "LOW_RETRIEVAL_SUPPORT"
+            ],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=[],
+            intent_class=intent_class,
+        )
+
+    synthesis_started = time.monotonic()
+    _emit_runtime_event(event_sink, "stage.started", stage="synthesis")
+    payload = _fast_synthesis_payload(
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=selected_evidence,
+    )
+    provider_identity = _fast_provider_identity(provider)
+    _emit_runtime_event(
+        event_sink,
+        "model.started",
+        role="answer_synthesizer",
+        provider=provider_identity["provider"],
+        model=provider_identity["model"],
+        attempt=1,
+    )
+    try:
+        provider_result = provider.call(payload, FAST_SYNTHESIS_CALL_CLASS)
+    except (LiveGateError, httpx.HTTPError, KeyError, ValueError) as exc:
+        failure_latency_ms = int((time.monotonic() - synthesis_started) * 1000)
+        _emit_runtime_event(
+            event_sink,
+            "model.completed",
+            role="answer_synthesizer",
+            provider=provider_identity["provider"],
+            model=provider_identity["model"],
+            attempt=1,
+            status="provider_unavailable",
+            latency_ms=failure_latency_ms,
+        )
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result={
+                "call_class": FAST_SYNTHESIS_CALL_CLASS,
+                "latency_ms": failure_latency_ms,
+                "output_char_count": 0,
+                "stop_reason": "",
+                "cost_usd": "0",
+            },
+        )
+
+    normalized = _normalize_fast_provider_result(provider_result)
+    _emit_runtime_event(
+        event_sink,
+        "model.completed",
+        role="answer_synthesizer",
+        provider=provider_identity["provider"],
+        model=provider_identity["model"],
+        attempt=1,
+        status="ok",
+        latency_ms=normalized.get("latency_ms"),
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="synthesis",
+        status="provider_response",
+        latency_ms=int((time.monotonic() - synthesis_started) * 1000),
+    )
+
+    publication = _validate_fast_provider_candidate(
+        question=normalized_question,
+        selected_evidence=selected_evidence,
+        provider_output=normalized,
+    )
+    if publication is None:
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=["PROVIDER_OUTPUT_INVALID"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+
+    response = _fast_answer_response(
+        gate=validated_gate,
+        trace_id=trace_id,
+        question_sha=question_sha,
+        started=started,
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        selected_evidence=selected_evidence,
+        intent_class=intent_class,
+        provider_identity=provider_identity,
+        provider_result=normalized,
+        publication=publication,
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="publication",
+        status=response.get("status", ""),
+    )
+    return response
+
+
+def _fast_provider_identity(provider_client: ProviderClient) -> dict[str, str]:
+    telemetry = getattr(provider_client, "telemetry", None)
+    if callable(telemetry):
+        try:
+            data = telemetry()
+        except Exception:
+            data = None
+        if isinstance(data, Mapping):
+            attempts = data.get("provider_attempts")
+            if isinstance(attempts, list) and attempts:
+                last = attempts[-1]
+                if isinstance(last, Mapping):
+                    provider = str(
+                        last.get("provider")
+                        or data.get("closure_provider_final")
+                        or data.get("closure_provider_initial")
+                        or "unknown"
+                    )
+                    model = str(
+                        last.get("model")
+                        or ("MiniMax-M3" if provider == "minimax-m3" else "unknown")
+                    )
+                    return {"provider": provider, "model": model}
+            provider = str(
+                data.get("closure_provider_final")
+                or data.get("closure_provider_initial")
+                or "unknown"
+            )
+            model = str(
+                data.get("closure_provider_final_model")
+                or data.get("closure_provider_initial_model")
+                or ("MiniMax-M3" if provider == "minimax-m3" else "unknown")
+            )
+            return {"provider": provider, "model": model}
+    if isinstance(provider_client, MiniMaxClient):
+        return {"provider": "minimax-m3", "model": MINIMAX_MODEL}
+    provider = provider_client.__class__.__name__.removesuffix("Client").casefold()
+    return {"provider": provider or "unknown", "model": "unknown"}
+
+
+def _fast_synthesis_payload(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    evidence_payload = [_provider_evidence_item(item) for item in evidence]
+    return {
+        "model": MINIMAX_MODEL,
+        "max_tokens": 768,
+        "temperature": 0,
+        "stream": False,
+        "system": (
+            "You are the fast cited answer synthesizer for public M26 answers. "
+            "Write one natural answer in plain prose. Use only the supplied evidence. "
+            "Return exactly one JSON object with keys status, answer_text, citation_ids, "
+            "and abstention_reason. status must be answer or abstain. citation_ids must "
+            "be evidence_id values from the supplied evidence bundle. Cite the evidence "
+            "you actually used. Do not mention internal labels, exact-quote scaffolding, "
+            "or unsupported claims. If the supplied evidence is genuinely insufficient, "
+            "return status abstain."
+        ),
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "question": question,
+                                "trace_id": trace_id,
+                                "intent_class": intent_class,
+                                "evidence_bundle": evidence_payload,
+                                "response_format": {
+                                    "status": "answer|abstain",
+                                    "answer_text": "natural prose",
+                                    "citation_ids": ["evidence_id", "..."],
+                                    "abstention_reason": "string or null",
+                                },
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    text = str(result.get("provider_text", result.get("text", "")))
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        parsed = {}
+    return {
+        "provider_text": text,
+        "provider_text_char_count": len(text),
+        "call_class": str(result.get("call_class", "")),
+        "latency_ms": int(result.get("latency_ms", 0) or 0),
+        "stop_reason": str(result.get("stop_reason") or result.get("finish_reason") or ""),
+        "usage": dict(result.get("usage", {})) if isinstance(result.get("usage"), Mapping) else {},
+        "cost_usd": str(result.get("cost_usd", "0")),
+        "response_id": str(result.get("response_id", "")),
+        "output_char_count": int(result.get("output_char_count", len(text)) or len(text)),
+        "parsed": parsed if isinstance(parsed, Mapping) else {},
+    }
+
+
+def _validate_fast_provider_candidate(
+    *,
+    question: str,
+    selected_evidence: Sequence[Mapping[str, Any]],
+    provider_output: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    del question
+    parsed = _object(provider_output.get("parsed", {}), "fast provider parsed")
+    status = str(parsed.get("status", "")).strip().casefold()
+    if status == "abstain":
+        return None
+    if status != "answer":
+        return None
+    answer_text = re.sub(r"\s+", " ", str(parsed.get("answer_text", ""))).strip()
+    if not answer_text or _contains_internal_fragment_leak(answer_text):
+        return None
+    raw_ids = parsed.get("citation_ids")
+    if raw_ids is None:
+        raw_ids = parsed.get("citations")
+    citation_ids: list[str] = []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            if isinstance(item, Mapping):
+                citation_id = str(
+                    item.get("evidence_id")
+                    or item.get("citation_id")
+                    or item.get("id")
+                    or ""
+                ).strip()
+            else:
+                citation_id = str(item).strip()
+            if citation_id:
+                citation_ids.append(citation_id)
+    citation_ids = list(dict.fromkeys(citation_ids))
+    if not citation_ids:
+        return None
+    selected_by_id = {str(item["evidence_id"]): item for item in selected_evidence}
+    if any(citation_id not in selected_by_id for citation_id in citation_ids):
+        return None
+    support_refs = []
+    for citation_id in citation_ids:
+        support_ref = _deterministic_support_ref(selected_by_id[citation_id])
+        if support_ref is None:
+            snippet = str(selected_by_id[citation_id].get("passage_text", ""))[:240]
+            support_ref = {
+                "evidence_id": citation_id,
+                "locator_id": str(selected_by_id[citation_id]["locator_id"]),
+                "exact_quote": snippet,
+                "exact_support_snippet": snippet,
+                "exact_quote_sha256": sha256_bytes(snippet.encode("utf-8")),
+                "uncertainty": "low",
+            }
+        support_refs.append(support_ref)
+    return {
+        "status": "answer",
+        "answer_text": answer_text,
+        "citation_ids": citation_ids,
+        "support_refs": support_refs,
+        "abstention_reason": str(parsed.get("abstention_reason") or ""),
+    }
+
+
+def _contains_internal_fragment_leak(text: str) -> bool:
+    lowered = text.casefold()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "definition head",
+            "context modifier",
+            "need relation",
+            "semantic_closure",
+            "support proof",
+            "claim-by-claim",
+            "exact quote",
+            "visible coverage",
+            "unanswered dimensions",
+        )
+    )
+
+
+def _fast_answer_response(
+    *,
+    gate: Mapping[str, Any],
+    trace_id: str,
+    question_sha: str,
+    started: float,
+    bundle: ProductionAnswerBundle,
+    lexical_result: Mapping[str, Any],
+    dense_result: Mapping[str, Any],
+    selected_evidence: Sequence[Mapping[str, Any]],
+    intent_class: str,
+    provider_identity: Mapping[str, str],
+    provider_result: Mapping[str, Any],
+    publication: Mapping[str, Any],
+) -> dict[str, Any]:
+    evidence_by_id = {str(item["evidence_id"]): item for item in selected_evidence}
+    citations = []
+    support_refs = list(publication.get("support_refs", []))
+    for index, citation_id in enumerate(publication["citation_ids"], start=1):
+        evidence = evidence_by_id[citation_id]
+        support_ref = (
+            support_refs[index - 1]
+            if index - 1 < len(support_refs)
+            else _deterministic_support_ref(evidence)
+        )
+        if support_ref is None:
+            snippet = str(evidence.get("passage_text", ""))[:240]
+            support_ref = {
+                "evidence_id": citation_id,
+                "locator_id": str(evidence["locator_id"]),
+                "exact_quote": snippet,
+                "exact_support_snippet": snippet,
+                "exact_quote_sha256": sha256_bytes(snippet.encode("utf-8")),
+                "uncertainty": "low",
+            }
+        citations.append(
+            _public_citation(
+                evidence,
+                {"claim_id": "claim_1", "claim_role": "direct"},
+                support_ref,
+                index,
+            )
+        )
+    response = {
+        **_base_response(
+            gate=gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_cited_answer",
+            terminal_status="fast_answer_ready",
+            answer_text=str(publication["answer_text"]),
+            citations=citations,
+            safe_abstention=False,
+            reason_codes=[],
+            provider_invoked=True,
+            provider_call_count=1,
+            payg_equivalent_cost_usd=str(provider_result.get("cost_usd", "0")),
+            material_claim_support_verified=True,
+            citation_locator_valid=True,
+            unsupported_accepted_claims=0,
+            repair_attempted=False,
+        ),
+        **_retrieval_response_fields(
+            gate=gate,
+            bundle=bundle,
+            lexical_result=lexical_result,
+            dense_result=dense_result,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+        ),
+        "citations": citations,
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "citation_ids": [citation["citation_id"] for citation in citations],
+                "support_ref_count": len(citations),
+            }
+        ],
+        "answer_source": "fast_natural_cited_synthesis",
+        "relationship_summary": {
+            "synthesis_source": "fast_natural_cited_synthesis",
+        },
+        "multi_evidence_verification": {
+            "provider_call_class": provider_result.get("call_class", FAST_SYNTHESIS_CALL_CLASS),
+            "provider_output_char_count": provider_result.get("provider_text_char_count", 0),
+            "citation_ids": publication["citation_ids"],
+            "deterministic_citation_validation": True,
+            "selected_evidence_ids": [str(item["evidence_id"]) for item in selected_evidence],
+        },
+        "provider_routing": {
+            "closure_provider_initial": provider_identity["provider"],
+            "closure_provider_final": provider_identity["provider"],
+            "fallback_used": False,
+            "fallback_reason": "NONE",
+            "provider_attempts": [
+                {
+                    "call_class": provider_result.get(
+                        "call_class", FAST_SYNTHESIS_CALL_CLASS
+                    ),
+                    "provider": provider_identity["provider"],
+                    "model": provider_identity["model"],
+                    "latency_ms": provider_result.get("latency_ms", 0),
+                    "stop_reason": provider_result.get("stop_reason", ""),
+                    "output_char_count": provider_result.get("output_char_count", 0),
+                }
+            ],
+        },
+        "semantic_closure": {},
+    }
+    response["evidence_utilization_trace"] = _evidence_utilization_trace(response)
+    response["latency_ms"] = max(
+        int(response["latency_ms"]),
+        int((time.monotonic() - started) * 1000),
+    )
+    return response
+
+
+def _fast_abstention_response(
+    *,
+    gate: Mapping[str, Any],
+    trace_id: str,
+    question_sha: str,
+    started: float,
+    reason_codes: Sequence[str],
+    bundle: ProductionAnswerBundle | None = None,
+    lexical_result: Mapping[str, Any] | None = None,
+    dense_result: Mapping[str, Any] | None = None,
+    selected_evidence: Sequence[Mapping[str, Any]] | None = None,
+    intent_class: str = "direct_grounded_knowledge",
+    provider_invoked: bool = False,
+    provider_identity: Mapping[str, str] | None = None,
+    provider_result: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = _base_response(
+        gate=gate,
+        trace_id=trace_id,
+        question_sha=question_sha,
+        started=started,
+        status="owner_only_safe_abstention",
+        terminal_status="safe_abstention",
+        reason_codes=reason_codes,
+        provider_invoked=provider_invoked,
+        provider_call_count=1 if provider_invoked else 0,
+        payg_equivalent_cost_usd=str(
+            provider_result.get("cost_usd", "0") if provider_result else "0"
+        ),
+        material_claim_support_verified=True,
+        citation_locator_valid=True,
+        unsupported_accepted_claims=0,
+        repair_attempted=False,
+    )
+    if bundle is not None and lexical_result is not None and dense_result is not None:
+        response.update(
+            _retrieval_response_fields(
+                gate=gate,
+                bundle=bundle,
+                lexical_result=lexical_result,
+                dense_result=dense_result,
+                selected_evidence=selected_evidence or [],
+                intent_class=intent_class,
+            )
+        )
+    if provider_identity is not None and provider_result is not None:
+        response["provider_routing"] = {
+            "closure_provider_initial": provider_identity["provider"],
+            "closure_provider_final": provider_identity["provider"],
+            "fallback_used": False,
+            "fallback_reason": "NONE",
+            "provider_attempts": [
+                {
+                    "call_class": provider_result.get(
+                        "call_class", FAST_SYNTHESIS_CALL_CLASS
+                    ),
+                    "provider": provider_identity["provider"],
+                    "model": provider_identity["model"],
+                    "latency_ms": provider_result.get("latency_ms", 0),
+                    "stop_reason": provider_result.get("stop_reason", ""),
+                    "output_char_count": provider_result.get("output_char_count", 0),
+                }
+            ],
+        }
+    response["semantic_closure"] = {}
+    return response
 
 
 def _synthesize_and_verify(
@@ -2433,6 +3086,7 @@ def _deterministic_support_ref(item: Mapping[str, Any]) -> dict[str, str] | None
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -5035,6 +5689,7 @@ def _select_evidence(
     trace_id: str,
     question: str,
     intent_class: str,
+    allow_graph_expansion: bool = True,
 ) -> list[dict[str, Any]]:
     documents = {str(item["section_id"]): item for item in _release_documents(bundle)}
     lexical_results = _list(lexical_result.get("results"), "lexical results")
@@ -5045,6 +5700,7 @@ def _select_evidence(
         dense_candidates=_list(dense_result.get("candidates"), "dense candidates"),
         question=question,
         intent_class=intent_class,
+        allow_graph_expansion=allow_graph_expansion,
     )
     budget = _dynamic_evidence_budget(question=question, intent_class=intent_class)
     ordered = _rerank_candidates(
@@ -5088,6 +5744,7 @@ def _build_candidate_pool(
     dense_candidates: Sequence[Any],
     question: str,
     intent_class: str,
+    allow_graph_expansion: bool = True,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
     for rank, item in enumerate(lexical_results, start=1):
@@ -5108,13 +5765,14 @@ def _build_candidate_pool(
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
-    _add_graph_expanded_candidates(
-        bundle=bundle,
-        documents=documents,
-        candidates=candidates,
-        question=question,
-        intent_class=intent_class,
-    )
+    if allow_graph_expansion:
+        _add_graph_expanded_candidates(
+            bundle=bundle,
+            documents=documents,
+            candidates=candidates,
+            question=question,
+            intent_class=intent_class,
+        )
     return sorted(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),

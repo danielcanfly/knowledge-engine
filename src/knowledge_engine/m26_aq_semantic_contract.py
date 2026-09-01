@@ -3038,6 +3038,23 @@ def run_owner_arbitrary_query(
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: legacy.RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
+    return _response_with_contract(
+        legacy.run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=provider_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            answer_bundle=answer_bundle,
+            event_sink=event_sink,
+        )
+    )
+
     import time
 
     started = time.monotonic()
