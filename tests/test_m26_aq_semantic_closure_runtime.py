@@ -3772,6 +3772,47 @@ def test_public_contract_preserves_safe_abstention_without_source_backed_definit
     assert response["semantic_closure"]["support_proof"] == []
 
 
+def test_public_contract_definition_fallback_uses_selected_predicate_support_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill_predicate",
+            "A skill is a task-level capability wrapper.",
+            "skill-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["semantic_closure"]["support_proof"]
+    support = response["semantic_closure"]["support_proof"][0]
+    assert support["evidence_id"] == "ev_skill_predicate"
+    assert support["locator_id"] == evidence[0]["locator_id"]
+    assert support["exact_quote_sha256"] == sha256_bytes(
+        "A skill is a task-level capability wrapper.".encode("utf-8")
+    )
+    assert response["citations"]
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        "A skill is a task-level capability wrapper.".encode("utf-8")
+    )
+
+
 def test_public_contract_preserves_safe_abstention_without_selected_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1940,16 +1940,23 @@ def _deterministic_definition_surface_text(
         return ""
     head_terms = _coverage_terms(head)
     predicate_terms = DEFINITION_PREDICATE_TERMS
-    chosen = next(
-        (
-            quote
-            for quote in quotes
-            if head_terms & _coverage_terms(quote)
-            and _coverage_terms(quote) & predicate_terms
-        ),
-        quotes[0],
-    )
-    surface = chosen.strip()
+    predicate_quotes = [
+        quote
+        for quote in quotes
+        if _coverage_terms(quote) & predicate_terms
+    ]
+    if predicate_quotes:
+        selected = next(
+            (
+                quote
+                for quote in predicate_quotes
+                if head_terms & _coverage_terms(quote)
+            ),
+            predicate_quotes[0],
+        )
+    else:
+        selected = quotes[0]
+    surface = selected.strip()
     if head and head.casefold() not in surface.casefold():
         surface = f"{head} {surface}".strip()
     if context and context.casefold() not in surface.casefold():

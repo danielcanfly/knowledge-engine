@@ -351,17 +351,75 @@ def _mirror_verified_support_proof(
     semantic_closure: Mapping[str, Any],
 ) -> dict[str, Any]:
     closure = dict(semantic_closure)
-    if closure.get("support_proof"):
-        return closure
-    if str(verification.get("status", "")) != "owner_only_cited_answer":
-        return closure
     citations = [
         item for item in verification.get("citations", []) if isinstance(item, Mapping)
     ]
     if not citations:
         return closure
+    existing = [item for item in closure.get("support_proof", []) if isinstance(item, Mapping)]
     support_proof: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
+
+    def _merge_proof(
+        proof: Mapping[str, Any] | None,
+        citation: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        evidence_id = str((proof or {}).get("evidence_id") or citation.get("evidence_id", ""))
+        locator_id = str((proof or {}).get("locator_id") or citation.get("locator_id", ""))
+        exact_quote_sha256 = str(
+            (proof or {}).get("exact_quote_sha256") or citation.get("exact_quote_sha256", "")
+        )
+        if not evidence_id or not locator_id or not exact_quote_sha256:
+            return None
+        merged = {
+            **dict(proof or {}),
+            "claim_id": str((proof or {}).get("claim_id") or citation.get("claim_id", "")),
+            "citation_id": str((proof or {}).get("citation_id") or citation.get("citation_id", "")),
+            "evidence_id": evidence_id,
+            "locator_id": locator_id,
+            "source_id": str((proof or {}).get("source_id") or citation.get("source_id", "")),
+            "source_identity": str(
+                (proof or {}).get("source_identity") or citation.get("source_identity", "")
+            ),
+            "section_id": str((proof or {}).get("section_id") or citation.get("section_id", "")),
+            "concept_id": str((proof or {}).get("concept_id") or citation.get("concept_id", "")),
+            "release_id": str((proof or {}).get("release_id") or citation.get("release_id", "")),
+            "source_locator": str(
+                (proof or {}).get("source_locator") or citation.get("source_locator", "")
+            ),
+            "support_text_sha256": str(
+                (proof or {}).get("support_text_sha256") or citation.get("support_text_sha256", "")
+            ),
+            "exact_quote_sha256": exact_quote_sha256,
+            "source_artifact_sha256": str(
+                (proof or {}).get("source_artifact_sha256")
+                or citation.get("source_artifact_sha256", "")
+            ),
+            "provenance_record_sha256": str(
+                (proof or {}).get("provenance_record_sha256")
+                or citation.get("provenance_record_sha256", "")
+            ),
+            "runtime_owned_locator": bool(
+                (proof or {}).get("runtime_owned_locator", citation.get("runtime_owned_locator", False))
+            ),
+            "supported": True,
+        }
+        return merged
+
+    for proof, citation in zip(existing, citations, strict=False):
+        merged = _merge_proof(proof, citation)
+        if merged is None:
+            continue
+        key = (
+            str(merged.get("evidence_id", "")),
+            str(merged.get("locator_id", "")),
+            str(merged.get("exact_quote_sha256", "")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        support_proof.append(merged)
+
     for citation in citations:
         evidence_id = str(citation.get("evidence_id", ""))
         locator_id = str(citation.get("locator_id", ""))
@@ -369,33 +427,11 @@ def _mirror_verified_support_proof(
         key = (evidence_id, locator_id, exact_quote_sha256)
         if not evidence_id or key in seen:
             continue
+        merged = _merge_proof(None, citation)
+        if merged is None:
+            continue
         seen.add(key)
-        support_proof.append(
-            {
-                "claim_id": str(citation.get("claim_id", "")),
-                "citation_id": str(citation.get("citation_id", "")),
-                "evidence_id": evidence_id,
-                "locator_id": locator_id,
-                "source_id": str(citation.get("source_id", "")),
-                "source_identity": str(citation.get("source_identity", "")),
-                "section_id": str(citation.get("section_id", "")),
-                "concept_id": str(citation.get("concept_id", "")),
-                "release_id": str(citation.get("release_id", "")),
-                "source_locator": str(citation.get("source_locator", "")),
-                "support_text_sha256": str(citation.get("support_text_sha256", "")),
-                "exact_quote_sha256": exact_quote_sha256,
-                "source_artifact_sha256": str(
-                    citation.get("source_artifact_sha256", "")
-                ),
-                "provenance_record_sha256": str(
-                    citation.get("provenance_record_sha256", "")
-                ),
-                "runtime_owned_locator": bool(
-                    citation.get("runtime_owned_locator", False)
-                ),
-                "supported": True,
-            }
-        )
+        support_proof.append(merged)
     if support_proof:
         closure["support_proof"] = support_proof
         closure["mirrored_verified_support_proof"] = True
