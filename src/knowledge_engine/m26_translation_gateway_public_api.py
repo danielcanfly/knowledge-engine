@@ -31,6 +31,7 @@ from .m26_google_translation_provider import (
     TranslationProviderConfig,
     TranslationProviderError,
 )
+from .m26_production_answer_bundle import load_production_answer_bundle
 from .m26_retrieval_envelope import sha256_value
 from .m26_translation_gateway import (
     TRANSLATION_GATEWAY_SCHEMA,
@@ -59,8 +60,13 @@ def _app_translation_provider(app: FastAPI) -> TranslationProvider:
         return provider
 
 
+def _prewarm_production_answer_bundle() -> None:
+    load_production_answer_bundle()
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> Any:
+    _prewarm_production_answer_bundle()
     try:
         yield
     finally:

@@ -10,6 +10,7 @@ def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setattr(public_gateway_module, "load_production_answer_bundle", lambda: None)
 
     def fake_run_owner_translation_gateway_for_web(**_: object) -> dict[str, object]:
         return {

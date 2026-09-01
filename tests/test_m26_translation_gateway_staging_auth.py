@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine.auth import Authenticator, Principal
+from knowledge_engine import m26_translation_gateway_public_api as gateway_module
 from knowledge_engine.m26_translation_gateway_public_api import (
     create_app,
 )
@@ -148,3 +149,154 @@ def test_staging_answers_preflight_allows_authorization(
 
     assert response.status_code in {200, 204}
     assert "authorization" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_gateway_startup_prewarms_bundle_before_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("AUTH_MODE", "supabase_jwt")
+    monkeypatch.setenv(
+        "JWT_ISSUER",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1",
+    )
+    monkeypatch.setenv(
+        "JWT_JWKS_URL",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1/.well-known/jwks.json",
+    )
+    monkeypatch.setenv("JWT_AUDIENCE", "authenticated")
+    monkeypatch.setenv("OBJECT_STORE_BACKEND", "filesystem")
+    monkeypatch.setenv(
+        "M26_PUBLIC_ALLOWED_ORIGINS",
+        "https://staging.danielcanfly.com",
+    )
+    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+
+    monkeypatch.setattr(
+        gateway_module,
+        "load_production_answer_bundle",
+        lambda: events.append("bundle"),
+    )
+
+    def fail_if_factory_called() -> object:
+        raise AssertionError("provider factory must not run during startup prewarm")
+
+    app = create_app(root=Path("."), provider_factory=fail_if_factory_called)
+
+    with TestClient(app) as client:
+        assert events == ["bundle"]
+        assert client.get("/v1/answers/health").status_code == 200
+        assert events == ["bundle"]
+
+
+def test_gateway_startup_prewarm_failure_blocks_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("AUTH_MODE", "supabase_jwt")
+    monkeypatch.setenv(
+        "JWT_ISSUER",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1",
+    )
+    monkeypatch.setenv(
+        "JWT_JWKS_URL",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1/.well-known/jwks.json",
+    )
+    monkeypatch.setenv("JWT_AUDIENCE", "authenticated")
+    monkeypatch.setenv("OBJECT_STORE_BACKEND", "filesystem")
+    monkeypatch.setenv(
+        "M26_PUBLIC_ALLOWED_ORIGINS",
+        "https://staging.danielcanfly.com",
+    )
+    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+
+    monkeypatch.setattr(
+        gateway_module,
+        "load_production_answer_bundle",
+        lambda: (_ for _ in ()).throw(RuntimeError("bundle prewarm failed")),
+    )
+
+    app = create_app(root=Path("."), provider_factory=lambda: object())
+
+    with pytest.raises(RuntimeError, match="bundle prewarm failed"):
+        with TestClient(app):
+            pass
+
+
+def test_gateway_first_query_after_startup_does_not_rewarm_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "staging")
+    monkeypatch.setenv("AUTH_MODE", "supabase_jwt")
+    monkeypatch.setenv(
+        "JWT_ISSUER",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1",
+    )
+    monkeypatch.setenv(
+        "JWT_JWKS_URL",
+        "https://votyiqqxkpiurwqshylx.supabase.co/auth/v1/.well-known/jwks.json",
+    )
+    monkeypatch.setenv("JWT_AUDIENCE", "authenticated")
+    monkeypatch.setenv("OBJECT_STORE_BACKEND", "filesystem")
+    monkeypatch.setenv(
+        "M26_PUBLIC_ALLOWED_ORIGINS",
+        "https://staging.danielcanfly.com",
+    )
+    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+
+    monkeypatch.setattr(
+        Authenticator,
+        "authenticate",
+        lambda self, authorization: Principal(  # type: ignore[call-arg]
+            subject="staging-test-user",
+            audiences=frozenset({"authenticated", "public"}),
+            claims={"sub": "staging-test-user"},
+        ),
+    )
+
+    observed: list[str] = []
+    monkeypatch.setattr(
+        gateway_module,
+        "load_production_answer_bundle",
+        lambda: observed.append("bundle"),
+    )
+
+    def fake_run_owner_translation_gateway_for_web(**kwargs: Any) -> dict[str, Any]:
+        observed.append("query")
+        assert observed == ["bundle", "query"]
+        return {
+            "answer_text": "A grounded supported answer.",
+            "citation_count": 1,
+            "source_count": 1,
+            "translation_gateway": {
+                "translation_applied": True,
+                "invariant_check_result": "pass",
+                "provider": "Google",
+            },
+        }
+
+    monkeypatch.setattr(
+        gateway_module,
+        "run_owner_translation_gateway_for_web",
+        fake_run_owner_translation_gateway_for_web,
+    )
+
+    app = create_app(root=Path("."))
+
+    with TestClient(app) as client:
+        assert observed == ["bundle"]
+        response = client.post(
+            "/v1/answers",
+            headers={
+                "origin": "https://staging.danielcanfly.com",
+                "authorization": "Bearer staging-token",
+            },
+            json={"question": "What is safe?"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: answer" in response.text
+    assert observed == ["bundle", "query"]
