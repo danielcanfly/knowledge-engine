@@ -2683,6 +2683,70 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
         add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    if "trade-off" in question_casefold or "tradeoff" in question_casefold:
+        add(
+            "tradeoff_relation",
+            [
+                "tradeoff",
+                "trade off",
+                "trade-offs",
+                "trade offs",
+                "balance",
+                "tension",
+                "compromise",
+                "cost",
+                "costs",
+                "between",
+                "versus",
+                "vs",
+            ],
+        )
+    if re.search(r"\brole\s+of\b", question_casefold):
+        add(
+            "role_relation",
+            [
+                "role",
+                "purpose",
+                "function",
+                "responsibility",
+                "responsibilities",
+                "use",
+                "uses",
+                "used",
+                "help",
+                "helps",
+                "inform",
+                "informs",
+                "guide",
+                "guides",
+                "support",
+                "supports",
+                "decision",
+                "decisions",
+            ],
+        )
+    if re.search(r"\bwhat\s+kind\s+of\b.*\bneed\b", question_casefold) or re.search(
+        r"\bneed(s|ed)?\b", question_casefold
+    ):
+        add(
+            "need_relation",
+            [
+                "need",
+                "needs",
+                "needed",
+                "require",
+                "requires",
+                "required",
+                "skill",
+                "skills",
+                "capability",
+                "capabilities",
+                "competence",
+                "competency",
+                "ability",
+                "abilities",
+            ],
+        )
     if "source of trust" in question_casefold:
         add("source_of_trust", ["source", "trust", "anchor", "authority"])
     if re.search(r"\bdoes\b.*\bprove\b|\bcan we safely infer\b|\bwhat can(?:'t|not) we infer\b", question_casefold):
@@ -4891,7 +4955,12 @@ def _select_evidence(
         intent_class=intent_class,
     )
     budget = _dynamic_evidence_budget(question=question, intent_class=intent_class)
-    ordered = _rerank_candidates(candidates, budget=budget)
+    ordered = _rerank_candidates(
+        candidates,
+        budget=budget,
+        documents=documents,
+        question=question,
+    )
     selected_candidates = _select_diverse_candidates(ordered, budget=budget)
     evidence = []
     for index, candidate in enumerate(selected_candidates, start=1):
@@ -5159,23 +5228,282 @@ def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     return max(4, min(base, MAX_DYNAMIC_EVIDENCE_ITEMS))
 
 
+@dataclass(frozen=True)
+class _AnswerBearingQueryFocus:
+    relation: str
+    subject_terms: frozenset[str]
+    context_terms: frozenset[str]
+    relation_terms: frozenset[str]
+    subject_phrases: tuple[str, ...]
+    requires_explicit_relation: bool
+
+
+def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
+    normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is not None:
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(definition_parts["definition_head"])),
+            context_terms=frozenset(_coverage_terms(definition_parts["context_modifier"])),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS),
+            subject_phrases=tuple(
+                item
+                for item in (
+                    definition_parts["definition_head"],
+                    definition_parts["context_modifier"],
+                )
+                if item
+            ),
+            requires_explicit_relation=False,
+        )
+
+    role_match = re.search(r"\brole\s+of\s+(.+?)\s+in\s+(.+?)(?:\?|$)", normalized)
+    if role_match is not None:
+        role_subject = _strip_leading_articles(role_match.group(1))
+        role_context = _strip_leading_articles(role_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="role",
+            subject_terms=frozenset(_coverage_terms(role_subject)),
+            context_terms=frozenset(_coverage_terms(role_context)),
+            relation_terms=frozenset(
+                {
+                    "role",
+                    "purpose",
+                    "function",
+                    "responsibility",
+                    "responsibilities",
+                    "use",
+                    "uses",
+                    "used",
+                    "help",
+                    "helps",
+                    "inform",
+                    "informs",
+                    "guide",
+                    "guides",
+                    "support",
+                    "supports",
+                    "decision",
+                    "decisions",
+                    "decide",
+                    "understand",
+                    "validates",
+                    "validation",
+                    "prioritize",
+                    "prioritization",
+                }
+            ),
+            subject_phrases=tuple(item for item in (role_subject, role_context) if item),
+            requires_explicit_relation=True,
+        )
+
+    need_match = re.search(
+        r"\bwhat\s+kind\s+of\s+(.+?)\s+does\s+(.+?)\s+need\b",
+        normalized,
+    )
+    if need_match is None:
+        need_match = re.search(r"\bwhat\s+(.+?)\s+does\s+(.+?)\s+need\b", normalized)
+    if need_match is not None:
+        needed_thing = _strip_leading_articles(need_match.group(1))
+        actor = _strip_leading_articles(need_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="need",
+            subject_terms=frozenset(_coverage_terms(actor)),
+            context_terms=frozenset(_coverage_terms(needed_thing)),
+            relation_terms=frozenset(
+                {
+                    "need",
+                    "needs",
+                    "needed",
+                    "require",
+                    "requires",
+                    "required",
+                    "must",
+                    "should",
+                    "skill",
+                    "skills",
+                    "capability",
+                    "capabilities",
+                    "competence",
+                    "competency",
+                    "ability",
+                    "abilities",
+                }
+            )
+            | frozenset(_coverage_terms(needed_thing)),
+            subject_phrases=tuple(item for item in (actor, needed_thing) if item),
+            requires_explicit_relation=True,
+        )
+
+    tradeoff_match = re.search(
+        r"\bwhat\s+trade[- ]?off\s+does\s+(.+?)\s+"
+        r"(?:describe|state|identify|make|mention)\b",
+        normalized,
+    )
+    if tradeoff_match is not None:
+        subject = _strip_leading_articles(tradeoff_match.group(1))
+        return _AnswerBearingQueryFocus(
+            relation="tradeoff",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(
+                {
+                    "tradeoff",
+                    "tradeoffs",
+                    "trade",
+                    "off",
+                    "tension",
+                    "tensions",
+                    "compromise",
+                    "compromises",
+                    "cost",
+                    "costs",
+                    "versus",
+                    "between",
+                    "vs",
+                }
+            ),
+            subject_phrases=(subject,) if subject else (),
+            requires_explicit_relation=True,
+        )
+
+    return _AnswerBearingQueryFocus(
+        relation="generic",
+        subject_terms=frozenset(_coverage_terms(question)),
+        context_terms=frozenset(),
+        relation_terms=frozenset(),
+        subject_phrases=tuple(_question_relevance_subjects(question)),
+        requires_explicit_relation=False,
+    )
+
+
+def _candidate_answer_bearing_score(
+    *,
+    question: str,
+    document: Mapping[str, Any],
+    focus: _AnswerBearingQueryFocus | None = None,
+) -> dict[str, Any]:
+    focus = focus or _answer_bearing_query_focus(question)
+    text = _document_text(document)
+    text_terms = _meaningful_terms(text)
+    subject_hits = focus.subject_terms & text_terms
+    context_hits = focus.context_terms & text_terms
+    relation_hits = focus.relation_terms & text_terms
+    subject_coverage = (
+        len(subject_hits) / len(focus.subject_terms) if focus.subject_terms else 0.0
+    )
+    context_coverage = (
+        len(context_hits) / len(focus.context_terms) if focus.context_terms else 1.0
+    )
+    phrase_hits = [
+        phrase
+        for phrase in focus.subject_phrases
+        if phrase and _contains_normalized_unit(text, phrase)
+    ]
+    relation_met = bool(relation_hits)
+    if focus.relation == "tradeoff":
+        relation_met = _text_has_explicit_tradeoff_relation(text)
+    elif focus.relation == "definition":
+        relation_met = bool(relation_hits)
+
+    score = 0.0
+    score += subject_coverage * 2.4
+    score += context_coverage * 1.1 if focus.context_terms else 0.0
+    score += min(len(phrase_hits), 2) * 0.5
+    score += min(len(relation_hits), 4) * 0.35
+    if relation_met:
+        score += 1.1
+    if focus.requires_explicit_relation and not relation_met:
+        score -= 3.0
+    if focus.requires_explicit_relation and subject_coverage < 0.5:
+        score -= 1.4
+    if focus.context_terms and context_coverage < 0.5:
+        score -= 0.75
+    if focus.relation == "tradeoff" and not relation_met:
+        score -= 2.0
+    return {
+        "score": round(score, 6),
+        "relation": focus.relation,
+        "subject_coverage": round(subject_coverage, 6),
+        "context_coverage": round(context_coverage, 6),
+        "relation_met": relation_met,
+        "relation_hits": sorted(relation_hits)[:8],
+        "phrase_hits": phrase_hits[:4],
+        "answer_bearing": _candidate_is_answer_bearing(
+            focus=focus,
+            subject_coverage=subject_coverage,
+            context_coverage=context_coverage,
+            relation_met=relation_met,
+        ),
+    }
+
+
+def _text_has_explicit_tradeoff_relation(text: str) -> bool:
+    lowered = str(text).casefold()
+    normalized = _normalized_relevance_text(text)
+    if re.search(r"\btrade[- ]?offs?\b|\btrade\s+off\b", lowered):
+        return True
+    if re.search(r"\b(?:tension|compromise|cost)s?\b", lowered):
+        return True
+    return bool(re.search(r"\bbetween\b.+\b(?:and|versus|vs)\b", normalized))
+
+
+def _candidate_is_answer_bearing(
+    *,
+    focus: _AnswerBearingQueryFocus,
+    subject_coverage: float,
+    context_coverage: float,
+    relation_met: bool,
+) -> bool:
+    if focus.relation == "generic":
+        return False
+    if focus.relation == "definition":
+        return subject_coverage >= 0.5 and relation_met
+    if not relation_met or subject_coverage < 0.5:
+        return False
+    if focus.context_terms and context_coverage < 0.5:
+        return False
+    return True
+
+
+def _answer_bearing_selection_required(focus: _AnswerBearingQueryFocus) -> bool:
+    return focus.relation in {"definition", "role", "need", "tradeoff"}
+
+
 def _rerank_candidates(
-    candidates: Sequence[Mapping[str, Any]], *, budget: int
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    budget: int,
+    documents: Mapping[str, Mapping[str, Any]] | None = None,
+    question: str = "",
 ) -> list[dict[str, Any]]:
+    focus = _answer_bearing_query_focus(question) if question else None
     ordered: list[dict[str, Any]] = []
     for candidate in candidates:
         item = dict(candidate)
         channel_count = len(item.get("channels", []))
         hop = int(item.get("graph_hop") or 0)
         graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
+        answer_bearing: dict[str, Any] = {}
+        section_id = str(item.get("section_id", ""))
+        document = documents.get(section_id, {}) if documents is not None else {}
+        if focus is not None and document:
+            answer_bearing = _candidate_answer_bearing_score(
+                question=question,
+                document=document,
+                focus=focus,
+            )
+            item["answer_bearing_relevance"] = answer_bearing
         item["rerank_score"] = (
             float(item.get("score", 0.0))
             + channel_count * 0.35
             + graph_bonus
+            + float(answer_bearing.get("score", 0.0))
             - _candidate_structural_relation_penalty(item)
         )
         ordered.append(item)
-    return sorted(
+    ranked = sorted(
         ordered,
         key=lambda item: (
             -float(item["rerank_score"]),
@@ -5184,6 +5512,22 @@ def _rerank_candidates(
             str(item["section_id"]),
         ),
     )[: max(MAX_CANDIDATE_POOL_ITEMS, budget)]
+    if focus is None or not _answer_bearing_selection_required(focus):
+        return ranked
+    answer_bearing_ranked = [
+        item
+        for item in ranked
+        if isinstance(item.get("answer_bearing_relevance"), Mapping)
+        and bool(item["answer_bearing_relevance"].get("answer_bearing"))
+    ]
+    if not answer_bearing_ranked:
+        return []
+    kept_ids = {str(kept.get("section_id", "")) for kept in answer_bearing_ranked}
+    return answer_bearing_ranked + [
+        item
+        for item in ranked
+        if str(item.get("section_id", "")) not in kept_ids
+    ]
 
 
 def _select_diverse_candidates(
@@ -5240,6 +5584,13 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         )[:6],
         "graph_relevance_scores": list(candidate.get("graph_relevance_scores", []))[:4],
         "structural_relation_only": _candidate_structural_relation_penalty(candidate) > 0,
+        "answer_bearing": bool(
+            isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+            and candidate["answer_bearing_relevance"].get("answer_bearing")
+        ),
+        "answer_bearing_relevance": dict(candidate.get("answer_bearing_relevance", {}))
+        if isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+        else {},
     }
 
 
@@ -5459,6 +5810,8 @@ def _ensure_required_facet_coverage_passages(
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
+    focus = _answer_bearing_query_focus(question)
+    answer_bearing_required = _answer_bearing_selection_required(focus)
     prepend: list[dict[str, Any]] = []
     prepend_sections: set[str] = set()
     ordinal = len(selected) + 1
@@ -5475,6 +5828,14 @@ def _ensure_required_facet_coverage_passages(
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
                 and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+                and (
+                    not answer_bearing_required
+                    or _candidate_answer_bearing_score(
+                        question=question,
+                        document=item,
+                        focus=focus,
+                    ).get("answer_bearing")
+                )
             ),
             None,
         )
@@ -5498,6 +5859,14 @@ def _ensure_required_facet_coverage_passages(
                 for item in documents
                 if str(item.get("section_id", "")) not in selected_sections
                 and _direct_facet_text_matches(facet, _document_text(item))
+                and (
+                    not answer_bearing_required
+                    or _candidate_answer_bearing_score(
+                        question=question,
+                        document=item,
+                        focus=focus,
+                    ).get("answer_bearing")
+                )
             ),
             None,
         )
@@ -5614,9 +5983,11 @@ def _ensure_query_coverage_passages(
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
+    focus = _answer_bearing_query_focus(question)
     query_terms = _coverage_terms(question)
     if not query_terms:
         return selected
+    answer_bearing_required = _answer_bearing_selection_required(focus)
     covered_terms: set[str] = set()
     ordinal = len(selected) + 1
     coverage_items: list[dict[str, Any]] = []
@@ -5635,6 +6006,14 @@ def _ensure_query_coverage_passages(
         section_id = str(document.get("section_id", ""))
         if section_id in selected_sections:
             continue
+        if answer_bearing_required:
+            relevance = _candidate_answer_bearing_score(
+                question=question,
+                document=document,
+                focus=focus,
+            )
+            if not relevance.get("answer_bearing"):
+                continue
         document_terms = _meaningful_terms(_document_text(document))
         gained = (query_terms - covered_terms) & document_terms
         if not gained:
@@ -5652,6 +6031,9 @@ def _ensure_query_coverage_passages(
                     _document_text(document),
                 ),
                 "coverage_terms": sorted(gained),
+                "answer_bearing_relevance": relevance
+                if answer_bearing_required
+                else {},
             },
         )
         coverage_items.append(item)

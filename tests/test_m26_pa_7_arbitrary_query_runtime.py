@@ -868,6 +868,152 @@ def test_contextual_definition_query_rejects_unbacked_category_mutation_even_wit
     assert exc.value.code == "M26-PA7-ME-071"
 
 
+def test_answer_bearing_reranker_prefers_need_relation_support() -> None:
+    question = "What kind of skill does a Product Owner need?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Product Owner overview",
+            "section_title": "overview",
+            "body": "A Product Owner appears in the team directory and reporting chart.",
+            "concept_id": "product_owner",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Product Owner skill guidance",
+            "section_title": "guidance",
+            "body": (
+                "A Product Owner needs prioritization skill, stakeholder alignment, and "
+                "decision judgment."
+            ),
+            "concept_id": "product_owner",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 11.5,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 11.0,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
+
+
+def test_definition_reranker_prefers_subject_and_context_anchor() -> None:
+    question = "What is a capability in a planning agent architecture?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Planning agent architecture notes",
+            "section_title": "overview",
+            "body": "The planning agent architecture lists components and routes.",
+            "concept_id": "planning_agent_architecture",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Capability definition",
+            "section_title": "definition",
+            "body": (
+                "A capability is a method the agent follows in a planning agent "
+                "architecture."
+            ),
+            "concept_id": "planning_agent_architecture",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 10.7,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 10.1,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[0]["answer_bearing_relevance"]["relation"] == "definition"
+
+
+def test_tradeoff_reranker_abstains_without_explicit_tradeoff_language() -> None:
+    question = "What trade-off does Widget Harness describe?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Widget Harness overview",
+            "section_title": "overview",
+            "body": "Widget Harness provides routing and release management for teams.",
+            "concept_id": "widget_harness",
+        }
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 12.0,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        }
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=1,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked == []
+
+
 def test_owner_admission_blocks_retrieval_and_provider_for_public_or_non_owner() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
