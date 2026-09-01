@@ -257,6 +257,33 @@ class NaturalProseProvider:
         }
 
 
+class FastAnswerProvider:
+    def __init__(self, answer_text: str) -> None:
+        self.answer_text = answer_text
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        passage = _passage_items(task["evidence_bundle"])[0]
+        body = {
+            "status": "answer",
+            "answer_text": self.answer_text,
+            "citation_ids": [passage["evidence_id"]],
+            "abstention_reason": None,
+        }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"fast-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 class GraphExpandedCitationProvider:
     def __init__(self) -> None:
         self.calls = 0
@@ -481,24 +508,26 @@ def test_varied_questions_are_not_keyword_whitelisted() -> None:
         assert response["status"] == "owner_only_cited_answer"
 
 
-def test_ordinary_explanatory_query_uses_graph_expanded_evidence_without_graph_keywords() -> None:
+def test_ordinary_explanatory_query_stays_lean_without_graph_expansion() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
         gate=load_json(GATE_PATH),
         question="Explain how harness acceptance components support permission-first execution.",
         owner_subject_hash=OWNER_SUBJECT_HASH,
-        provider_client=ExactSpanProvider(),
+        provider_client=FastAnswerProvider(
+            "Harness acceptance components support permission-first execution [claim_1_ref_1]."
+        ),
         dense_channel=LocalDenseProjectionChannel(),
     )
 
     assert response["status"] == "owner_only_cited_answer"
     assert response["intent_class"] == "direct_grounded_knowledge"
-    assert response["selected_evidence_count"] > 5
-    assert response["candidate_count_by_channel"]["graph_expanded_selected"] > 0
-    assert response["graph_observability"]["selected_graph_derived_evidence_count"] > 0
-    assert response["graph_observability"]["selected_graph_relation_types"]
-    assert any(
-        any(str(channel).startswith("graph_") for channel in item["channels"])
+    assert 3 <= response["selected_evidence_count"] <= 4
+    assert response["candidate_count_by_channel"]["graph_expanded_selected"] == 0
+    assert response["graph_observability"]["selected_graph_derived_evidence_count"] == 0
+    assert response["graph_observability"]["selected_graph_relation_types"] == []
+    assert all(
+        not any(str(channel).startswith("graph_") for channel in item["channels"])
         for item in response["selected_evidence"]
     )
 
@@ -966,6 +995,65 @@ def test_answer_bearing_reranker_prefers_need_relation_support() -> None:
 
     assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
     assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
+
+
+def test_need_query_prefers_full_subject_over_facet_only_distractor() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Harness Theory overview",
+            "section_title": "overview",
+            "body": "Harness theory talks about skills and needs in general terms.",
+            "concept_id": "harness_theory",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Product Manager skill guidance",
+            "section_title": "guidance",
+            "body": (
+                "A Product Manager needs prioritization skill, stakeholder alignment, and "
+                "decision judgment."
+            ),
+            "concept_id": "product_manager",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 12.0,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 11.0,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[0]["answer_bearing_relevance"]["subject_anchor_score"] > ranked[1][
+        "answer_bearing_relevance"
+    ]["subject_anchor_score"]
     assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
 
 
@@ -2098,7 +2186,9 @@ def test_fas5_api_citation_shape_remains_compatible() -> None:
         gate=load_json(GATE_PATH),
         question="What should a router define for permission-first controls?",
         owner_subject_hash=OWNER_SUBJECT_HASH,
-        provider_client=ExactSpanProvider(),
+        provider_client=FastAnswerProvider(
+            "A router should define permission-first controls before execution [claim_1_ref_1]."
+        ),
         dense_channel=LocalDenseProjectionChannel(),
     )
 
@@ -2108,6 +2198,27 @@ def test_fas5_api_citation_shape_remains_compatible() -> None:
         citation
     )
     assert response["answer_claims"][0]["citation_ids"] == [citation["citation_id"]]
+
+
+def test_provider_evidence_item_is_compact_and_stable() -> None:
+    evidence = runtime_module._provider_evidence_item(_direct_semantic_evidence())
+
+    assert set(evidence) == {
+        "evidence_id",
+        "evidence_type",
+        "locator_id",
+        "source_id",
+        "source_identity",
+        "section_id",
+        "concept_id",
+        "text",
+        "text_sha256",
+        "text_role",
+        "channels",
+    }
+    assert evidence["evidence_id"] == "ev_semantic"
+    assert evidence["locator_id"] == "loc_semantic"
+    assert evidence["source_identity"] == "src_semantic"
 
 
 def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:

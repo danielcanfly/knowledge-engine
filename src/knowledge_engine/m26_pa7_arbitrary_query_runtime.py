@@ -1317,7 +1317,7 @@ def _retrieval_response_fields(
             "intent_class": intent_class,
             "multi_evidence_bundle": True,
             "dynamic_evidence_budget": True,
-            "graph_expansion_default_for_ordinary_queries": True,
+            "graph_expansion_default_for_ordinary_queries": False,
             "source_diversity": True,
             "redundancy_penalty": True,
         },
@@ -3292,23 +3292,10 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "source_identity": _source_identity(item),
         "section_id": str(item.get("section_id", "")),
         "concept_id": str(item.get("concept_id", "")),
-        "artifact_key": str(item.get("artifact_key", "")),
-        "artifact_sha256": str(item.get("artifact_sha256", "")),
-        "release_id": str(item.get("release_id", "")),
-        "text_sha256": str(item.get("passage_text_sha256", "")),
         "text": str(item.get("passage_text", "")),
+        "text_sha256": str(item.get("passage_text_sha256", "")),
         "text_role": _evidence_text_role(item),
-        "section_granularity": _section_granularity(item),
-        "edge_id": str(item.get("edge_id", "")),
-        "edge_source": str(item.get("edge_source", "")),
-        "edge_target": str(item.get("edge_target", "")),
-        "relation_type": str(item.get("relation_type", "")),
-        "provenance_record_sha256": str(item.get("provenance_record_sha256", "")),
-        "retrieved_at": str(item.get("retrieved_at", "")),
         "channels": [str(channel) for channel in item.get("channels", [])],
-        "retrieval_metadata": dict(item.get("retrieval_metadata", {}))
-        if isinstance(item.get("retrieval_metadata"), Mapping)
-        else {},
     }
 
 
@@ -5959,7 +5946,9 @@ def _relation_navigation_weight(
 
 def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     terms = _meaningful_terms(question)
-    if intent_class in {
+    if intent_class == "direct_grounded_knowledge":
+        base = 4
+    elif intent_class in {
         "graph_relationship",
         "cross_document_comparison",
         "complementary_synthesis",
@@ -6140,17 +6129,23 @@ def _candidate_answer_bearing_score(
     subject_hits = focus.subject_terms & text_terms
     context_hits = focus.context_terms & text_terms
     relation_hits = focus.relation_terms & text_terms
+    subject_phrase_hits = [
+        phrase
+        for phrase in focus.subject_phrases
+        if phrase and _contains_normalized_unit(text, phrase)
+    ]
     subject_coverage = (
         len(subject_hits) / len(focus.subject_terms) if focus.subject_terms else 0.0
     )
     context_coverage = (
         len(context_hits) / len(focus.context_terms) if focus.context_terms else 1.0
     )
-    phrase_hits = [
-        phrase
-        for phrase in focus.subject_phrases
-        if phrase and _contains_normalized_unit(text, phrase)
-    ]
+    subject_anchor_score = _subject_anchor_score(
+        focus=focus,
+        subject_coverage=subject_coverage,
+        subject_phrase_hits=subject_phrase_hits,
+    )
+    phrase_hits = subject_phrase_hits
     relation_met = bool(relation_hits)
     if focus.relation == "tradeoff":
         relation_met = _text_has_explicit_tradeoff_relation(text)
@@ -6158,7 +6153,7 @@ def _candidate_answer_bearing_score(
         relation_met = bool(relation_hits)
 
     score = 0.0
-    score += subject_coverage * 2.4
+    score += subject_anchor_score * 2.8
     score += context_coverage * 1.1 if focus.context_terms else 0.0
     score += min(len(phrase_hits), 2) * 0.5
     score += min(len(relation_hits), 4) * 0.35
@@ -6180,11 +6175,14 @@ def _candidate_answer_bearing_score(
         "relation_met": relation_met,
         "relation_hits": sorted(relation_hits)[:8],
         "phrase_hits": phrase_hits[:4],
+        "subject_anchor_score": round(subject_anchor_score, 6),
+        "subject_phrase_hits": subject_phrase_hits[:4],
         "answer_bearing": _candidate_is_answer_bearing(
             focus=focus,
             subject_coverage=subject_coverage,
             context_coverage=context_coverage,
             relation_met=relation_met,
+            subject_anchor_score=subject_anchor_score,
         ),
     }
 
@@ -6205,14 +6203,33 @@ def _candidate_is_answer_bearing(
     subject_coverage: float,
     context_coverage: float,
     relation_met: bool,
+    subject_anchor_score: float,
 ) -> bool:
     if focus.relation == "generic":
+        return False
+    if focus.subject_phrases and subject_anchor_score < 1.0:
         return False
     if focus.relation == "definition":
         return subject_coverage >= 0.5 and relation_met
     if not relation_met or subject_coverage < 0.5:
         return False
     return not (focus.context_terms and context_coverage < 0.5)
+
+
+def _subject_anchor_score(
+    *,
+    focus: _AnswerBearingQueryFocus,
+    subject_coverage: float,
+    subject_phrase_hits: Sequence[str],
+) -> float:
+    score = subject_coverage
+    if subject_phrase_hits:
+        score += min(len(subject_phrase_hits), 2) * 0.75
+        if any(len(_coverage_terms(phrase)) >= 2 for phrase in subject_phrase_hits):
+            score += 0.5
+    elif focus.subject_phrases and subject_coverage < 0.75:
+        score -= 0.25
+    return score
 
 
 def _answer_bearing_selection_required(focus: _AnswerBearingQueryFocus) -> bool:
@@ -6254,6 +6271,27 @@ def _rerank_candidates(
     ranked = sorted(
         ordered,
         key=lambda item: (
+            -int(
+                bool(
+                    isinstance(item.get("answer_bearing_relevance"), Mapping)
+                    and item["answer_bearing_relevance"].get("answer_bearing")
+                )
+            ),
+            -float(
+                item.get("answer_bearing_relevance", {}).get("subject_anchor_score", 0.0)
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else 0.0
+            ),
+            -float(
+                item.get("answer_bearing_relevance", {}).get("subject_coverage", 0.0)
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else 0.0
+            ),
+            -len(
+                item.get("answer_bearing_relevance", {}).get("subject_phrase_hits", [])
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else []
+            ),
             -float(item["rerank_score"]),
             int(item.get("graph_hop") or 99),
             int(item.get("seed_rank", 999)),
@@ -6557,12 +6595,29 @@ def _ensure_required_facet_coverage_passages(
     limit: int,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
+    if len(selected) >= 3:
+        return selected
     selected_sections = {str(item.get("section_id", "")) for item in selected}
     focus = _answer_bearing_query_focus(question)
     answer_bearing_required = _answer_bearing_selection_required(focus)
+    subject_cache: dict[str, dict[str, Any]] = {}
     prepend: list[dict[str, Any]] = []
     prepend_sections: set[str] = set()
     ordinal = len(selected) + 1
+
+    def _subject_relevance(document: Mapping[str, Any]) -> dict[str, Any]:
+        section_id = str(document.get("section_id", ""))
+        cached = subject_cache.get(section_id)
+        if cached is not None:
+            return cached
+        relevance = _candidate_answer_bearing_score(
+            question=question,
+            document=document,
+            focus=focus,
+        )
+        subject_cache[section_id] = relevance
+        return relevance
+
     for facet in _question_contract(question=question, intent_class=intent_class)[
         "required_facets"
     ]:
@@ -6576,6 +6631,12 @@ def _ensure_required_facet_coverage_passages(
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
                 and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+                and _subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
+                )
+                >= 1.0
                 and (
                     not answer_bearing_required
                     or _candidate_answer_bearing_score(
@@ -6594,6 +6655,11 @@ def _ensure_required_facet_coverage_passages(
         documents = sorted(
             _release_documents(bundle),
             key=lambda document: (
+                -_subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(document).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(document).get("subject_phrase_hits", []),
+                ),
                 -_direct_facet_match_score(facet, _document_text(document)),
                 -_text_term_overlap_score(facet_terms, _document_text(document)),
                 _is_article_root_document(document),
@@ -6607,6 +6673,12 @@ def _ensure_required_facet_coverage_passages(
                 for item in documents
                 if str(item.get("section_id", "")) not in selected_sections
                 and _direct_facet_text_matches(facet, _document_text(item))
+                and _subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
+                )
+                >= 1.0
                 and (
                     not answer_bearing_required
                     or _candidate_answer_bearing_score(
