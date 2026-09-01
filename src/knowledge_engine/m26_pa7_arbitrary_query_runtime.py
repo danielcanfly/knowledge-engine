@@ -826,7 +826,7 @@ def _run_lexical_primary_retrieval(
         relation_graph=bundle.graph_v2,
         relation_aware_expansion=relation_aware_expansion,
         provenance=bundle.provenance,
-        semantic_index=None,
+        semantic_index=bundle.semantic_inputs,
         limit=8,
     )
     dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
