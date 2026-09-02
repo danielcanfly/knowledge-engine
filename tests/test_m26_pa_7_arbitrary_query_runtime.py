@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -1050,11 +1051,267 @@ def test_need_query_prefers_full_subject_over_facet_only_distractor() -> None:
     )
 
     assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert len(ranked) == 1
     assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
-    assert ranked[0]["answer_bearing_relevance"]["subject_anchor_score"] > ranked[1][
-        "answer_bearing_relevance"
-    ]["subject_anchor_score"]
-    assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
+    topic_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["doc_topic"],
+    )
+    assert topic_relevance["answer_bearing"] is False
+
+
+def _rerank_candidate(section_id: str, *, score: float, rank: int) -> dict[str, Any]:
+    return {
+        "section_id": section_id,
+        "channels": {"lexical"},
+        "score": score,
+        "seed_rank": rank,
+        "graph_hop": 0,
+        "graph_edges": [],
+        "relation_types": set(),
+        "graph_relevance_scores": [],
+    }
+
+
+def _document(
+    section_id: str,
+    *,
+    title: str,
+    body: str,
+    source_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "section_id": section_id,
+        "title": title,
+        "section_title": "Overview",
+        "description": body[:120],
+        "body": body,
+        "excerpt": body[:240],
+        "concept_id": section_id,
+        "source_id": source_id or section_id,
+    }
+
+
+def _bundle_with_documents(documents: list[dict[str, Any]]):
+    bundle = synthetic_full_production_answer_bundle()
+    lexical_index = dict(bundle.lexical_index)
+    lexical_index["documents"] = documents
+    provenance = {
+        "schema_version": "knowledge-engine-provenance/v1",
+        "release_id": bundle.release_id,
+        "records": [],
+    }
+    return replace(bundle, lexical_index=lexical_index, provenance=provenance)
+
+
+def test_a2_need_query_preserves_product_manager_subject_anchor() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    focus = runtime_module._answer_bearing_query_focus(question)
+    assert focus.relation == "need"
+    assert focus.subject_terms == {"product", "manager"}
+    assert {"skill", "capability", "ability"}.issubset(focus.context_terms)
+    assert focus.subject_phrases[0] == "product manager"
+    assert "skill" not in focus.subject_phrases
+
+    documents = {
+        "mcp": _document(
+            "mcp",
+            title="Build Your Own MCP Server",
+            body=(
+                "MCP systems discuss products, managers, capabilities, skills, and what "
+                "an agent should use, but this passage is not about that job."
+            ),
+            source_id="daniel_blog_en__build-mcp-server-part-1",
+        ),
+        "harness": _document(
+            "harness",
+            title="Harness Theory Capability Engineering",
+            body=(
+                "Capability systems often separate tools, skills, hooks, plugins, and MCP. "
+                "A product label may have a manager field, but it does not describe the "
+                "job role."
+            ),
+            source_id="daniel_blog_en__harness-theory-part-5",
+        ),
+        "pm": _document(
+            "pm",
+            title="Product Manager skills",
+            body=(
+                "A Product Manager needs prioritization skill, user research judgment, "
+                "stakeholder communication, and decision trade-off skill."
+            ),
+            source_id="general_pm_skills",
+        ),
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [
+            _rerank_candidate("mcp", score=14.0, rank=1),
+            _rerank_candidate("harness", score=13.0, rank=2),
+            _rerank_candidate("pm", score=8.0, rank=3),
+        ],
+        budget=3,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked[0]["section_id"] == "pm"
+    assert len(ranked) == 1
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    harness_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["harness"],
+    )
+    assert harness_relevance["answer_bearing"] is False
+    assert harness_relevance["subject_phrase_hits"] == []
+
+    selected = runtime_module._select_evidence(
+        bundle=_bundle_with_documents(list(documents.values())),
+        lexical_result={
+            "results": [
+                {"section_id": "mcp", "score": 14.0, "citations": []},
+                {"section_id": "harness", "score": 13.0, "citations": []},
+                {"section_id": "pm", "score": 8.0, "citations": []},
+            ]
+        },
+        dense_result={"candidates": []},
+        trace_id="trace-a2-selection",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        allow_graph_expansion=False,
+    )
+    assert [item["section_id"] for item in selected] == ["pm"]
+
+
+def test_need_query_preserves_subject_anchor_for_security_engineer_capability() -> None:
+    question = "What kind of capability does a security engineer need?"
+    documents = {
+        "generic": _document(
+            "generic",
+            title="Capability catalog",
+            body=(
+                "Generic capability planning lists skills, tools, and abilities a system "
+                "may require without naming the role."
+            ),
+        ),
+        "subject": _document(
+            "subject",
+            title="Security engineer capability guidance",
+            body=(
+                "A security engineer needs incident triage capability, threat modeling, "
+                "log analysis, and careful escalation judgment."
+            ),
+        ),
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [
+            _rerank_candidate("generic", score=12.0, rank=1),
+            _rerank_candidate("subject", score=8.0, rank=2),
+        ],
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked[0]["section_id"] == "subject"
+    assert len(ranked) == 1
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    generic_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["generic"],
+    )
+    assert generic_relevance["answer_bearing"] is False
+
+
+def test_a1_skill_definition_selection_regression_keeps_small_non_graph_bundle() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    documents = [
+        _document(
+            "skill_answer",
+            title="AI agent architecture skills",
+            body=(
+                "A skill is a reusable capability an AI agent architecture can invoke "
+                "through bounded interfaces and verified inputs."
+            ),
+        ),
+        _document(
+            "loose_agent",
+            title="Agent architecture overview",
+            body="An AI agent architecture can contain routing, memory, and execution controls.",
+        ),
+    ]
+    bundle = _bundle_with_documents(documents)
+    lexical_result = {
+        "results": [
+            {"section_id": "skill_answer", "score": 12.0, "citations": []},
+            {"section_id": "loose_agent", "score": 10.0, "citations": []},
+        ]
+    }
+
+    selected = runtime_module._select_evidence(
+        bundle=bundle,
+        lexical_result=lexical_result,
+        dense_result={"candidates": []},
+        trace_id="trace-a1-regression",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        allow_graph_expansion=False,
+    )
+
+    assert 1 <= len(selected) <= 4
+    assert selected[0]["section_id"] == "skill_answer"
+    assert all("graph" not in channel for item in selected for channel in item["channels"])
+
+
+def test_required_facet_topup_cannot_bypass_present_subject_anchor() -> None:
+    question = "What kind of capability does a security engineer need?"
+    bundle = _bundle_with_documents(
+        [
+            _document(
+                "generic_capability",
+                title="Capability terms",
+                body=(
+                    "Capabilities, skills, and abilities are useful terms for systems "
+                    "that need extension points."
+                ),
+            )
+        ]
+    )
+
+    selected = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-facet-topup-subject-gate",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=4,
+    )
+
+    assert selected == []
+
+
+def test_need_query_fails_soft_without_subject_bearing_evidence() -> None:
+    question = "What kind of capability does a security engineer need?"
+    documents = {
+        "generic_capability": _document(
+            "generic_capability",
+            title="Capability terms",
+            body=(
+                "Capabilities, skills, and abilities are useful terms for systems that "
+                "need extension points."
+            ),
+        )
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [_rerank_candidate("generic_capability", score=12.0, rank=1)],
+        budget=1,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked == []
 
 
 def test_definition_reranker_prefers_subject_and_context_anchor() -> None:

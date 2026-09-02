@@ -3458,9 +3458,10 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
                 "decisions",
             ],
         )
-    if re.search(r"\bwhat\s+kind\s+of\b.*\bneed\b", question_casefold) or re.search(
-        r"\bneed(s|ed)?\b", question_casefold
-    ):
+    if re.search(
+        r"\bwhat\s+(?:kind|type)\s+of\b.*\b(?:need|require)\b",
+        question_casefold,
+    ) or re.search(r"\b(?:need(s|ed)?|require[sd]?)\b", question_casefold):
         add(
             "need_relation",
             [
@@ -6038,18 +6039,22 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
         )
 
     need_match = re.search(
-        r"\bwhat\s+kind\s+of\s+(.+?)\s+does\s+(.+?)\s+need\b",
+        r"\bwhat\s+(?:kind|type)\s+of\s+(.+?)\s+does\s+(.+?)\s+(?:need|require)\b",
         normalized,
     )
     if need_match is None:
-        need_match = re.search(r"\bwhat\s+(.+?)\s+does\s+(.+?)\s+need\b", normalized)
+        need_match = re.search(
+            r"\bwhat\s+(.+?)\s+does\s+(.+?)\s+(?:need|require)\b",
+            normalized,
+        )
     if need_match is not None:
         needed_thing = _strip_leading_articles(need_match.group(1))
         actor = _strip_leading_articles(need_match.group(2))
+        requested_facet_terms = _need_requested_facet_terms(needed_thing)
         return _AnswerBearingQueryFocus(
             relation="need",
             subject_terms=frozenset(_coverage_terms(actor)),
-            context_terms=frozenset(_coverage_terms(needed_thing)),
+            context_terms=frozenset(requested_facet_terms),
             relation_terms=frozenset(
                 {
                     "need",
@@ -6070,8 +6075,8 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
                     "abilities",
                 }
             )
-            | frozenset(_coverage_terms(needed_thing)),
-            subject_phrases=tuple(item for item in (actor, needed_thing) if item),
+            | frozenset(requested_facet_terms),
+            subject_phrases=_subject_phrase_variants(actor),
             requires_explicit_relation=True,
         )
 
@@ -6138,7 +6143,11 @@ def _candidate_answer_bearing_score(
         len(subject_hits) / len(focus.subject_terms) if focus.subject_terms else 0.0
     )
     context_coverage = (
-        len(context_hits) / len(focus.context_terms) if focus.context_terms else 1.0
+        (1.0 if context_hits else 0.0)
+        if focus.relation == "need" and focus.context_terms
+        else len(context_hits) / len(focus.context_terms)
+        if focus.context_terms
+        else 1.0
     )
     subject_anchor_score = _subject_anchor_score(
         focus=focus,
@@ -6227,9 +6236,51 @@ def _subject_anchor_score(
         score += min(len(subject_phrase_hits), 2) * 0.75
         if any(len(_coverage_terms(phrase)) >= 2 for phrase in subject_phrase_hits):
             score += 0.5
+        elif any(len(_normalized_relevance_text(phrase)) >= 2 for phrase in subject_phrase_hits):
+            score = max(score, 1.0)
+    elif (
+        focus.relation == "need"
+        and any(len(_coverage_terms(phrase)) >= 2 for phrase in focus.subject_phrases)
+    ):
+        score = min(score, 0.99)
     elif focus.subject_phrases and subject_coverage < 0.75:
         score -= 0.25
     return score
+
+
+def _subject_phrase_variants(phrase: str) -> tuple[str, ...]:
+    cleaned = _strip_leading_articles(phrase)
+    if not cleaned:
+        return ()
+    variants = [cleaned]
+    tokens = [
+        token
+        for token in _normalized_relevance_text(cleaned).split()
+        if token not in STOP_TERMS
+    ]
+    if len(tokens) >= 2:
+        acronym = "".join(token[0] for token in tokens if token)
+        if 2 <= len(acronym) <= 6:
+            variants.extend([acronym, f"{acronym}s"])
+    return tuple(dict.fromkeys(variants))
+
+
+def _need_requested_facet_terms(phrase: str) -> set[str]:
+    terms = _coverage_terms(phrase)
+    capability_terms = {
+        "abilities",
+        "ability",
+        "capabilities",
+        "capability",
+        "competence",
+        "competency",
+        "skill",
+        "skills",
+    }
+    singularized_capability_terms = _meaningful_terms(" ".join(capability_terms))
+    if terms & singularized_capability_terms:
+        return terms | singularized_capability_terms
+    return terms
 
 
 def _answer_bearing_selection_required(focus: _AnswerBearingQueryFocus) -> bool:
@@ -6308,6 +6359,8 @@ def _rerank_candidates(
     ]
     if not answer_bearing_ranked:
         return []
+    if focus.relation == "need" and focus.subject_phrases:
+        return answer_bearing_ranked
     kept_ids = {str(kept.get("section_id", "")) for kept in answer_bearing_ranked}
     return answer_bearing_ranked + [
         item
@@ -6814,6 +6867,15 @@ def _ensure_query_coverage_passages(
     documents = sorted(
         _release_documents(bundle),
         key=lambda document: (
+            -float(
+                _candidate_answer_bearing_score(
+                    question=question,
+                    document=document,
+                    focus=focus,
+                ).get("score", 0.0)
+            )
+            if answer_bearing_required
+            else 0.0,
             -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
             -_text_term_overlap_score(query_terms, _document_text(document)),
             _is_article_root_document(document),
