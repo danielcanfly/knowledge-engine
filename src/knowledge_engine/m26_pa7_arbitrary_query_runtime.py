@@ -326,6 +326,11 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
         body = normalized[len(prefix) :].strip(" ?.")
         if not body:
             return None
+        if re.match(
+            r"(?:the\s+)?role\s+of\s+.+?\s+(?:in|within|for)\s+.+",
+            body,
+        ):
+            return None
         if (prefix.startswith("what does") or prefix.startswith("what do")) and (
             " mean " not in f" {body} "
         ):
@@ -1052,7 +1057,6 @@ def run_owner_arbitrary_query(
                 intent_class=intent_class,
             ),
         }
-
     _emit_runtime_event(event_sink, "stage.started", stage="closure")
     verification = _synthesize_and_verify(
         root=root,
@@ -1600,6 +1604,24 @@ def _run_fast_public_query(
         latency_ms=int((time.monotonic() - synthesis_started) * 1000),
     )
 
+    abstention_publication = _fast_public_abstention_publication(normalized)
+    if abstention_publication is not None:
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[abstention_publication["abstention_reason"] or "PROVIDER_ABSTAINED"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+
     publication = _validate_fast_provider_candidate(
         question=normalized_question,
         selected_evidence=selected_evidence,
@@ -1612,6 +1634,22 @@ def _run_fast_public_query(
             question_sha=question_sha,
             started=started,
             reason_codes=["PROVIDER_OUTPUT_INVALID"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+    if publication["status"] == "abstain":
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[publication["abstention_reason"] or "PROVIDER_ABSTAINED"],
             bundle=bundle,
             lexical_result=lexical,
             dense_result=dense,
@@ -1738,11 +1776,33 @@ def _fast_synthesis_payload(
 
 
 def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]:
-    text = str(result.get("provider_text", result.get("text", "")))
-    try:
-        parsed = json.loads(text)
-    except Exception:
-        parsed = {}
+    provider_text = result.get("provider_text")
+    text_value = result.get("text", "")
+    text = str(provider_text if provider_text not in (None, "") else text_value)
+    parsed: Mapping[str, Any] | dict[str, Any] = {}
+    candidates = [text]
+    stripped = text.strip()
+    if (
+        stripped.startswith("<|start|>assistant")
+        and "<|channel|>final" in stripped
+        and "<|constrain|>" in stripped
+        and stripped.endswith("<|return|>")
+    ):
+        constrained = stripped.split("<|constrain|>", 1)[1].rsplit("<|return|>", 1)[0].strip()
+        candidates.append(constrained)
+        if (
+            constrained.endswith("}")
+            and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', constrained)
+        ):
+            candidates.append('{"' + constrained)
+    for candidate in candidates:
+        try:
+            decoded = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(decoded, Mapping):
+            parsed = decoded
+            break
     return {
         "provider_text": text,
         "provider_text_char_count": len(text),
@@ -1754,6 +1814,41 @@ def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]
         "response_id": str(result.get("response_id", "")),
         "output_char_count": int(result.get("output_char_count", len(text)) or len(text)),
         "parsed": parsed if isinstance(parsed, Mapping) else {},
+    }
+
+
+def _fast_public_abstention_publication(
+    provider_output: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    parsed = _object(provider_output.get("parsed", {}), "fast provider parsed")
+    status = str(parsed.get("status", "")).strip().casefold()
+    if status != "abstain":
+        return None
+    abstention_reason = str(parsed.get("abstention_reason") or "").strip()
+    answer_text = re.sub(r"\s+", " ", str(parsed.get("answer_text") or "")).strip()
+    raw_ids = parsed.get("citation_ids")
+    if raw_ids is None:
+        raw_ids = parsed.get("citations")
+    citation_ids: list[str] = []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            if isinstance(item, Mapping):
+                citation_id = str(
+                    item.get("evidence_id")
+                    or item.get("citation_id")
+                    or item.get("id")
+                    or ""
+                ).strip()
+            else:
+                citation_id = str(item).strip()
+            if citation_id:
+                citation_ids.append(citation_id)
+    citation_ids = list(dict.fromkeys(citation_ids))
+    if answer_text or citation_ids or not abstention_reason:
+        return None
+    return {
+        "status": "abstain",
+        "abstention_reason": abstention_reason,
     }
 
 
@@ -2827,6 +2922,7 @@ def _deterministic_support_ref_for_terms(
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -2900,6 +2996,7 @@ def _deterministic_support_ref_for_facet(
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -5679,7 +5776,11 @@ def _select_evidence(
     intent_class: str,
     allow_graph_expansion: bool = True,
 ) -> list[dict[str, Any]]:
-    documents = {str(item["section_id"]): item for item in _release_documents(bundle)}
+    documents_list = _release_documents(bundle)
+    documents = {str(item["section_id"]): item for item in documents_list}
+    focus = _answer_bearing_query_focus(question)
+    query_terms = _coverage_terms(question)
+    question_contract = _question_contract(question=question, intent_class=intent_class)
     lexical_results = _list(lexical_result.get("results"), "lexical results")
     candidates = _build_candidate_pool(
         bundle=bundle,
@@ -5689,6 +5790,7 @@ def _select_evidence(
         question=question,
         intent_class=intent_class,
         allow_graph_expansion=allow_graph_expansion,
+        query_terms=query_terms,
     )
     budget = _dynamic_evidence_budget(question=question, intent_class=intent_class)
     ordered = _rerank_candidates(
@@ -5696,6 +5798,7 @@ def _select_evidence(
         budget=budget,
         documents=documents,
         question=question,
+        focus=focus,
     )
     selected_candidates = _select_diverse_candidates(ordered, budget=budget)
     evidence = []
@@ -5721,6 +5824,10 @@ def _select_evidence(
         intent_class=intent_class,
         budget=budget,
         question=question,
+        documents=documents_list,
+        focus=focus,
+        query_terms=query_terms,
+        question_contract=question_contract,
     )
 
 
@@ -5733,6 +5840,7 @@ def _build_candidate_pool(
     question: str,
     intent_class: str,
     allow_graph_expansion: bool = True,
+    query_terms: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
     for rank, item in enumerate(lexical_results, start=1):
@@ -5760,6 +5868,7 @@ def _build_candidate_pool(
             candidates=candidates,
             question=question,
             intent_class=intent_class,
+            query_terms=query_terms,
         )
     return sorted(
         candidates.values(),
@@ -5788,6 +5897,7 @@ def _add_graph_expanded_candidates(
     candidates: dict[str, dict[str, Any]],
     question: str,
     intent_class: str,
+    query_terms: set[str] | None = None,
 ) -> None:
     by_concept: dict[str, list[Mapping[str, Any]]] = {}
     for document in documents.values():
@@ -5805,7 +5915,7 @@ def _add_graph_expanded_candidates(
         )
     if not concept_seed_scores:
         return
-    query_terms = _meaningful_terms(question)
+    query_terms = query_terms or _meaningful_terms(question)
     order_query = bool(query_terms & ORDER_QUERY_TERMS)
     relation_index: dict[str, list[Mapping[str, Any]]] = {}
     for edge in bundle.graph_v2.get("edges", []):
@@ -5998,7 +6108,10 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
             requires_explicit_relation=False,
         )
 
-    role_match = re.search(r"\brole\s+of\s+(.+?)\s+in\s+(.+?)(?:\?|$)", normalized)
+    role_match = re.search(
+        r"\brole\s+of\s+(.+?)\s+(?:in|within|for)\s+(.+?)(?:\?|$)",
+        normalized,
+    )
     if role_match is not None:
         role_subject = _strip_leading_articles(role_match.group(1))
         role_context = _strip_leading_articles(role_match.group(2))
@@ -6127,10 +6240,12 @@ def _candidate_answer_bearing_score(
     question: str,
     document: Mapping[str, Any],
     focus: _AnswerBearingQueryFocus | None = None,
+    document_text: str | None = None,
+    document_terms: set[str] | None = None,
 ) -> dict[str, Any]:
     focus = focus or _answer_bearing_query_focus(question)
-    text = _document_text(document)
-    text_terms = _meaningful_terms(text)
+    text = document_text or _document_text(document)
+    text_terms = document_terms if document_terms is not None else _meaningful_terms(text)
     subject_hits = focus.subject_terms & text_terms
     context_hits = focus.context_terms & text_terms
     relation_hits = focus.relation_terms & text_terms
@@ -6293,8 +6408,9 @@ def _rerank_candidates(
     budget: int,
     documents: Mapping[str, Mapping[str, Any]] | None = None,
     question: str = "",
+    focus: _AnswerBearingQueryFocus | None = None,
 ) -> list[dict[str, Any]]:
-    focus = _answer_bearing_query_focus(question) if question else None
+    focus = focus or (_answer_bearing_query_focus(question) if question else None)
     ordered: list[dict[str, Any]] = []
     for candidate in candidates:
         item = dict(candidate)
@@ -6458,6 +6574,10 @@ def _augment_evidence_for_intent(
     intent_class: str,
     budget: int,
     question: str,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    query_terms: set[str] | None = None,
+    question_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     evidence = [dict(item) for item in base_evidence]
     if intent_class in {
@@ -6472,6 +6592,9 @@ def _augment_evidence_for_intent(
             trace_id=trace_id,
             question=question,
             limit=budget,
+            documents=documents,
+            focus=focus,
+            query_terms=query_terms,
         )
     if intent_class == "direct_grounded_knowledge":
         evidence = _ensure_required_facet_coverage_passages(
@@ -6481,6 +6604,9 @@ def _augment_evidence_for_intent(
             question=question,
             intent_class=intent_class,
             limit=budget,
+            documents=documents,
+            focus=focus,
+            question_contract=question_contract,
         )
     if intent_class in {
         "cross_document_comparison",
@@ -6646,17 +6772,34 @@ def _ensure_required_facet_coverage_passages(
     question: str,
     intent_class: str,
     limit: int,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    question_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     if len(selected) >= 3:
         return selected
     selected_sections = {str(item.get("section_id", "")) for item in selected}
-    focus = _answer_bearing_query_focus(question)
+    focus = focus or _answer_bearing_query_focus(question)
     answer_bearing_required = _answer_bearing_selection_required(focus)
     subject_cache: dict[str, dict[str, Any]] = {}
+    text_cache: dict[str, str] = {}
+    terms_cache: dict[str, set[str]] = {}
     prepend: list[dict[str, Any]] = []
     prepend_sections: set[str] = set()
     ordinal = len(selected) + 1
+
+    def _cached_text(document: Mapping[str, Any]) -> str:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in text_cache:
+            text_cache[section_id] = _document_text(document)
+        return text_cache[section_id]
+
+    def _cached_terms(document: Mapping[str, Any]) -> set[str]:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in terms_cache:
+            terms_cache[section_id] = _meaningful_terms(_cached_text(document))
+        return terms_cache[section_id]
 
     def _subject_relevance(document: Mapping[str, Any]) -> dict[str, Any]:
         section_id = str(document.get("section_id", ""))
@@ -6667,13 +6810,18 @@ def _ensure_required_facet_coverage_passages(
             question=question,
             document=document,
             focus=focus,
+            document_text=_cached_text(document),
+            document_terms=_cached_terms(document),
         )
         subject_cache[section_id] = relevance
         return relevance
 
-    for facet in _question_contract(question=question, intent_class=intent_class)[
-        "required_facets"
-    ]:
+    question_contract = question_contract or _question_contract(
+        question=question,
+        intent_class=intent_class,
+    )
+    documents = list(documents) if documents is not None else _release_documents(bundle)
+    for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
             continue
@@ -6683,7 +6831,7 @@ def _ensure_required_facet_coverage_passages(
                 for item in selected
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
-                and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+                and _direct_facet_text_matches(facet, _cached_text(item))
                 and _subject_anchor_score(
                     focus=focus,
                     subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
@@ -6692,11 +6840,7 @@ def _ensure_required_facet_coverage_passages(
                 >= 1.0
                 and (
                     not answer_bearing_required
-                    or _candidate_answer_bearing_score(
-                        question=question,
-                        document=item,
-                        focus=focus,
-                    ).get("answer_bearing")
+                    or _subject_relevance(item).get("answer_bearing")
                 )
             ),
             None,
@@ -6706,15 +6850,15 @@ def _ensure_required_facet_coverage_passages(
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
         documents = sorted(
-            _release_documents(bundle),
+            documents,
             key=lambda document: (
                 -_subject_anchor_score(
                     focus=focus,
                     subject_coverage=_subject_relevance(document).get("subject_coverage", 0.0),
                     subject_phrase_hits=_subject_relevance(document).get("subject_phrase_hits", []),
                 ),
-                -_direct_facet_match_score(facet, _document_text(document)),
-                -_text_term_overlap_score(facet_terms, _document_text(document)),
+                -_direct_facet_match_score(facet, _cached_text(document)),
+                -_text_term_overlap_score(facet_terms, _cached_text(document)),
                 _is_article_root_document(document),
                 -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
                 str(document.get("section_id", "")),
@@ -6725,7 +6869,7 @@ def _ensure_required_facet_coverage_passages(
                 item
                 for item in documents
                 if str(item.get("section_id", "")) not in selected_sections
-                and _direct_facet_text_matches(facet, _document_text(item))
+                and _direct_facet_text_matches(facet, _cached_text(item))
                 and _subject_anchor_score(
                     focus=focus,
                     subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
@@ -6734,11 +6878,7 @@ def _ensure_required_facet_coverage_passages(
                 >= 1.0
                 and (
                     not answer_bearing_required
-                    or _candidate_answer_bearing_score(
-                        question=question,
-                        document=item,
-                        focus=focus,
-                    ).get("answer_bearing")
+                    or _subject_relevance(item).get("answer_bearing")
                 )
             ),
             None,
@@ -6755,7 +6895,7 @@ def _ensure_required_facet_coverage_passages(
             retrieval_metadata={
                 "required_facet_id": str(facet.get("facet_id", "")),
                 "required_facet_terms": sorted(facet_terms),
-                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _document_text(document))),
+                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _cached_text(document))),
             },
         )
         prepend.append(item)
@@ -6853,31 +6993,51 @@ def _ensure_query_coverage_passages(
     trace_id: str,
     question: str,
     limit: int,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    query_terms: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
-    focus = _answer_bearing_query_focus(question)
-    query_terms = _coverage_terms(question)
+    focus = focus or _answer_bearing_query_focus(question)
+    query_terms = query_terms or _coverage_terms(question)
     if not query_terms:
         return selected
     answer_bearing_required = _answer_bearing_selection_required(focus)
     covered_terms: set[str] = set()
     ordinal = len(selected) + 1
     coverage_items: list[dict[str, Any]] = []
+    text_cache: dict[str, str] = {}
+    terms_cache: dict[str, set[str]] = {}
+
+    def _cached_text(document: Mapping[str, Any]) -> str:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in text_cache:
+            text_cache[section_id] = _document_text(document)
+        return text_cache[section_id]
+
+    def _cached_terms(document: Mapping[str, Any]) -> set[str]:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in terms_cache:
+            terms_cache[section_id] = _meaningful_terms(_cached_text(document))
+        return terms_cache[section_id]
+
     documents = sorted(
-        _release_documents(bundle),
+        list(documents) if documents is not None else _release_documents(bundle),
         key=lambda document: (
             -float(
                 _candidate_answer_bearing_score(
                     question=question,
                     document=document,
                     focus=focus,
+                    document_text=_cached_text(document),
+                    document_terms=_cached_terms(document),
                 ).get("score", 0.0)
             )
             if answer_bearing_required
             else 0.0,
-            -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
-            -_text_term_overlap_score(query_terms, _document_text(document)),
+            -len((query_terms - covered_terms) & _cached_terms(document)),
+            -_text_term_overlap_score(query_terms, _cached_text(document)),
             _is_article_root_document(document),
             str(document.get("section_id", "")),
         ),
@@ -6888,15 +7048,19 @@ def _ensure_query_coverage_passages(
         section_id = str(document.get("section_id", ""))
         if section_id in selected_sections:
             continue
+        document_text = _cached_text(document)
+        relevance: dict[str, Any] = {}
         if answer_bearing_required:
             relevance = _candidate_answer_bearing_score(
                 question=question,
                 document=document,
                 focus=focus,
+                document_text=document_text,
+                document_terms=_cached_terms(document),
             )
             if not relevance.get("answer_bearing"):
                 continue
-        document_terms = _meaningful_terms(_document_text(document))
+        document_terms = _cached_terms(document)
         gained = (query_terms - covered_terms) & document_terms
         if not gained:
             continue
@@ -6908,10 +7072,7 @@ def _ensure_query_coverage_passages(
             ordinal=ordinal,
             channels=["query_coverage"],
             retrieval_metadata={
-                "query_overlap_score": _text_term_overlap_score(
-                    query_terms,
-                    _document_text(document),
-                ),
+                "query_overlap_score": _text_term_overlap_score(query_terms, document_text),
                 "coverage_terms": sorted(gained),
                 "answer_bearing_relevance": relevance
                 if answer_bearing_required
