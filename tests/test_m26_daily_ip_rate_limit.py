@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_daily_ip_rate_limit as rate_limit_module
@@ -48,6 +49,30 @@ def _fake_answer_run(calls: list[dict[str, Any]]):
     return run
 
 
+def _assert_exact_429_contract(response) -> None:
+    payload = response.json()
+    assert response.status_code == 429
+    assert payload["error"] == "daily_rate_limit_exceeded"
+    assert payload["message"] == "Daily question limit reached."
+    assert payload["quota"]["scope"] == "ip-day"
+    assert payload["quota"]["limit"] == 10
+    assert payload["quota"]["remaining"] == 0
+    assert payload["quota"]["reset_at"].endswith("Z")
+    assert isinstance(payload["quota"]["reset_in_seconds"], int)
+    assert payload["quota"]["reset_in_seconds"] > 0
+
+    reset_seconds = str(payload["quota"]["reset_in_seconds"])
+    assert response.headers["retry-after"] == reset_seconds
+    assert response.headers["x-m26-ratelimit-limit"] == "10"
+    assert response.headers["x-m26-ratelimit-remaining"] == "0"
+    assert response.headers["x-m26-ratelimit-scope"] == "ip-day"
+    assert response.headers["x-m26-ratelimit-reset"] == reset_seconds
+    assert response.headers["x-m26-ratelimit-reset-at"] == payload["quota"]["reset_at"]
+    assert "x-ratelimit-limit" not in response.headers
+    assert "x-ratelimit-remaining" not in response.headers
+    assert "x-ratelimit-reset" not in response.headers
+
+
 def _client(monkeypatch, tmp_path: Path, calls: list[dict[str, Any]]) -> TestClient:
     _set_public_env(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -73,7 +98,7 @@ def test_daily_limit_allows_first_ten_and_rejects_eleventh_before_provider(
             json={"question": "What is safe?"},
         )
         assert response.status_code == 200
-        assert response.headers["x-ratelimit-limit"] == "10"
+        assert response.headers["x-m26-ratelimit-limit"] == "10"
 
     response = client.post(
         "/v1/answers",
@@ -81,10 +106,7 @@ def test_daily_limit_allows_first_ten_and_rejects_eleventh_before_provider(
         json={"question": "What is safe?"},
     )
 
-    assert response.status_code == 429
-    assert response.json()["error"] == "daily_rate_limit_exceeded"
-    assert response.json()["limit"] == 10
-    assert response.headers["x-ratelimit-remaining"] == "0"
+    _assert_exact_429_contract(response)
     assert len(calls) == 10
 
 
@@ -164,7 +186,10 @@ def test_health_route_does_not_count_against_daily_quota(monkeypatch, tmp_path: 
     assert len(calls) == 10
 
 
-def test_owner_bypass_token_skips_guest_quota(monkeypatch, tmp_path: Path) -> None:
+def test_owner_bypass_token_skips_guest_quota_across_source_ips(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     _set_public_env(monkeypatch, tmp_path)
     owner_token = uuid.uuid4().hex
     monkeypatch.setenv(
@@ -180,20 +205,42 @@ def test_owner_bypass_token_skips_guest_quota(monkeypatch, tmp_path: Path) -> No
     app = public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json"))
     client = TestClient(app)
 
-    for _ in range(12):
+    for index in range(12):
         response = client.post(
             "/v1/answers",
-            headers={**_post_headers(16), "x-m26-owner-bypass": owner_token},
+            headers={**_post_headers(16 + (index % 2)), "x-m26-owner-bypass": owner_token},
             json={"question": "What is safe?"},
         )
         assert response.status_code == 200
 
     assert len(calls) == 12
 
+    for last_octet in (16, 17):
+        for _ in range(10):
+            guest = client.post(
+                "/v1/answers",
+                headers=_post_headers(last_octet),
+                json={"question": "What is safe?"},
+            )
+            assert guest.status_code == 200
+        blocked = client.post(
+            "/v1/answers",
+            headers=_post_headers(last_octet),
+            json={"question": "What is safe?"},
+        )
+        _assert_exact_429_contract(blocked)
 
-def test_exempt_ip_and_cidr_skip_guest_quota(monkeypatch, tmp_path: Path) -> None:
+
+def test_invalid_owner_bypass_token_counts_as_guest_and_blocks_before_provider(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     _set_public_env(monkeypatch, tmp_path)
-    monkeypatch.setenv("M26_ASK_RATE_LIMIT_EXEMPT_IPS", f"{_ip(17)},{_ip(32)}/28")
+    owner_token = uuid.uuid4().hex
+    monkeypatch.setenv(
+        "M26_ASK_OWNER_BYPASS_TOKEN_SHA256",
+        hashlib.sha256(owner_token.encode("utf-8")).hexdigest(),
+    )
     calls: list[dict[str, Any]] = []
     monkeypatch.setattr(
         public_gateway_module,
@@ -203,16 +250,21 @@ def test_exempt_ip_and_cidr_skip_guest_quota(monkeypatch, tmp_path: Path) -> Non
     app = public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json"))
     client = TestClient(app)
 
-    for last_octet in (17, 33):
-        for _ in range(12):
-            response = client.post(
-                "/v1/answers",
-                headers=_post_headers(last_octet),
-                json={"question": "What is safe?"},
-            )
-            assert response.status_code == 200
+    for _ in range(10):
+        response = client.post(
+            "/v1/answers",
+            headers={**_post_headers(20), "x-m26-owner-bypass": uuid.uuid4().hex},
+            json={"question": "What is safe?"},
+        )
+        assert response.status_code == 200
+    blocked = client.post(
+        "/v1/answers",
+        headers={**_post_headers(20), "x-m26-owner-bypass": uuid.uuid4().hex},
+        json={"question": "What is safe?"},
+    )
 
-    assert len(calls) == 24
+    _assert_exact_429_contract(blocked)
+    assert len(calls) == 10
 
 
 def test_rate_limit_store_does_not_persist_raw_ip(monkeypatch, tmp_path: Path) -> None:
@@ -257,3 +309,35 @@ def test_zero_daily_limit_fails_closed(monkeypatch, tmp_path: Path) -> None:
     assert response.status_code == 503
     assert response.json()["detail"]["reason_code"] == "M26_ASK_RATE_LIMIT_CONFIG_INVALID"
     assert calls == []
+
+
+def test_production_requires_durable_db_path_and_ip_hash_secret(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _set_public_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("M26_ASK_RATE_LIMIT_DB_PATH", raising=False)
+    with pytest.raises(
+        rate_limit_module.M26DailyRateLimitConfigError,
+        match="M26_ASK_RATE_LIMIT_DB_PATH",
+    ):
+        rate_limit_module.DailyRateLimitConfig.from_env()
+
+    _set_public_env(monkeypatch, tmp_path)
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("M26_ASK_RATE_LIMIT_IP_HASH_SECRET", raising=False)
+    with pytest.raises(
+        rate_limit_module.M26DailyRateLimitConfigError,
+        match="M26_ASK_RATE_LIMIT_IP_HASH_SECRET",
+    ):
+        rate_limit_module.DailyRateLimitConfig.from_env()
+
+
+def test_no_ip_allowlist_support_remains() -> None:
+    forbidden_env = "_".join(("M26", "ASK", "RATE", "LIMIT", "EXEMPT", "IPS"))
+    source = Path(rate_limit_module.__file__).read_text(encoding="utf-8")
+
+    assert forbidden_env not in source
+    assert "ip_network" not in source
+    assert "exempt" not in source.lower()

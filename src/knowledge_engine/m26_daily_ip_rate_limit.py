@@ -34,6 +34,7 @@ class DailyRateLimitDecision:
     reset_at: datetime
     retry_after_seconds: int
     bypassed: bool = False
+    scope: str = "ip-day"
 
     @property
     def reset_header(self) -> str:
@@ -42,9 +43,11 @@ class DailyRateLimitDecision:
     @property
     def headers(self) -> dict[str, str]:
         headers = {
-            "X-RateLimit-Limit": str(self.limit),
-            "X-RateLimit-Remaining": str(max(self.remaining, 0)),
-            "X-RateLimit-Reset": self.reset_header,
+            "X-M26-RateLimit-Limit": str(self.limit),
+            "X-M26-RateLimit-Remaining": str(max(self.remaining, 0)),
+            "X-M26-RateLimit-Reset": str(max(self.retry_after_seconds, 1)),
+            "X-M26-RateLimit-Reset-At": self.reset_header,
+            "X-M26-RateLimit-Scope": self.scope,
         }
         if not self.allowed:
             headers["Retry-After"] = str(max(self.retry_after_seconds, 1))
@@ -54,10 +57,14 @@ class DailyRateLimitDecision:
     def exceeded_body(self) -> dict[str, Any]:
         return {
             "error": "daily_rate_limit_exceeded",
-            "message": "You have reached today’s Ask Archive limit.",
-            "limit": self.limit,
-            "remaining": 0,
-            "reset_at": self.reset_header,
+            "message": "Daily question limit reached.",
+            "quota": {
+                "scope": self.scope,
+                "limit": self.limit,
+                "remaining": 0,
+                "reset_at": self.reset_header,
+                "reset_in_seconds": max(self.retry_after_seconds, 1),
+            },
         }
 
 
@@ -67,8 +74,6 @@ class DailyRateLimitConfig:
     db_path: Path
     day_tz: ZoneInfo
     ip_hash_secret: str
-    exempt_networks: tuple[ipaddress._BaseNetwork, ...]
-    exempt_addresses: tuple[ipaddress._BaseAddress, ...]
     owner_bypass_token_sha256: str
 
     @classmethod
@@ -101,9 +106,6 @@ class DailyRateLimitConfig:
                 )
             ip_hash_secret = DEFAULT_DEV_IP_HASH_SECRET
 
-        exempt_addresses, exempt_networks = _parse_exempt_ips(
-            os.environ.get("M26_ASK_RATE_LIMIT_EXEMPT_IPS", "")
-        )
         owner_digest = os.environ.get("M26_ASK_OWNER_BYPASS_TOKEN_SHA256", "").strip().lower()
         if owner_digest and not _is_sha256_hex(owner_digest):
             raise M26DailyRateLimitConfigError(
@@ -115,8 +117,6 @@ class DailyRateLimitConfig:
             db_path=db_path,
             day_tz=day_tz,
             ip_hash_secret=ip_hash_secret,
-            exempt_networks=tuple(exempt_networks),
-            exempt_addresses=tuple(exempt_addresses),
             owner_bypass_token_sha256=owner_digest,
         )
 
@@ -146,16 +146,6 @@ class SQLiteDailyIPRateLimiter:
             )
 
         client_ip = _client_ip(request)
-        if _is_exempt(client_ip, self.config):
-            return DailyRateLimitDecision(
-                allowed=True,
-                limit=self.config.limit,
-                remaining=self.config.limit,
-                reset_at=reset_at,
-                retry_after_seconds=retry_after,
-                bypassed=True,
-            )
-
         day_key = _day_key(now, self.config.day_tz)
         ip_key = _hmac_ip_key(client_ip, secret=self.config.ip_hash_secret)
         count = self._increment(day_key=day_key, ip_key=ip_key, now=now)
@@ -266,32 +256,6 @@ def _client_ip(request: Request) -> ipaddress._BaseAddress:
 def _hmac_ip_key(client_ip: ipaddress._BaseAddress, *, secret: str) -> str:
     normalized = client_ip.compressed.encode("utf-8")
     return hmac.new(secret.encode("utf-8"), normalized, hashlib.sha256).hexdigest()
-
-
-def _parse_exempt_ips(
-    raw: str,
-) -> tuple[list[ipaddress._BaseAddress], list[ipaddress._BaseNetwork]]:
-    addresses: list[ipaddress._BaseAddress] = []
-    networks: list[ipaddress._BaseNetwork] = []
-    for item in (part.strip() for part in raw.split(",")):
-        if not item:
-            continue
-        try:
-            if "/" in item:
-                networks.append(ipaddress.ip_network(item, strict=False))
-            else:
-                addresses.append(ipaddress.ip_address(item))
-        except ValueError as exc:
-            raise M26DailyRateLimitConfigError(
-                "invalid M26_ASK_RATE_LIMIT_EXEMPT_IPS entry"
-            ) from exc
-    return addresses, networks
-
-
-def _is_exempt(client_ip: ipaddress._BaseAddress, config: DailyRateLimitConfig) -> bool:
-    if any(client_ip == address for address in config.exempt_addresses):
-        return True
-    return any(client_ip in network for network in config.exempt_networks)
 
 
 def _is_sha256_hex(value: str) -> bool:
