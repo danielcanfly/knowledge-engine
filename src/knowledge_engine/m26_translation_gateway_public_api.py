@@ -286,14 +286,43 @@ async def _answer_event_stream(
     yield _sse_event("meta", meta)
     seen: list[str] = ["translation_in"]
     yield _sse_event("progress", {"stage": "translation_in", "stages": list(seen)})
-    try:
-        result = await asyncio.to_thread(
+    event_queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def event_sink(event: Mapping[str, Any]) -> None:
+        try:
+            public_event = _public_runtime_event(event, correlation_id=correlation_id)
+        except Exception:
+            return
+        if public_event is None:
+            return
+        try:
+            loop.call_soon_threadsafe(event_queue.put_nowait, public_event)
+        except RuntimeError:
+            return
+
+    answer_task = asyncio.create_task(
+        asyncio.to_thread(
             _resolve_answer,
             app=app,
             payload={"question": question},
             owner_hash=owner_hash,
             correlation_id=correlation_id,
+            event_sink=event_sink,
         )
+    )
+    try:
+        while not answer_task.done():
+            try:
+                event_name, event_payload = await asyncio.wait_for(event_queue.get(), timeout=0.1)
+            except TimeoutError:
+                continue
+            yield _sse_event(event_name, event_payload)
+        await asyncio.sleep(0)
+        while not event_queue.empty():
+            event_name, event_payload = event_queue.get_nowait()
+            yield _sse_event(event_name, event_payload)
+        result = await answer_task
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
         yield _sse_event(
@@ -329,6 +358,34 @@ async def _answer_event_stream(
             )
     yield _sse_event("answer", result)
     yield _sse_event("done", {"status": "ok", "correlation_id": correlation_id})
+
+
+def _public_runtime_event(
+    event: Mapping[str, Any],
+    *,
+    correlation_id: str,
+) -> tuple[str, dict[str, Any]] | None:
+    event_type = str(event.get("type") or event.get("event") or "").strip().lower()
+    event_name = {
+        "stage.started": "stage_started",
+        "stage.completed": "stage_completed",
+        "model.started": "model_started",
+        "model.completed": "model_completed",
+    }.get(event_type)
+    if event_name is None:
+        return None
+    payload: dict[str, Any] = {
+        "type": event_name,
+        "correlation_id": correlation_id,
+    }
+    for key in ("stage", "role", "provider", "model", "attempt", "status"):
+        if key in event:
+            value = event[key]
+            if isinstance(value, str):
+                payload[key] = value
+            elif isinstance(value, int | float | bool) or value is None:
+                payload[key] = value
+    return event_name, payload
 
 
 def _sse_event(event: str, payload: Mapping[str, Any]) -> str:
@@ -406,6 +463,7 @@ def _resolve_answer(
     payload: dict[str, Any],
     owner_hash: str,
     correlation_id: str,
+    event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     try:
         return run_owner_translation_gateway_for_web(
@@ -415,6 +473,7 @@ def _resolve_answer(
             owner_subject_hash=owner_hash,
             public_request=False,
             correlation_id=correlation_id,
+            event_sink=event_sink,
         )
     except TranslationGatewayError as exc:
         raise _translation_gateway_http_error(exc.failure) from exc

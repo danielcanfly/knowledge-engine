@@ -97,6 +97,33 @@ def test_owner_gateway_english_bypass_omits_downstream_provider_call_limit(
     assert "max_cost" not in calls[0]
 
 
+def test_owner_gateway_forwards_event_sink_to_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from knowledge_engine import m26_ask_api
+
+    seen_sink: list[Any] = []
+
+    def fake_run_owner_query_for_web(**kwargs: Any) -> dict[str, Any]:
+        seen_sink.append(kwargs.get("event_sink"))
+        return {"answer_text": "ok"}
+
+    monkeypatch.setattr(m26_ask_api, "run_owner_query_for_web", fake_run_owner_query_for_web)
+
+    events: list[dict[str, Any]] = []
+    result = run_owner_translation_gateway_for_web(
+        root=type("Pathish", (), {})(),
+        gate_path=type("Pathish", (), {})(),
+        request_payload={"question": "What is the M26 PA7 status?"},
+        owner_subject_hash="owner",
+        provider=FakeProvider("unused"),
+        event_sink=events.append,
+    )
+
+    assert result["answer_text"] == "ok"
+    assert seen_sink == [events.append]
+
+
 def test_owner_gateway_translated_and_canonical_calls_have_same_downstream_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
