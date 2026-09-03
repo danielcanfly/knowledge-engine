@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.responses import StreamingResponse
 
 from .auth import Authenticator
@@ -24,6 +25,11 @@ from .m26_ask_api import (
     _authorize_backend_request,
     _http_error,
     validate_query_request,
+)
+from .m26_daily_ip_rate_limit import (
+    OWNER_BYPASS_HEADER,
+    M26DailyRateLimitConfigError,
+    SQLiteDailyIPRateLimiter,
 )
 from .m26_google_translation_provider import (
     GoogleTranslationLLMProvider,
@@ -95,13 +101,27 @@ def create_app(
     app.state.translation_provider = translation_provider
     app.state.translation_provider_factory = provider_factory or _default_provider_factory
     app.state.translation_provider_lock = threading.Lock()
+    app.state.rate_limiter = None
+    app.state.rate_limiter_lock = threading.Lock()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_allowed_origins(),
         allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Accept", "Authorization", OWNER_HASH_HEADER],
-        expose_headers=["X-Request-Id"],
+        allow_headers=[
+            "Content-Type",
+            "Accept",
+            "Authorization",
+            OWNER_HASH_HEADER,
+            OWNER_BYPASS_HEADER,
+        ],
+        expose_headers=[
+            "X-Request-Id",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+            "Retry-After",
+        ],
         max_age=600,
     )
 
@@ -163,7 +183,7 @@ def create_app(
         return _public_health_payload(base_url=_origin_base_url(request))
 
     @app.post("/v1/answers")
-    async def public_answers(request: Request) -> StreamingResponse:
+    async def public_answers(request: Request) -> Any:
         _authenticate_staging_qualification(request)
         body = await request.body()
         if len(body) > MAX_BODY_BYTES:
@@ -178,6 +198,19 @@ def create_app(
         if unknown:
             raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_TG_REQUEST_FIELD_DENIED")
         validate_query_request(payload)
+        try:
+            rate_limit = _app_rate_limiter(app).check_request(request)
+        except M26DailyRateLimitConfigError as exc:
+            raise _http_error(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "M26_ASK_RATE_LIMIT_CONFIG_INVALID",
+            ) from exc
+        if not rate_limit.allowed:
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content=rate_limit.exceeded_body,
+                headers=rate_limit.headers,
+            )
         correlation_id = str(uuid.uuid4())
         base_url = _origin_base_url(request)
         stream = _answer_event_stream(
@@ -193,10 +226,25 @@ def create_app(
                 "Cache-Control": "no-store",
                 "X-Content-Type-Options": "nosniff",
                 "X-Accel-Buffering": "no",
+                **rate_limit.headers,
             },
         )
 
     return app
+
+
+def _app_rate_limiter(app: FastAPI) -> SQLiteDailyIPRateLimiter:
+    limiter = getattr(app.state, "rate_limiter", None)
+    if limiter is not None:
+        return limiter
+    with app.state.rate_limiter_lock:
+        limiter = getattr(app.state, "rate_limiter", None)
+        if limiter is None:
+            limiter = SQLiteDailyIPRateLimiter.from_env()
+            app.state.rate_limiter = limiter
+        return limiter
+
+
 def _allowed_origins() -> list[str]:
     configured = os.environ.get("M26_PUBLIC_ALLOWED_ORIGINS", "").strip()
     if not configured:
@@ -381,9 +429,7 @@ def _public_runtime_event(
     for key in ("stage", "role", "provider", "model", "attempt", "status"):
         if key in event:
             value = event[key]
-            if isinstance(value, str):
-                payload[key] = value
-            elif isinstance(value, int | float | bool) or value is None:
+            if isinstance(value, str | int | float | bool) or value is None:
                 payload[key] = value
     return event_name, payload
 
