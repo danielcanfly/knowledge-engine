@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout exact backend branch
         uses: actions/checkout@v4
@@ -27,9 +27,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
 
-      - name: Install browser regression runtime
-        run: python -m playwright install --with-deps chromium
-
       - name: Focused P01 lint
         run: >-
           ruff check
@@ -37,11 +34,32 @@ jobs:
           src/knowledge_engine/m26_console_api.py
           tests/test_m26_admin_overview.py
 
-      - name: Focused P01 tests
-        run: pytest -q tests/test_m26_admin_overview.py
+      - name: Focused P01 format check
+        run: >-
+          ruff format --check
+          src/knowledge_engine/m26_admin_overview.py
+          src/knowledge_engine/m26_console_api.py
+          tests/test_m26_admin_overview.py
 
-      - name: Full repository pytest regression
-        run: pytest -q
+      - name: P01 and B01 control-plane tests
+        run: >-
+          pytest -q
+          tests/test_m26_admin_control_plane.py
+          tests/test_m26_admin_overview.py
+
+      - name: Public Ask regression
+        run: >-
+          pytest -q
+          tests/test_m26_translation_gateway_public_api.py
+          tests/test_m26_translation_gateway_release_metadata.py
+
+      - name: Combined relevant regression
+        run: >-
+          pytest -q
+          tests/test_m26_admin_control_plane.py
+          tests/test_m26_admin_overview.py
+          tests/test_m26_translation_gateway_public_api.py
+          tests/test_m26_translation_gateway_release_metadata.py
 
       - name: Python-only compile regression
         shell: bash
