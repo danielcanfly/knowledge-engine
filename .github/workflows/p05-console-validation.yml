@@ -1,0 +1,36 @@
+name: P05 Console Backend Validation
+
+on:
+  push:
+    branches:
+      - m26-console/p05-ask-playground-backend-20260904
+
+permissions:
+  contents: read
+
+jobs:
+  focused-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff P05 scope
+        run: >-
+          ruff check
+          src/knowledge_engine/m26_console_p05_ask_playground.py
+          src/knowledge_engine/m26_console_api.py
+          tests/test_m26_console_p05_ask_playground.py
+          tests/test_m26_admin_control_plane.py
+      - name: Focused pytest
+        run: >-
+          pytest -q
+          tests/test_m26_admin_control_plane.py
+          tests/test_m26_console_p05_ask_playground.py
+      - name: Import smoke
+        run: python -c "from knowledge_engine.m26_console_api import create_app; app=create_app(); paths={r.path for r in app.routes}; assert '/v1/admin/playground/retrieve' in paths; assert '/v1/admin/playground/ask' in paths"
