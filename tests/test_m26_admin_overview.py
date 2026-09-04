@@ -59,9 +59,7 @@ def make_app(*, bundle_loader=None) -> FastAPI:
     app.state.admin_overview_public_health_builder = lambda **_: {
         "ok": True,
         "status": "ok",
-        "surface": {
-            "canonical_health_url": "https://api.example/v1/answers/health"
-        },
+        "surface": {"canonical_health_url": "https://api.example/v1/answers/health"},
     }
     return app
 
@@ -129,6 +127,4 @@ def test_overview_admin_auth_still_fails_closed() -> None:
 
 def test_overview_is_read_only_and_does_not_register_a_mutation() -> None:
     app = make_app()
-    assert not app.state.admin_mutation_registry.is_state_changing(
-        "GET", "/v1/admin/overview"
-    )
+    assert not app.state.admin_mutation_registry.is_state_changing("GET", "/v1/admin/overview")
