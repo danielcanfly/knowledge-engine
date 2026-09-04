@@ -11,7 +11,7 @@ permissions:
 jobs:
   converge-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,24 +76,32 @@ jobs:
                   subprocess.check_call(['git','checkout',head,'--',p]); copied[p]=lane
               patch=subprocess.check_output(['git','diff','--unified=0',base,head,'--',seam],text=True)
               for raw in patch.splitlines():
-                  if not raw.startswith('+') or raw.startswith('+++'): continue
+                  if not raw.startswith('+') or raw.startswith('+++'):
+                      continue
                   line=raw[1:]; stripped=line.strip()
-                  if line.startswith('from .') and line not in imports: imports.append(line)
+                  if line.startswith('from .') and line not in imports:
+                      imports.append(line)
                   if ((stripped.startswith('install_') and stripped.endswith('(app)')) or stripped.startswith('app.include_router(')):
                       normalized='    '+stripped
-                      if normalized not in calls: calls.append(normalized)
-          if len(calls)!=12: raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
+                      if normalized not in calls:
+                          calls.append(normalized)
+          if len(calls)!=12:
+              raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
           lines=subprocess.check_output(['git','show',f'{repair}:{seam}'],text=True).splitlines()
           public_idx=next(i for i,l in enumerate(lines) if 'm26_translation_gateway_public_api' in l)
-          for line in reversed(imports): lines.insert(public_idx,line)
+          for line in reversed(imports):
+              lines.insert(public_idx,line)
           install_idx=next(i for i,l in enumerate(lines) if l.strip()=='install_admin_control_plane(app)')+1
-          for line in reversed(calls): lines.insert(install_idx,line)
+          for line in reversed(calls):
+              lines.insert(install_idx,line)
           pathlib.Path(seam).write_text('\n'.join(lines)+'\n')
           print('COPIED_PATHS',len(copied)); print('UNION_CALLS',len(calls))
           PY
           python -m pip install -e '.[dev]'
-          python -m ruff check --fix src/knowledge_engine/m26_console_api.py
-          python -m ruff format src/knowledge_engine/m26_console_api.py
+          files=$(git diff --name-only "$REPAIR" -- 'src/knowledge_engine/*.py' 'tests/test_m26*.py' | tr '\n' ' ')
+          test -n "$files"
+          python -m ruff check --fix $files
+          python -m ruff format $files
           git add -A
           test -z "$(git diff --cached --name-only | grep -E '^\.github/workflows/' || true)"
           test -z "$(git diff --cached --name-only | grep -E '^openapi/CANONICAL_ADMIN_API_OPENAPI.yaml$' || true)"
@@ -145,7 +153,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then exit 1; fi
+          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then
+            exit 1
+          fi
           git diff --exit-code HEAD^ HEAD -- openapi/CANONICAL_ADMIN_API_OPENAPI.yaml
       - name: Push exact tested candidate
         shell: bash
