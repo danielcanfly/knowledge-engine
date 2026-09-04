@@ -102,8 +102,10 @@ def _iso_datetime(value: Any) -> str | None:
         return None
     candidate = value.strip()
     try:
-        datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
     except ValueError:
+        return None
+    if parsed.tzinfo is None:
         return None
     return candidate
 
@@ -139,8 +141,8 @@ def _normalize_limit(
     verified = raw.get("verified") is True
     if not _valid_number(value) or not isinstance(source, str) or not source.strip():
         return None
-    unit = raw.get("unit", definition.unit)
-    window = raw.get("window", definition.window)
+    unit = raw.get("unit")
+    window = raw.get("window")
     if unit != definition.unit or window != definition.window:
         return None
     return {
@@ -425,7 +427,12 @@ def _latest_observed_at(metrics: list[dict[str, Any]]) -> str | None:
         for metric in metrics
         if isinstance(metric.get("observed_at"), str)
     ]
-    return max(observations) if observations else None
+    if not observations:
+        return None
+    return max(
+        observations,
+        key=lambda item: datetime.fromisoformat(item.replace("Z", "+00:00")),
+    )
 
 
 def build_usage_payload(
