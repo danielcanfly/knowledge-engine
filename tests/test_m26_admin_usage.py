@@ -127,6 +127,8 @@ def test_unverified_limit_never_creates_remaining() -> None:
                 "freshness": "live",
                 "limit": {
                     "value": 100,
+                    "unit": "requests",
+                    "window": "minute",
                     "source": "unqualified_config",
                     "verified": False,
                 },
@@ -138,6 +140,33 @@ def test_unverified_limit_never_creates_remaining() -> None:
     ).json()
     item = metric(payload, "requests_minute")
     assert item["limit"]["value"] == 100
+    assert item["remaining"] is None
+
+
+def test_limit_without_explicit_unit_and_window_is_rejected() -> None:
+    provider = {
+        "metrics": {
+            "requests_minute": {
+                "value": 80,
+                "unit": "requests",
+                "window": "minute",
+                "source": "qualified_counter",
+                "observed_at": "2026-09-04T12:00:00Z",
+                "freshness": "live",
+                "limit": {
+                    "value": 100,
+                    "source": "ambiguous_policy",
+                    "verified": True,
+                },
+            }
+        }
+    }
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
+    item = metric(payload, "requests_minute")
+    assert item["value"] == 80
+    assert item["limit"] is None
     assert item["remaining"] is None
 
 
@@ -190,6 +219,27 @@ def test_missing_timestamp_and_partial_coverage_are_explicitly_partial() -> None
     assert item["availability"]["status"] == "partial"
     assert item["coverage"]["complete"] is False
     assert payload["availability"]["status"] == "partial"
+
+
+def test_naive_timestamp_is_not_treated_as_authoritative_observation_time() -> None:
+    provider = {
+        "metrics": {
+            "requests_hour": {
+                "value": 42,
+                "unit": "requests",
+                "window": "hour",
+                "source": "qualified_request_counter",
+                "observed_at": "2026-09-04T12:00:00",
+                "freshness": "live",
+            }
+        }
+    }
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
+    item = metric(payload, "requests_hour")
+    assert item["observed_at"] is None
+    assert item["availability"]["status"] == "partial"
 
 
 def test_stale_metric_preserves_stale_freshness() -> None:
