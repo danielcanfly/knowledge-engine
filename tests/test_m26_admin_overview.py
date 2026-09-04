@@ -6,8 +6,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from knowledge_engine.m26_admin_contract import AdminActor, AdminAPIError
-from knowledge_engine.m26_admin_control_plane import ACCESS_ASSERTION_HEADER, install_admin_control_plane
-from knowledge_engine.m26_admin_overview import OVERVIEW_SECTION_IDS, install_admin_overview
+from knowledge_engine.m26_admin_control_plane import (
+    ACCESS_ASSERTION_HEADER,
+    install_admin_control_plane,
+)
+from knowledge_engine.m26_admin_overview import (
+    OVERVIEW_SECTION_IDS,
+    install_admin_overview,
+)
 
 OWNER = AdminActor(
     actor_id="cfaccess:owner",
@@ -53,12 +59,14 @@ def make_app(*, bundle_loader=None) -> FastAPI:
     app.state.admin_overview_public_health_builder = lambda **_: {
         "ok": True,
         "status": "ok",
-        "surface": {"canonical_health_url": "https://api.example/v1/answers/health"},
+        "surface": {
+            "canonical_health_url": "https://api.example/v1/answers/health"
+        },
     }
     return app
 
 
-def test_overview_returns_canonical_partial_read_envelope_without_fabricating_missing_metrics() -> None:
+def test_overview_returns_partial_envelope_without_fabricated_metrics() -> None:
     client = TestClient(make_app())
     response = client.get("/v1/admin/overview", headers=admin_headers())
     assert response.status_code == 200
@@ -71,7 +79,7 @@ def test_overview_returns_canonical_partial_read_envelope_without_fabricating_mi
 
     sections = payload["data"]["sections"]
     assert tuple(sections) == OVERVIEW_SECTION_IDS
-    assert sections["release_index"]["status"] == "healthy"
+    assert sections["release_index"]["status"] == "unknown"
     assert sections["release_index"]["value"]["release_id"] == "release-test"
     assert sections["public_ask"]["status"] == "healthy"
 
@@ -121,4 +129,6 @@ def test_overview_admin_auth_still_fails_closed() -> None:
 
 def test_overview_is_read_only_and_does_not_register_a_mutation() -> None:
     app = make_app()
-    assert not app.state.admin_mutation_registry.is_state_changing("GET", "/v1/admin/overview")
+    assert not app.state.admin_mutation_registry.is_state_changing(
+        "GET", "/v1/admin/overview"
+    )
