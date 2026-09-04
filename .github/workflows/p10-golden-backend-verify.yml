@@ -1,0 +1,22 @@
+name: P10 Golden Backend Verify
+
+on:
+  push:
+    branches:
+      - 'm26-console/p10-golden-questions-backend-20260904'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff
+        run: ruff check src/knowledge_engine/m26_golden_questions_admin.py src/knowledge_engine/m26_console_api.py tests/test_m26_golden_questions_admin.py
+      - name: P10 focused pytest
+        run: pytest -q tests/test_m26_golden_questions_admin.py
