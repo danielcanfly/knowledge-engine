@@ -61,9 +61,7 @@ def _section(
     }
 
 
-def _unavailable_section(
-    *, reason_code: str, source: str, detail: str
-) -> dict[str, Any]:
+def _unavailable_section(*, reason_code: str, source: str, detail: str) -> dict[str, Any]:
     return _section(
         availability="unavailable",
         reason_code=reason_code,
@@ -130,9 +128,7 @@ def _release_section(request: Request) -> dict[str, Any]:
         value = {
             "release_id": release_id,
             "manifest_sha256": getattr(bundle, "manifest_sha256", None),
-            "production_pointer_sha256": getattr(
-                bundle, "production_pointer_sha256", None
-            ),
+            "production_pointer_sha256": getattr(bundle, "production_pointer_sha256", None),
         }
         return _section(
             availability="available",
@@ -169,13 +165,9 @@ def _public_ask_section(request: Request, observed_at: str) -> dict[str, Any]:
     try:
         payload = builder(base_url=str(request.base_url).rstrip("/"))
         status = (
-            "healthy"
-            if payload.get("ok") is True and payload.get("status") == "ok"
-            else "warning"
+            "healthy" if payload.get("ok") is True and payload.get("status") == "ok" else "warning"
         )
-        reason_code = (
-            None if status == "healthy" else "OVERVIEW_PUBLIC_ASK_HEALTH_NOT_OK"
-        )
+        reason_code = None if status == "healthy" else "OVERVIEW_PUBLIC_ASK_HEALTH_NOT_OK"
         return _section(
             availability="available",
             reason_code=reason_code,
@@ -200,10 +192,7 @@ def _public_ask_section(request: Request, observed_at: str) -> dict[str, Any]:
         return _unavailable_section(
             reason_code="OVERVIEW_PUBLIC_ASK_HEALTH_UNAVAILABLE",
             source="public_ask_in_process_health",
-            detail=(
-                "Public Ask health evidence could not be collected; health was not "
-                "inferred."
-            ),
+            detail=("Public Ask health evidence could not be collected; health was not inferred."),
         )
 
 
@@ -228,10 +217,7 @@ def _optional_sources() -> dict[str, dict[str, Any]]:
         "ingestion_jobs": _unavailable_section(
             reason_code="OVERVIEW_INGESTION_JOBS_SOURCE_UNAVAILABLE",
             source="ingestion_job_read_model",
-            detail=(
-                "No qualified recent ingestion/job ledger is wired into this "
-                "backend base."
-            ),
+            detail=("No qualified recent ingestion/job ledger is wired into this backend base."),
         ),
         "usage_rate_limits": _unavailable_section(
             reason_code="OVERVIEW_USAGE_SOURCE_UNAVAILABLE",
@@ -287,9 +273,7 @@ def _aggregate_freshness(sections: Mapping[str, Mapping[str, Any]]) -> str:
         for section in sections.values()
     ):
         return "unknown"
-    freshness = {
-        str(section.get("freshness", "unknown")) for section in sections.values()
-    }
+    freshness = {str(section.get("freshness", "unknown")) for section in sections.values()}
     if len(freshness) == 1:
         return freshness.pop()
     if "stale" in freshness:
