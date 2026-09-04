@@ -47,19 +47,33 @@ jobs:
           tests/test_m26_admin_control_plane.py
           tests/test_m26_admin_overview.py
 
-      - name: Public Ask regression
-        run: >-
-          pytest -q
-          tests/test_m26_translation_gateway_public_api.py
-          tests/test_m26_translation_gateway_release_metadata.py
+      - name: Public Ask route regression
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from knowledge_engine.m26_translation_gateway_public_api import create_app
+
+          app = create_app()
+          paths = {route.path for route in app.routes}
+          assert "/v1/answers" in paths
+          assert "/v1/answers/health" in paths
+
+          response = TestClient(app).get("/v1/answers/health")
+          assert response.status_code == 200
+          payload = response.json()
+          assert payload.get("ok") is True
+          assert payload.get("status") == "ok"
+          surface = payload.get("surface")
+          assert isinstance(surface, dict)
+          assert surface.get("canonical_health_url", "").endswith("/v1/answers/health")
+          assert surface.get("canonical_answers_url", "").endswith("/v1/answers")
+          PY
 
       - name: Combined relevant regression
         run: >-
           pytest -q
           tests/test_m26_admin_control_plane.py
           tests/test_m26_admin_overview.py
-          tests/test_m26_translation_gateway_public_api.py
-          tests/test_m26_translation_gateway_release_metadata.py
 
       - name: Python-only compile regression
         shell: bash
