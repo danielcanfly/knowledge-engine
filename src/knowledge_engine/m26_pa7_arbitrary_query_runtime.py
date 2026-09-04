@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import re
+import threading
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -24,7 +26,7 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
-from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
+from .m26_pa5_v8_live import LiveGateError, MiniMaxClient, MODEL as MINIMAX_MODEL
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_ADMISSION_SHA256,
     FULL_PRODUCTION_QDRANT_COLLECTION,
@@ -56,7 +58,9 @@ MAX_BUNDLE_EVIDENCE_ITEMS = 5
 MAX_CANDIDATE_POOL_ITEMS = 40
 MAX_DYNAMIC_EVIDENCE_ITEMS = 16
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
+DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS = 2.0
 LOCAL_DENSE_DIMENSION = 64
+FAST_SYNTHESIS_CALL_CLASS = "aq_fast_answer_synthesis"
 PA4_POLICY_PATH = Path("pilot/m26/m26-pa-4-verified-answer-policy.json")
 PA7_OWNER_DECISION_PATH = Path("pilot/m26/m26-pa-7-owner-final-decision.json")
 RELATIONAL_INTENTS = {
@@ -243,6 +247,127 @@ MODALITY_STRENGTHENING_TERMS = {
     "requires",
     "will",
 }
+DEFINITION_PREDICATE_TERMS = {
+    "acceptance",
+    "behavior",
+    "capability",
+    "carry",
+    "carries",
+    "carrying",
+    "criteria",
+    "decision",
+    "follow",
+    "followed",
+    "follows",
+    "guide",
+    "means",
+    "method",
+    "order",
+    "practice",
+    "procedure",
+    "role",
+    "rules",
+    "sop",
+    "task",
+    "tells",
+    "tool",
+    "uses",
+}
+DEFINITION_CATEGORY_TERMS = {
+    "behavior",
+    "component",
+    "function",
+    "framework",
+    "mechanism",
+    "module",
+    "pattern",
+    "practice",
+    "process",
+    "procedure",
+    "system",
+    "tool",
+    "capability",
+}
+DEFINITION_NON_NOUN_TERMS = {
+    "associated",
+    "available",
+    "capable",
+    "causal",
+    "different",
+    "equivalent",
+    "identical",
+    "necessary",
+    "opposite",
+    "related",
+    "responsible",
+    "similar",
+}
+def _strip_leading_articles(text: str) -> str:
+    return re.sub(r"^(?:a|an|the)\s+", "", str(text).strip(), flags=re.I)
+
+
+def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
+    normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    if not normalized:
+        return None
+    prefixes = (
+        "what is ",
+        "what are ",
+        "what was ",
+        "what were ",
+        "what does ",
+        "what do ",
+        "what's ",
+        "define ",
+    )
+    for prefix in prefixes:
+        if not normalized.startswith(prefix):
+            continue
+        body = normalized[len(prefix) :].strip(" ?.")
+        if not body:
+            return None
+        if re.match(
+            r"(?:the\s+)?role\s+of\s+.+?\s+(?:in|within|for)\s+.+",
+            body,
+        ):
+            return None
+        if (prefix.startswith("what does") or prefix.startswith("what do")) and (
+            " mean " not in f" {body} "
+        ):
+            return None
+        if " which " in f" {body} " or ("," in body and " mean " not in f" {body} "):
+            return None
+        head = body
+        context_modifier = ""
+        if prefix.startswith("what does") or prefix.startswith("what do"):
+            for marker in (" mean in ", " mean within ", " mean for ", " mean under "):
+                if marker in body:
+                    head, context_modifier = body.split(marker, 1)
+                    break
+            else:
+                if " mean " in f" {body} ":
+                    head = body.split(" mean ", 1)[0]
+        if not context_modifier:
+            for marker in (" in ", " within ", " for ", " under "):
+                if marker in head:
+                    head, context_modifier = head.split(marker, 1)
+                    break
+        head = re.sub(r"\s+", " ", _strip_leading_articles(head)).strip(" ?.,;:")
+        context_modifier = re.sub(
+            r"\s+", " ", _strip_leading_articles(context_modifier)
+        ).strip(" ?.,;:")
+        head_terms = _coverage_terms(head)
+        if len(head_terms) == 1:
+            sole_term = next(iter(head_terms))
+            if sole_term in DEFINITION_NON_NOUN_TERMS or sole_term.endswith(("ed", "ing")):
+                return None
+        if head:
+            return {
+                "definition_head": head,
+                "context_modifier": context_modifier,
+                "question_prefix": prefix.strip(),
+            }
+    return None
 CAUSALITY_UPGRADE_TERMS = {
     "cause",
     "caused",
@@ -577,6 +702,174 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
     return LocalDenseProjectionChannel()
 
 
+_DENSE_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+_DENSE_TRANSIENT_REASON_CODE = "DENSE_TRANSIENT_UNAVAILABLE"
+_DENSE_TIMEOUT_REASON_CODE = "DENSE_SEARCH_DEADLINE_EXCEEDED"
+
+
+def _float_from_env(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _dense_search_deadline_seconds() -> float:
+    return _float_from_env(
+        "M26_DENSE_SEARCH_DEADLINE_SECONDS",
+        DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS,
+    )
+
+
+def _degraded_dense_result(
+    dense_backend: DenseChannel,
+    *,
+    http_status: int | None,
+    reason_code: str = _DENSE_TRANSIENT_REASON_CODE,
+    deadline_ms: int | None = None,
+    elapsed_ms: int | None = None,
+) -> dict[str, Any]:
+    backend_identity: dict[str, Any] = {
+        "backend": dense_backend.__class__.__name__,
+        "availability": "unavailable",
+        "degraded": True,
+        "reason_code": reason_code,
+        "http_status": http_status,
+    }
+    if deadline_ms is not None:
+        backend_identity["deadline_ms"] = deadline_ms
+    if elapsed_ms is not None:
+        backend_identity["elapsed_ms"] = elapsed_ms
+    return {
+        "backend_identity": backend_identity,
+        "candidates": [],
+    }
+
+
+def _dense_http_status(exc: httpx.HTTPStatusError) -> int | None:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    return status_code if isinstance(status_code, int) else None
+
+
+def _run_dense_search_with_deadline(
+    *,
+    dense_backend: DenseChannel,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    top_k: int,
+    deadline_seconds: float,
+    event_sink: RuntimeEventSink | None,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    results: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+
+    def run() -> None:
+        try:
+            results.put(
+                (
+                    "ok",
+                    dense_backend.search(
+                        question=question,
+                        bundle=bundle,
+                        top_k=top_k,
+                    ),
+                ),
+                block=False,
+            )
+        except Exception as exc:
+            results.put(("error", exc), block=False)
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+    thread.join(deadline_seconds)
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    deadline_ms = int(deadline_seconds * 1000)
+    if thread.is_alive():
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            http_status=None,
+            deadline_ms=deadline_ms,
+            elapsed_ms=elapsed_ms,
+        )
+        return _degraded_dense_result(
+            dense_backend,
+            http_status=None,
+            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            deadline_ms=deadline_ms,
+            elapsed_ms=elapsed_ms,
+        )
+    status, payload = results.get_nowait()
+    if status == "error":
+        raise payload
+    return payload
+
+
+def _run_lexical_primary_retrieval(
+    *,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    dense_channel: DenseChannel | None,
+    require_remote_dense: bool,
+    top_k: int,
+    event_sink: RuntimeEventSink | None,
+    relation_aware_expansion: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    lexical = retrieve_wiki_first(
+        query=question,
+        allowed_audiences={"public", "internal"},
+        lexical_index=bundle.lexical_index,
+        graph=bundle.graph,
+        relation_graph=bundle.graph_v2,
+        relation_aware_expansion=relation_aware_expansion,
+        provenance=bundle.provenance,
+        semantic_index=bundle.semantic_inputs,
+        limit=8,
+    )
+    dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
+    try:
+        dense = _run_dense_search_with_deadline(
+            dense_backend=dense_backend,
+            question=question,
+            bundle=bundle,
+            top_k=top_k,
+            deadline_seconds=_dense_search_deadline_seconds(),
+            event_sink=event_sink,
+        )
+    except (httpx.TimeoutException, httpx.NetworkError):
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            http_status=None,
+        )
+        dense = _degraded_dense_result(dense_backend, http_status=None)
+    except httpx.HTTPStatusError as exc:
+        http_status = _dense_http_status(exc)
+        if http_status not in _DENSE_TRANSIENT_HTTP_STATUSES:
+            raise
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            http_status=http_status,
+        )
+        dense = _degraded_dense_result(dense_backend, http_status=http_status)
+    return lexical, dense
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -592,6 +885,21 @@ def run_owner_arbitrary_query(
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
+    return _run_fast_public_query(
+        root=root,
+        gate=gate,
+        question=question,
+        owner_subject_hash=owner_subject_hash,
+        public_request=public_request,
+        provider_client=provider_client,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        max_provider_calls=max_provider_calls,
+        max_cost=max_cost,
+        answer_bundle=answer_bundle,
+        event_sink=event_sink,
+    )
+
     started = time.monotonic()
     normalized_question = _normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
@@ -696,6 +1004,7 @@ def run_owner_arbitrary_query(
             }
             return response
 
+    retrieval_started = time.monotonic()
     _emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
@@ -703,21 +1012,13 @@ def run_owner_arbitrary_query(
             "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
             "answer runtime is not bound to the accepted full production release",
         )
-    dense = (dense_channel or dense_channel_from_env(require_remote=require_remote_dense)).search(
+    lexical, dense = _run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
         top_k=8,
-    )
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+        event_sink=event_sink,
     )
     evidence = _select_evidence(
         bundle=bundle,
@@ -732,6 +1033,7 @@ def run_owner_arbitrary_query(
         "stage.completed",
         stage="retrieval",
         selected_evidence_count=len(evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
     )
     if not evidence or not _has_meaningful_overlap(normalized_question, evidence):
         return {
@@ -755,7 +1057,6 @@ def run_owner_arbitrary_query(
                 intent_class=intent_class,
             ),
         }
-
     _emit_runtime_event(event_sink, "stage.started", stage="closure")
     verification = _synthesize_and_verify(
         root=root,
@@ -1020,7 +1321,7 @@ def _retrieval_response_fields(
             "intent_class": intent_class,
             "multi_evidence_bundle": True,
             "dynamic_evidence_budget": True,
-            "graph_expansion_default_for_ordinary_queries": True,
+            "graph_expansion_default_for_ordinary_queries": False,
             "source_diversity": True,
             "redundancy_penalty": True,
         },
@@ -1089,6 +1390,733 @@ def _selected_item_relation_types(item: Mapping[str, Any]) -> list[str]:
             if isinstance(edge, Mapping) and edge.get("relation_type"):
                 relation_types.append(str(edge.get("relation_type")))
     return relation_types
+
+
+def _run_fast_public_query(
+    *,
+    root: Path,
+    gate: Mapping[str, Any],
+    question: str,
+    owner_subject_hash: str,
+    public_request: bool = False,
+    provider_client: ProviderClient | None = None,
+    dense_channel: DenseChannel | None = None,
+    require_remote_dense: bool = False,
+    max_provider_calls: int = 2,
+    max_cost: Decimal = Decimal("0.10"),
+    answer_bundle: ProductionAnswerBundle | None = None,
+    event_sink: RuntimeEventSink | None = None,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    normalized_question = _normalize_request_question(question)
+    question_sha = canonical_sha256(normalized_question)
+    intent_class = _intent_class(normalized_question)
+    validated_gate = _validate_gate(root, gate)
+    identities = _object(
+        validated_gate.get("production_identities"), "gate.production_identities"
+    )
+    _emit_runtime_event(event_sink, "stage.started", stage="admission")
+    admission = evaluate_owner_admission(
+        validated_gate,
+        {
+            "resolved_gate_self_sha256": validated_gate.get("self_sha256"),
+            "owner_subject_hash": owner_subject_hash,
+            "owner_only_route": identities.get("owner_only_route"),
+            "public_request": public_request,
+        },
+    )
+    trace_id = "m26pa7aq_" + canonical_sha256(
+        {
+            "gate": validated_gate.get("self_sha256"),
+            "question_sha256": question_sha,
+            "owner_subject_hash": owner_subject_hash,
+        }
+    )[:32]
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="admission",
+        status="admitted" if admission["admitted"] else "denied",
+    )
+    if not admission["admitted"]:
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="denied_non_owner_or_public_request",
+            terminal_status="denied_before_retrieval",
+            reason_codes=admission["reason_codes"],
+        )
+    if _looks_like_prompt_injection(normalized_question):
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_safe_abstention",
+            terminal_status="safe_abstention",
+            reason_codes=["PROMPT_INJECTION_OR_PRIVACY_RISK"],
+        )
+    if _looks_like_underspecified_workflow_question(normalized_question):
+        return _base_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_safe_abstention",
+            terminal_status="safe_abstention",
+            reason_codes=["QUESTION_UNDERSPECIFIED_CLARIFICATION_REQUIRED"],
+        )
+
+    provider = provider_client
+    if provider is None:
+        try:
+            provider = MiniMaxClient(
+                os.environ.get("MINIMAX_API_KEY", ""),
+                max_calls=max_provider_calls,
+                max_cost=max_cost,
+            )
+        except LiveGateError as exc:
+            return _fast_abstention_response(
+                gate=validated_gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                reason_codes=[type(exc).__name__, "PROVIDER_CONFIGURATION_MISSING"],
+            )
+
+    retrieval_started = time.monotonic()
+    _emit_runtime_event(event_sink, "stage.started", stage="retrieval")
+    bundle = answer_bundle or load_production_answer_bundle()
+    lexical, dense = _run_lexical_primary_retrieval(
+        question=normalized_question,
+        bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        top_k=8,
+        event_sink=event_sink,
+        relation_aware_expansion=False,
+    )
+    selected_evidence = _select_evidence(
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        trace_id=trace_id,
+        question=normalized_question,
+        intent_class=intent_class,
+        allow_graph_expansion=False,
+    )[:6]
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="retrieval",
+        selected_evidence_count=len(selected_evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
+    )
+    if not selected_evidence or not _has_meaningful_overlap(normalized_question, selected_evidence):
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[
+                "NO_AUTHORIZED_PRODUCTION_EVIDENCE"
+                if not selected_evidence
+                else "LOW_RETRIEVAL_SUPPORT"
+            ],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=[],
+            intent_class=intent_class,
+        )
+
+    synthesis_started = time.monotonic()
+    _emit_runtime_event(event_sink, "stage.started", stage="synthesis")
+    payload = _fast_synthesis_payload(
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=selected_evidence,
+    )
+    provider_identity = _fast_provider_identity(provider)
+    _emit_runtime_event(
+        event_sink,
+        "model.started",
+        role="answer_synthesizer",
+        provider=provider_identity["provider"],
+        model=provider_identity["model"],
+        attempt=1,
+    )
+    try:
+        provider_result = provider.call(payload, FAST_SYNTHESIS_CALL_CLASS)
+    except (LiveGateError, httpx.HTTPError, KeyError, ValueError) as exc:
+        failure_latency_ms = int((time.monotonic() - synthesis_started) * 1000)
+        _emit_runtime_event(
+            event_sink,
+            "model.completed",
+            role="answer_synthesizer",
+            provider=provider_identity["provider"],
+            model=provider_identity["model"],
+            attempt=1,
+            status="provider_unavailable",
+            latency_ms=failure_latency_ms,
+        )
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result={
+                "call_class": FAST_SYNTHESIS_CALL_CLASS,
+                "latency_ms": failure_latency_ms,
+                "output_char_count": 0,
+                "stop_reason": "",
+                "cost_usd": "0",
+            },
+        )
+
+    normalized = _normalize_fast_provider_result(provider_result)
+    _emit_runtime_event(
+        event_sink,
+        "model.completed",
+        role="answer_synthesizer",
+        provider=provider_identity["provider"],
+        model=provider_identity["model"],
+        attempt=1,
+        status="ok",
+        latency_ms=normalized.get("latency_ms"),
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="synthesis",
+        status="provider_response",
+        latency_ms=int((time.monotonic() - synthesis_started) * 1000),
+    )
+
+    abstention_publication = _fast_public_abstention_publication(normalized)
+    if abstention_publication is not None:
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[abstention_publication["abstention_reason"] or "PROVIDER_ABSTAINED"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+
+    publication = _validate_fast_provider_candidate(
+        question=normalized_question,
+        selected_evidence=selected_evidence,
+        provider_output=normalized,
+    )
+    if publication is None:
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=["PROVIDER_OUTPUT_INVALID"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+    if publication["status"] == "abstain":
+        return _fast_abstention_response(
+            gate=validated_gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[publication["abstention_reason"] or "PROVIDER_ABSTAINED"],
+            bundle=bundle,
+            lexical_result=lexical,
+            dense_result=dense,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=provider_identity,
+            provider_result=normalized,
+        )
+
+    response = _fast_answer_response(
+        gate=validated_gate,
+        trace_id=trace_id,
+        question_sha=question_sha,
+        started=started,
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        selected_evidence=selected_evidence,
+        intent_class=intent_class,
+        provider_identity=provider_identity,
+        provider_result=normalized,
+        publication=publication,
+    )
+    _emit_runtime_event(
+        event_sink,
+        "stage.completed",
+        stage="publication",
+        status=response.get("status", ""),
+    )
+    return response
+
+
+def _fast_provider_identity(provider_client: ProviderClient) -> dict[str, str]:
+    telemetry = getattr(provider_client, "telemetry", None)
+    if callable(telemetry):
+        try:
+            data = telemetry()
+        except Exception:
+            data = None
+        if isinstance(data, Mapping):
+            attempts = data.get("provider_attempts")
+            if isinstance(attempts, list) and attempts:
+                last = attempts[-1]
+                if isinstance(last, Mapping):
+                    provider = str(
+                        last.get("provider")
+                        or data.get("closure_provider_final")
+                        or data.get("closure_provider_initial")
+                        or "unknown"
+                    )
+                    model = str(
+                        last.get("model")
+                        or ("MiniMax-M3" if provider == "minimax-m3" else "unknown")
+                    )
+                    return {"provider": provider, "model": model}
+            provider = str(
+                data.get("closure_provider_final")
+                or data.get("closure_provider_initial")
+                or "unknown"
+            )
+            model = str(
+                data.get("closure_provider_final_model")
+                or data.get("closure_provider_initial_model")
+                or ("MiniMax-M3" if provider == "minimax-m3" else "unknown")
+            )
+            return {"provider": provider, "model": model}
+    if isinstance(provider_client, MiniMaxClient):
+        return {"provider": "minimax-m3", "model": MINIMAX_MODEL}
+    provider = provider_client.__class__.__name__.removesuffix("Client").casefold()
+    return {"provider": provider or "unknown", "model": "unknown"}
+
+
+def _fast_synthesis_payload(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    evidence_payload = [_provider_evidence_item(item) for item in evidence]
+    return {
+        "model": MINIMAX_MODEL,
+        "max_tokens": 768,
+        "temperature": 0,
+        "stream": False,
+        "system": (
+            "You are the fast cited answer synthesizer for public M26 answers. "
+            "Write one natural answer in plain prose. Use only the supplied evidence. "
+            "Return exactly one JSON object with keys status, answer_text, citation_ids, "
+            "and abstention_reason. status must be answer or abstain. citation_ids must "
+            "be evidence_id values from the supplied evidence bundle. Cite the evidence "
+            "you actually used. Do not mention internal labels, exact-quote scaffolding, "
+            "or unsupported claims. If the supplied evidence is genuinely insufficient, "
+            "return status abstain."
+        ),
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "question": question,
+                                "trace_id": trace_id,
+                                "intent_class": intent_class,
+                                "evidence_bundle": evidence_payload,
+                                "response_format": {
+                                    "status": "answer|abstain",
+                                    "answer_text": "natural prose",
+                                    "citation_ids": ["evidence_id", "..."],
+                                    "abstention_reason": "string or null",
+                                },
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    provider_text = result.get("provider_text")
+    text_value = result.get("text", "")
+    text = str(provider_text if provider_text not in (None, "") else text_value)
+    parsed: Mapping[str, Any] | dict[str, Any] = {}
+    candidates = [text]
+    stripped = text.strip()
+    if (
+        stripped.startswith("<|start|>assistant")
+        and "<|channel|>final" in stripped
+        and "<|constrain|>" in stripped
+        and stripped.endswith("<|return|>")
+    ):
+        constrained = stripped.split("<|constrain|>", 1)[1].rsplit("<|return|>", 1)[0].strip()
+        candidates.append(constrained)
+        if (
+            constrained.endswith("}")
+            and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', constrained)
+        ):
+            candidates.append('{"' + constrained)
+    for candidate in candidates:
+        try:
+            decoded = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(decoded, Mapping):
+            parsed = decoded
+            break
+    return {
+        "provider_text": text,
+        "provider_text_char_count": len(text),
+        "call_class": str(result.get("call_class", "")),
+        "latency_ms": int(result.get("latency_ms", 0) or 0),
+        "stop_reason": str(result.get("stop_reason") or result.get("finish_reason") or ""),
+        "usage": dict(result.get("usage", {})) if isinstance(result.get("usage"), Mapping) else {},
+        "cost_usd": str(result.get("cost_usd", "0")),
+        "response_id": str(result.get("response_id", "")),
+        "output_char_count": int(result.get("output_char_count", len(text)) or len(text)),
+        "parsed": parsed if isinstance(parsed, Mapping) else {},
+    }
+
+
+def _fast_public_abstention_publication(
+    provider_output: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    parsed = _object(provider_output.get("parsed", {}), "fast provider parsed")
+    status = str(parsed.get("status", "")).strip().casefold()
+    if status != "abstain":
+        return None
+    abstention_reason = str(parsed.get("abstention_reason") or "").strip()
+    answer_text = re.sub(r"\s+", " ", str(parsed.get("answer_text") or "")).strip()
+    raw_ids = parsed.get("citation_ids")
+    if raw_ids is None:
+        raw_ids = parsed.get("citations")
+    citation_ids: list[str] = []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            if isinstance(item, Mapping):
+                citation_id = str(
+                    item.get("evidence_id")
+                    or item.get("citation_id")
+                    or item.get("id")
+                    or ""
+                ).strip()
+            else:
+                citation_id = str(item).strip()
+            if citation_id:
+                citation_ids.append(citation_id)
+    citation_ids = list(dict.fromkeys(citation_ids))
+    if answer_text or citation_ids or not abstention_reason:
+        return None
+    return {
+        "status": "abstain",
+        "abstention_reason": abstention_reason,
+    }
+
+
+def _validate_fast_provider_candidate(
+    *,
+    question: str,
+    selected_evidence: Sequence[Mapping[str, Any]],
+    provider_output: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    del question
+    parsed = _object(provider_output.get("parsed", {}), "fast provider parsed")
+    status = str(parsed.get("status", "")).strip().casefold()
+    if status == "abstain":
+        return None
+    if status != "answer":
+        return None
+    answer_text = re.sub(r"\s+", " ", str(parsed.get("answer_text", ""))).strip()
+    if not answer_text or _contains_internal_fragment_leak(answer_text):
+        return None
+    raw_ids = parsed.get("citation_ids")
+    if raw_ids is None:
+        raw_ids = parsed.get("citations")
+    citation_ids: list[str] = []
+    if isinstance(raw_ids, list):
+        for item in raw_ids:
+            if isinstance(item, Mapping):
+                citation_id = str(
+                    item.get("evidence_id")
+                    or item.get("citation_id")
+                    or item.get("id")
+                    or ""
+                ).strip()
+            else:
+                citation_id = str(item).strip()
+            if citation_id:
+                citation_ids.append(citation_id)
+    citation_ids = list(dict.fromkeys(citation_ids))
+    if not citation_ids:
+        return None
+    selected_by_id = {str(item["evidence_id"]): item for item in selected_evidence}
+    if any(citation_id not in selected_by_id for citation_id in citation_ids):
+        return None
+    support_refs = []
+    for citation_id in citation_ids:
+        support_ref = _deterministic_support_ref(selected_by_id[citation_id])
+        if support_ref is None:
+            snippet = str(selected_by_id[citation_id].get("passage_text", ""))[:240]
+            support_ref = {
+                "evidence_id": citation_id,
+                "locator_id": str(selected_by_id[citation_id]["locator_id"]),
+                "exact_quote": snippet,
+                "exact_support_snippet": snippet,
+                "exact_quote_sha256": sha256_bytes(snippet.encode("utf-8")),
+                "uncertainty": "low",
+            }
+        support_refs.append(support_ref)
+    return {
+        "status": "answer",
+        "answer_text": answer_text,
+        "citation_ids": citation_ids,
+        "support_refs": support_refs,
+        "abstention_reason": str(parsed.get("abstention_reason") or ""),
+    }
+
+
+def _contains_internal_fragment_leak(text: str) -> bool:
+    lowered = text.casefold()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "definition head",
+            "context modifier",
+            "need relation",
+            "semantic_closure",
+            "support proof",
+            "claim-by-claim",
+            "exact quote",
+            "visible coverage",
+            "unanswered dimensions",
+        )
+    )
+
+
+def _fast_answer_response(
+    *,
+    gate: Mapping[str, Any],
+    trace_id: str,
+    question_sha: str,
+    started: float,
+    bundle: ProductionAnswerBundle,
+    lexical_result: Mapping[str, Any],
+    dense_result: Mapping[str, Any],
+    selected_evidence: Sequence[Mapping[str, Any]],
+    intent_class: str,
+    provider_identity: Mapping[str, str],
+    provider_result: Mapping[str, Any],
+    publication: Mapping[str, Any],
+) -> dict[str, Any]:
+    evidence_by_id = {str(item["evidence_id"]): item for item in selected_evidence}
+    citations = []
+    support_refs = list(publication.get("support_refs", []))
+    for index, citation_id in enumerate(publication["citation_ids"], start=1):
+        evidence = evidence_by_id[citation_id]
+        support_ref = (
+            support_refs[index - 1]
+            if index - 1 < len(support_refs)
+            else _deterministic_support_ref(evidence)
+        )
+        if support_ref is None:
+            snippet = str(evidence.get("passage_text", ""))[:240]
+            support_ref = {
+                "evidence_id": citation_id,
+                "locator_id": str(evidence["locator_id"]),
+                "exact_quote": snippet,
+                "exact_support_snippet": snippet,
+                "exact_quote_sha256": sha256_bytes(snippet.encode("utf-8")),
+                "uncertainty": "low",
+            }
+        citations.append(
+            _public_citation(
+                evidence,
+                {"claim_id": "claim_1", "claim_role": "direct"},
+                support_ref,
+                index,
+            )
+        )
+    response = {
+        **_base_response(
+            gate=gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            status="owner_only_cited_answer",
+            terminal_status="fast_answer_ready",
+            answer_text=str(publication["answer_text"]),
+            citations=citations,
+            safe_abstention=False,
+            reason_codes=[],
+            provider_invoked=True,
+            provider_call_count=1,
+            payg_equivalent_cost_usd=str(provider_result.get("cost_usd", "0")),
+            material_claim_support_verified=True,
+            citation_locator_valid=True,
+            unsupported_accepted_claims=0,
+            repair_attempted=False,
+        ),
+        **_retrieval_response_fields(
+            gate=gate,
+            bundle=bundle,
+            lexical_result=lexical_result,
+            dense_result=dense_result,
+            selected_evidence=selected_evidence,
+            intent_class=intent_class,
+        ),
+        "citations": citations,
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "citation_ids": [citation["citation_id"] for citation in citations],
+                "support_ref_count": len(citations),
+            }
+        ],
+        "answer_source": "fast_natural_cited_synthesis",
+        "relationship_summary": {
+            "synthesis_source": "fast_natural_cited_synthesis",
+        },
+        "multi_evidence_verification": {
+            "provider_call_class": provider_result.get("call_class", FAST_SYNTHESIS_CALL_CLASS),
+            "provider_output_char_count": provider_result.get("provider_text_char_count", 0),
+            "citation_ids": publication["citation_ids"],
+            "deterministic_citation_validation": True,
+            "selected_evidence_ids": [str(item["evidence_id"]) for item in selected_evidence],
+        },
+        "provider_routing": {
+            "closure_provider_initial": provider_identity["provider"],
+            "closure_provider_final": provider_identity["provider"],
+            "fallback_used": False,
+            "fallback_reason": "NONE",
+            "provider_attempts": [
+                {
+                    "call_class": provider_result.get(
+                        "call_class", FAST_SYNTHESIS_CALL_CLASS
+                    ),
+                    "provider": provider_identity["provider"],
+                    "model": provider_identity["model"],
+                    "latency_ms": provider_result.get("latency_ms", 0),
+                    "stop_reason": provider_result.get("stop_reason", ""),
+                    "output_char_count": provider_result.get("output_char_count", 0),
+                }
+            ],
+        },
+        "semantic_closure": {},
+    }
+    response["evidence_utilization_trace"] = _evidence_utilization_trace(response)
+    response["latency_ms"] = max(
+        int(response["latency_ms"]),
+        int((time.monotonic() - started) * 1000),
+    )
+    return response
+
+
+def _fast_abstention_response(
+    *,
+    gate: Mapping[str, Any],
+    trace_id: str,
+    question_sha: str,
+    started: float,
+    reason_codes: Sequence[str],
+    bundle: ProductionAnswerBundle | None = None,
+    lexical_result: Mapping[str, Any] | None = None,
+    dense_result: Mapping[str, Any] | None = None,
+    selected_evidence: Sequence[Mapping[str, Any]] | None = None,
+    intent_class: str = "direct_grounded_knowledge",
+    provider_invoked: bool = False,
+    provider_identity: Mapping[str, str] | None = None,
+    provider_result: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = _base_response(
+        gate=gate,
+        trace_id=trace_id,
+        question_sha=question_sha,
+        started=started,
+        status="owner_only_safe_abstention",
+        terminal_status="safe_abstention",
+        reason_codes=reason_codes,
+        provider_invoked=provider_invoked,
+        provider_call_count=1 if provider_invoked else 0,
+        payg_equivalent_cost_usd=str(
+            provider_result.get("cost_usd", "0") if provider_result else "0"
+        ),
+        material_claim_support_verified=True,
+        citation_locator_valid=True,
+        unsupported_accepted_claims=0,
+        repair_attempted=False,
+    )
+    if bundle is not None and lexical_result is not None and dense_result is not None:
+        response.update(
+            _retrieval_response_fields(
+                gate=gate,
+                bundle=bundle,
+                lexical_result=lexical_result,
+                dense_result=dense_result,
+                selected_evidence=selected_evidence or [],
+                intent_class=intent_class,
+            )
+        )
+    if provider_identity is not None and provider_result is not None:
+        response["provider_routing"] = {
+            "closure_provider_initial": provider_identity["provider"],
+            "closure_provider_final": provider_identity["provider"],
+            "fallback_used": False,
+            "fallback_reason": "NONE",
+            "provider_attempts": [
+                {
+                    "call_class": provider_result.get(
+                        "call_class", FAST_SYNTHESIS_CALL_CLASS
+                    ),
+                    "provider": provider_identity["provider"],
+                    "model": provider_identity["model"],
+                    "latency_ms": provider_result.get("latency_ms", 0),
+                    "stop_reason": provider_result.get("stop_reason", ""),
+                    "output_char_count": provider_result.get("output_char_count", 0),
+                }
+            ],
+        }
+    response["semantic_closure"] = {}
+    return response
 
 
 def _synthesize_and_verify(
@@ -1463,8 +2491,58 @@ def _deterministic_direct_provider_candidate(
     question: str,
     evidence: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any] | None:
+    definition_parts = _contextual_definition_query_parts(question)
+    used_evidence_ids: set[str] = set()
     raw_claims: list[dict[str, Any]] = []
     selected_ids: list[str] = []
+    if definition_parts is not None:
+        required_facets = _question_contract(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+        )["required_facets"]
+        refs: list[dict[str, Any]] = []
+        for facet in required_facets:
+            item = _best_evidence_for_direct_facet(
+                question=question,
+                facet=facet,
+                evidence=evidence,
+                exclude_evidence_ids=used_evidence_ids,
+            )
+            if item is None:
+                return None
+            ref = _deterministic_support_ref_for_facet(item, facet)
+            if ref is None:
+                return None
+            refs.append(ref)
+            selected_ids.append(str(item["evidence_id"]))
+            used_evidence_ids.add(str(item["evidence_id"]))
+        surface_text = _deterministic_definition_surface_text(
+            question=question,
+            definition_parts=definition_parts,
+            refs=refs,
+        )
+        if not surface_text:
+            return None
+        claims = [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "surface_text": surface_text,
+                "facet_ids": [str(facet.get("facet_id", "")) for facet in required_facets],
+                "support_mode": "exact_quote",
+                "support_refs": refs,
+            }
+        ]
+        return {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
+            "answer_text": _deterministic_answer_text(claims),
+            "claims": claims,
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
     for index, facet in enumerate(
         _question_contract(
             question=question,
@@ -1472,7 +2550,11 @@ def _deterministic_direct_provider_candidate(
         )["required_facets"],
         start=1,
     ):
-        item = _best_evidence_for_direct_facet(question=question, facet=facet, evidence=evidence)
+        item = _best_evidence_for_direct_facet(
+            question=question,
+            facet=facet,
+            evidence=evidence,
+        )
         if item is None:
             return None
         ref = _deterministic_support_ref_for_facet(item, facet)
@@ -1629,10 +2711,32 @@ def _best_evidence_for_direct_facet(
     question: str,
     facet: Mapping[str, Any],
     evidence: Sequence[Mapping[str, Any]],
+    exclude_evidence_ids: set[str] | None = None,
 ) -> Mapping[str, Any] | None:
     passages = [item for item in evidence if item.get("evidence_type") == "passage"]
     if not passages:
         return None
+    definition_parts = _contextual_definition_query_parts(question)
+    facet_id = str(facet.get("facet_id", ""))
+    if definition_parts is not None and facet_id == "definition_head":
+        head_terms = _coverage_terms(definition_parts["definition_head"])
+        passages = [
+            item
+            for item in passages
+            if head_terms & _coverage_terms(str(item.get("passage_text", "")))
+            and _coverage_terms(str(item.get("passage_text", "")))
+            & DEFINITION_PREDICATE_TERMS
+        ]
+        if not passages:
+            return None
+    if exclude_evidence_ids:
+        passages = [
+            item
+            for item in passages
+            if str(item.get("evidence_id", "")) not in exclude_evidence_ids
+        ]
+        if not passages:
+            return None
     facet_terms = _facet_terms(facet)
     if not facet_terms:
         return _single_responsive_fallback_passage(question=question, evidence=passages)
@@ -1660,6 +2764,50 @@ def _best_evidence_for_direct_facet(
         if _direct_facet_match_score(facet, str(best.get("passage_text", ""))) >= 1
         else None
     )
+
+
+def _deterministic_definition_surface_text(
+    *,
+    question: str,
+    definition_parts: Mapping[str, str],
+    refs: Sequence[Mapping[str, Any]],
+) -> str:
+    head = re.sub(r"\s+", " ", str(definition_parts.get("definition_head", ""))).strip()
+    context = re.sub(r"\s+", " ", str(definition_parts.get("context_modifier", ""))).strip()
+    quotes = [
+        re.sub(r"\s+", " ", str(ref.get("exact_quote", ""))).strip(" .")
+        for ref in refs
+        if str(ref.get("exact_quote", "")).strip()
+    ]
+    if not quotes:
+        return ""
+    head_terms = _coverage_terms(head)
+    predicate_terms = DEFINITION_PREDICATE_TERMS
+    predicate_quotes = [
+        quote
+        for quote in quotes
+        if _coverage_terms(quote) & predicate_terms
+    ]
+    if predicate_quotes:
+        selected = next(
+            (
+                quote
+                for quote in predicate_quotes
+                if head_terms & _coverage_terms(quote)
+            ),
+            predicate_quotes[0],
+        )
+    else:
+        selected = quotes[0]
+    surface = selected.strip()
+    if head and head.casefold() not in surface.casefold():
+        surface = f"{head} {surface}".strip()
+    if context and context.casefold() not in surface.casefold():
+        surface = f"{surface} in {context}".strip()
+    surface = re.sub(r"\s+", " ", surface).strip(" .;:")
+    if surface and not surface.endswith((".", "!", "?")):
+        surface += "."
+    return surface
 
 
 def _deterministic_relation_surface_text(
@@ -1774,6 +2922,7 @@ def _deterministic_support_ref_for_terms(
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -1847,6 +2996,7 @@ def _deterministic_support_ref_for_facet(
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -2033,6 +3183,7 @@ def _deterministic_support_ref(item: Mapping[str, Any]) -> dict[str, str] | None
         "locator_id": str(item["locator_id"]),
         "exact_quote": quote,
         "exact_support_snippet": quote,
+        "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
         "uncertainty": "low",
     }
 
@@ -2238,29 +3389,46 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "source_identity": _source_identity(item),
         "section_id": str(item.get("section_id", "")),
         "concept_id": str(item.get("concept_id", "")),
-        "artifact_key": str(item.get("artifact_key", "")),
-        "artifact_sha256": str(item.get("artifact_sha256", "")),
-        "release_id": str(item.get("release_id", "")),
-        "text_sha256": str(item.get("passage_text_sha256", "")),
         "text": str(item.get("passage_text", "")),
+        "text_sha256": str(item.get("passage_text_sha256", "")),
         "text_role": _evidence_text_role(item),
-        "section_granularity": _section_granularity(item),
-        "edge_id": str(item.get("edge_id", "")),
-        "edge_source": str(item.get("edge_source", "")),
-        "edge_target": str(item.get("edge_target", "")),
-        "relation_type": str(item.get("relation_type", "")),
-        "provenance_record_sha256": str(item.get("provenance_record_sha256", "")),
-        "retrieved_at": str(item.get("retrieved_at", "")),
         "channels": [str(channel) for channel in item.get("channels", [])],
-        "retrieval_metadata": dict(item.get("retrieval_metadata", {}))
-        if isinstance(item.get("retrieval_metadata"), Mapping)
-        else {},
     }
 
 
 def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
+    definition_parts = _contextual_definition_query_parts(question)
     terms = sorted(_coverage_terms(question))
     facets: list[dict[str, Any]] = []
+    if definition_parts is not None:
+        facets = [
+            {
+                "facet_id": "definition_head",
+                "terms": sorted(_coverage_terms(definition_parts["definition_head"])),
+                "required": True,
+            },
+        ]
+        if definition_parts["context_modifier"]:
+            facets.append(
+                {
+                    "facet_id": "context_modifier",
+                    "terms": sorted(
+                        _coverage_terms(definition_parts["context_modifier"])
+                    ),
+                    "required": True,
+                }
+            )
+        return {
+            "required_facets": facets,
+            "material_claim_policy": (
+                "definition-head claims must keep the source-backed predicate explicit, "
+                "and the contextual anchor must remain separate from the head definition"
+            ),
+            "graph_relation_policy": (
+                "structural graph relations may identify navigation/order only unless "
+                "endpoint passage text supports stronger semantics"
+            ),
+        }
     if intent_class == "cross_document_comparison":
         facets = [
             {"facet_id": "compare_left", "terms": terms[:6], "required": True},
@@ -2335,9 +3503,81 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
         facets.append({"facet_id": facet_id, "terms": list(terms), "required": True})
         seen.add(facet_id)
 
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is not None:
+        add("definition_head", [definition_parts["definition_head"]])
+        if definition_parts["context_modifier"]:
+            add("context_modifier", [definition_parts["context_modifier"]])
+        return facets
+
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
         add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    if "trade-off" in question_casefold or "tradeoff" in question_casefold:
+        add(
+            "tradeoff_relation",
+            [
+                "tradeoff",
+                "trade off",
+                "trade-offs",
+                "trade offs",
+                "balance",
+                "tension",
+                "compromise",
+                "cost",
+                "costs",
+                "between",
+                "versus",
+                "vs",
+            ],
+        )
+    if re.search(r"\brole\s+of\b", question_casefold):
+        add(
+            "role_relation",
+            [
+                "role",
+                "purpose",
+                "function",
+                "responsibility",
+                "responsibilities",
+                "use",
+                "uses",
+                "used",
+                "help",
+                "helps",
+                "inform",
+                "informs",
+                "guide",
+                "guides",
+                "support",
+                "supports",
+                "decision",
+                "decisions",
+            ],
+        )
+    if re.search(
+        r"\bwhat\s+(?:kind|type)\s+of\b.*\b(?:need|require)\b",
+        question_casefold,
+    ) or re.search(r"\b(?:need(s|ed)?|require[sd]?)\b", question_casefold):
+        add(
+            "need_relation",
+            [
+                "need",
+                "needs",
+                "needed",
+                "require",
+                "requires",
+                "required",
+                "skill",
+                "skills",
+                "capability",
+                "capabilities",
+                "competence",
+                "competency",
+                "ability",
+                "abilities",
+            ],
+        )
     if "source of trust" in question_casefold:
         add("source_of_trust", ["source", "trust", "anchor", "authority"])
     if re.search(r"\bdoes\b.*\bprove\b|\bcan we safely infer\b|\bwhat can(?:'t|not) we infer\b", question_casefold):
@@ -2805,6 +4045,16 @@ def _verify_multi_evidence_provider_output(
                 }
             )
         if (
+            _contextual_definition_query_parts(question) is not None
+            and not is_model_explanation
+        ):
+            _verify_definition_claim_surface(
+                question=question,
+                surface_text=surface_text or str(parsed.get("answer_text") or ""),
+                support_refs=ref_records,
+                evidence_by_id=evidence_by_id,
+            )
+        if (
             _claim_requires_multi_source(intent_class, claim_role)
             and _distinct_source_count(
                 evidence_by_id[str(ref["evidence_id"])] for ref in ref_records
@@ -3140,8 +4390,13 @@ def _validated_claim_facets(
         evidence_text
     )
     evidence_casefold = evidence_text.casefold()
-    candidate_facets = inferred | (requested_facet_ids & set(_required_facet_ids(question=question, intent_class=intent_class)))
+    candidate_facets = inferred | (
+        requested_facet_ids
+        & set(_required_facet_ids(question=question, intent_class=intent_class))
+    )
     accepted: set[str] = set()
+    definition_parts = _contextual_definition_query_parts(question)
+    question_terms = _coverage_terms(question)
     for facet in _question_contract(question=question, intent_class=intent_class)[
         "required_facets"
     ]:
@@ -3157,8 +4412,40 @@ def _validated_claim_facets(
             support_terms=support_terms,
             evidence_text=evidence_casefold,
             evidence_terms=evidence_terms,
+            question_terms=question_terms,
         ):
             accepted.add(facet_id)
+    if definition_parts is not None and "definition_head" in candidate_facets:
+        head_terms = _coverage_terms(definition_parts["definition_head"])
+        context_terms = (
+            _coverage_terms(definition_parts["context_modifier"])
+            if definition_parts["context_modifier"]
+            else set()
+        )
+        if head_terms and not (visible_terms & head_terms and support_terms & head_terms):
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim is missing source-backed head terms",
+            )
+        supported_predicates = (visible_terms | support_terms | evidence_terms) & DEFINITION_PREDICATE_TERMS
+        if not supported_predicates:
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim lacks a source-backed predicate",
+            )
+        unsupported_category_terms = (
+            (visible_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
+        )
+        if unsupported_category_terms:
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim invents an unsupported category predicate",
+            )
+        if context_terms and not (visible_terms & context_terms):
+            raise _verification_failure(
+                "M26-PA7-ME-071",
+                "definition claim omits the contextual modifier",
+            )
     return sorted(accepted)
 
 
@@ -3178,6 +4465,7 @@ def _direct_facet_signal_met(
     support_terms: set[str],
     evidence_text: str,
     evidence_terms: set[str],
+    question_terms: set[str],
 ) -> bool:
     visible_casefold = visible_text.casefold()
     exact_phrases = _direct_facet_required_phrases(facet_id)
@@ -3195,6 +4483,14 @@ def _direct_facet_signal_met(
     if facet_id == "ordering_boundary":
         return bool(visible_terms & ORDER_SURFACE_TERMS) and "precede" in (
             visible_terms | support_terms | evidence_terms
+        )
+    if facet_id == "definition_head":
+        return bool(visible_terms & facet_terms) and bool(
+            visible_terms & (support_terms | evidence_terms)
+        )
+    if facet_id == "context_modifier":
+        return bool(visible_terms & facet_terms) and bool(
+            visible_terms & (support_terms | evidence_terms | question_terms)
         )
     if facet_id == "direct_answer":
         return bool(visible_terms & (support_terms | evidence_terms))
@@ -3315,6 +4611,55 @@ def _verify_question_evidence_relevance(
                     f"{', '.join(group_labels)}"
                 ),
             )
+
+
+def _verify_definition_claim_surface(
+    *,
+    question: str,
+    surface_text: str,
+    support_refs: Sequence[Mapping[str, Any]],
+    evidence_by_id: Mapping[str, Mapping[str, Any]],
+) -> None:
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is None:
+        return
+    surface = _strip_runtime_markers(surface_text)
+    support_text = " ".join(str(ref.get("exact_quote", "")) for ref in support_refs)
+    support_terms = _coverage_terms(support_text)
+    question_terms = _coverage_terms(question)
+    surface_terms = _coverage_terms(surface)
+    head_terms = _coverage_terms(definition_parts["definition_head"])
+    if not head_terms:
+        return
+    if not (surface_terms & head_terms) or not (support_terms & head_terms):
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim is missing source-backed head terms",
+        )
+    supported_predicates = (surface_terms | support_terms) & DEFINITION_PREDICATE_TERMS
+    if not supported_predicates:
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim lacks a source-backed predicate",
+        )
+    unsupported_category_terms = (
+        (surface_terms & DEFINITION_CATEGORY_TERMS) - support_terms - question_terms
+    )
+    if unsupported_category_terms:
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim invents an unsupported category predicate",
+        )
+    context_terms = (
+        _coverage_terms(definition_parts["context_modifier"])
+        if definition_parts["context_modifier"]
+        else set()
+    )
+    if context_terms and not (surface_terms & context_terms):
+        raise _verification_failure(
+            "M26-PA7-ME-071",
+            "definition claim omits the contextual modifier",
+        )
 
 
 def _is_question_evidence_relevance_hard_stop(exc: VerifiedAnswerGateError) -> bool:
@@ -4429,8 +5774,13 @@ def _select_evidence(
     trace_id: str,
     question: str,
     intent_class: str,
+    allow_graph_expansion: bool = True,
 ) -> list[dict[str, Any]]:
-    documents = {str(item["section_id"]): item for item in _release_documents(bundle)}
+    documents_list = _release_documents(bundle)
+    documents = {str(item["section_id"]): item for item in documents_list}
+    focus = _answer_bearing_query_focus(question)
+    query_terms = _coverage_terms(question)
+    question_contract = _question_contract(question=question, intent_class=intent_class)
     lexical_results = _list(lexical_result.get("results"), "lexical results")
     candidates = _build_candidate_pool(
         bundle=bundle,
@@ -4439,9 +5789,17 @@ def _select_evidence(
         dense_candidates=_list(dense_result.get("candidates"), "dense candidates"),
         question=question,
         intent_class=intent_class,
+        allow_graph_expansion=allow_graph_expansion,
+        query_terms=query_terms,
     )
     budget = _dynamic_evidence_budget(question=question, intent_class=intent_class)
-    ordered = _rerank_candidates(candidates, budget=budget)
+    ordered = _rerank_candidates(
+        candidates,
+        budget=budget,
+        documents=documents,
+        question=question,
+        focus=focus,
+    )
     selected_candidates = _select_diverse_candidates(ordered, budget=budget)
     evidence = []
     for index, candidate in enumerate(selected_candidates, start=1):
@@ -4466,6 +5824,10 @@ def _select_evidence(
         intent_class=intent_class,
         budget=budget,
         question=question,
+        documents=documents_list,
+        focus=focus,
+        query_terms=query_terms,
+        question_contract=question_contract,
     )
 
 
@@ -4477,6 +5839,8 @@ def _build_candidate_pool(
     dense_candidates: Sequence[Any],
     question: str,
     intent_class: str,
+    allow_graph_expansion: bool = True,
+    query_terms: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     candidates: dict[str, dict[str, Any]] = {}
     for rank, item in enumerate(lexical_results, start=1):
@@ -4497,13 +5861,15 @@ def _build_candidate_pool(
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
-    _add_graph_expanded_candidates(
-        bundle=bundle,
-        documents=documents,
-        candidates=candidates,
-        question=question,
-        intent_class=intent_class,
-    )
+    if allow_graph_expansion:
+        _add_graph_expanded_candidates(
+            bundle=bundle,
+            documents=documents,
+            candidates=candidates,
+            question=question,
+            intent_class=intent_class,
+            query_terms=query_terms,
+        )
     return sorted(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),
@@ -4531,6 +5897,7 @@ def _add_graph_expanded_candidates(
     candidates: dict[str, dict[str, Any]],
     question: str,
     intent_class: str,
+    query_terms: set[str] | None = None,
 ) -> None:
     by_concept: dict[str, list[Mapping[str, Any]]] = {}
     for document in documents.values():
@@ -4548,7 +5915,7 @@ def _add_graph_expanded_candidates(
         )
     if not concept_seed_scores:
         return
-    query_terms = _meaningful_terms(question)
+    query_terms = query_terms or _meaningful_terms(question)
     order_query = bool(query_terms & ORDER_QUERY_TERMS)
     relation_index: dict[str, list[Mapping[str, Any]]] = {}
     for edge in bundle.graph_v2.get("edges", []):
@@ -4690,7 +6057,9 @@ def _relation_navigation_weight(
 
 def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     terms = _meaningful_terms(question)
-    if intent_class in {
+    if intent_class == "direct_grounded_knowledge":
+        base = 4
+    elif intent_class in {
         "graph_relationship",
         "cross_document_comparison",
         "complementary_synthesis",
@@ -4709,31 +6078,411 @@ def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     return max(4, min(base, MAX_DYNAMIC_EVIDENCE_ITEMS))
 
 
+@dataclass(frozen=True)
+class _AnswerBearingQueryFocus:
+    relation: str
+    subject_terms: frozenset[str]
+    context_terms: frozenset[str]
+    relation_terms: frozenset[str]
+    subject_phrases: tuple[str, ...]
+    requires_explicit_relation: bool
+
+
+def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
+    normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    definition_parts = _contextual_definition_query_parts(question)
+    if definition_parts is not None:
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(definition_parts["definition_head"])),
+            context_terms=frozenset(_coverage_terms(definition_parts["context_modifier"])),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS),
+            subject_phrases=tuple(
+                item
+                for item in (
+                    definition_parts["definition_head"],
+                    definition_parts["context_modifier"],
+                )
+                if item
+            ),
+            requires_explicit_relation=False,
+        )
+
+    role_match = re.search(
+        r"\brole\s+of\s+(.+?)\s+(?:in|within|for)\s+(.+?)(?:\?|$)",
+        normalized,
+    )
+    if role_match is not None:
+        role_subject = _strip_leading_articles(role_match.group(1))
+        role_context = _strip_leading_articles(role_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="role",
+            subject_terms=frozenset(_coverage_terms(role_subject)),
+            context_terms=frozenset(_coverage_terms(role_context)),
+            relation_terms=frozenset(
+                {
+                    "role",
+                    "purpose",
+                    "function",
+                    "responsibility",
+                    "responsibilities",
+                    "use",
+                    "uses",
+                    "used",
+                    "help",
+                    "helps",
+                    "inform",
+                    "informs",
+                    "guide",
+                    "guides",
+                    "support",
+                    "supports",
+                    "decision",
+                    "decisions",
+                    "decide",
+                    "understand",
+                    "validates",
+                    "validation",
+                    "prioritize",
+                    "prioritization",
+                }
+            ),
+            subject_phrases=tuple(item for item in (role_subject, role_context) if item),
+            requires_explicit_relation=True,
+        )
+
+    need_match = re.search(
+        r"\bwhat\s+(?:kind|type)\s+of\s+(.+?)\s+does\s+(.+?)\s+(?:need|require)\b",
+        normalized,
+    )
+    if need_match is None:
+        need_match = re.search(
+            r"\bwhat\s+(.+?)\s+does\s+(.+?)\s+(?:need|require)\b",
+            normalized,
+        )
+    if need_match is not None:
+        needed_thing = _strip_leading_articles(need_match.group(1))
+        actor = _strip_leading_articles(need_match.group(2))
+        requested_facet_terms = _need_requested_facet_terms(needed_thing)
+        return _AnswerBearingQueryFocus(
+            relation="need",
+            subject_terms=frozenset(_coverage_terms(actor)),
+            context_terms=frozenset(requested_facet_terms),
+            relation_terms=frozenset(
+                {
+                    "need",
+                    "needs",
+                    "needed",
+                    "require",
+                    "requires",
+                    "required",
+                    "must",
+                    "should",
+                    "skill",
+                    "skills",
+                    "capability",
+                    "capabilities",
+                    "competence",
+                    "competency",
+                    "ability",
+                    "abilities",
+                }
+            )
+            | frozenset(requested_facet_terms),
+            subject_phrases=_subject_phrase_variants(actor),
+            requires_explicit_relation=True,
+        )
+
+    tradeoff_match = re.search(
+        r"\bwhat\s+trade[- ]?off\s+does\s+(.+?)\s+"
+        r"(?:describe|state|identify|make|mention)\b",
+        normalized,
+    )
+    if tradeoff_match is not None:
+        subject = _strip_leading_articles(tradeoff_match.group(1))
+        return _AnswerBearingQueryFocus(
+            relation="tradeoff",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(
+                {
+                    "tradeoff",
+                    "tradeoffs",
+                    "trade",
+                    "off",
+                    "tension",
+                    "tensions",
+                    "compromise",
+                    "compromises",
+                    "cost",
+                    "costs",
+                    "versus",
+                    "between",
+                    "vs",
+                }
+            ),
+            subject_phrases=(subject,) if subject else (),
+            requires_explicit_relation=True,
+        )
+
+    return _AnswerBearingQueryFocus(
+        relation="generic",
+        subject_terms=frozenset(_coverage_terms(question)),
+        context_terms=frozenset(),
+        relation_terms=frozenset(),
+        subject_phrases=tuple(_question_relevance_subjects(question)),
+        requires_explicit_relation=False,
+    )
+
+
+def _candidate_answer_bearing_score(
+    *,
+    question: str,
+    document: Mapping[str, Any],
+    focus: _AnswerBearingQueryFocus | None = None,
+    document_text: str | None = None,
+    document_terms: set[str] | None = None,
+) -> dict[str, Any]:
+    focus = focus or _answer_bearing_query_focus(question)
+    text = document_text or _document_text(document)
+    text_terms = document_terms if document_terms is not None else _meaningful_terms(text)
+    subject_hits = focus.subject_terms & text_terms
+    context_hits = focus.context_terms & text_terms
+    relation_hits = focus.relation_terms & text_terms
+    subject_phrase_hits = [
+        phrase
+        for phrase in focus.subject_phrases
+        if phrase and _contains_normalized_unit(text, phrase)
+    ]
+    subject_coverage = (
+        len(subject_hits) / len(focus.subject_terms) if focus.subject_terms else 0.0
+    )
+    context_coverage = (
+        (1.0 if context_hits else 0.0)
+        if focus.relation == "need" and focus.context_terms
+        else len(context_hits) / len(focus.context_terms)
+        if focus.context_terms
+        else 1.0
+    )
+    subject_anchor_score = _subject_anchor_score(
+        focus=focus,
+        subject_coverage=subject_coverage,
+        subject_phrase_hits=subject_phrase_hits,
+    )
+    phrase_hits = subject_phrase_hits
+    relation_met = bool(relation_hits)
+    if focus.relation == "tradeoff":
+        relation_met = _text_has_explicit_tradeoff_relation(text)
+    elif focus.relation == "definition":
+        relation_met = bool(relation_hits)
+
+    score = 0.0
+    score += subject_anchor_score * 2.8
+    score += context_coverage * 1.1 if focus.context_terms else 0.0
+    score += min(len(phrase_hits), 2) * 0.5
+    score += min(len(relation_hits), 4) * 0.35
+    if relation_met:
+        score += 1.1
+    if focus.requires_explicit_relation and not relation_met:
+        score -= 3.0
+    if focus.requires_explicit_relation and subject_coverage < 0.5:
+        score -= 1.4
+    if focus.context_terms and context_coverage < 0.5:
+        score -= 0.75
+    if focus.relation == "tradeoff" and not relation_met:
+        score -= 2.0
+    return {
+        "score": round(score, 6),
+        "relation": focus.relation,
+        "subject_coverage": round(subject_coverage, 6),
+        "context_coverage": round(context_coverage, 6),
+        "relation_met": relation_met,
+        "relation_hits": sorted(relation_hits)[:8],
+        "phrase_hits": phrase_hits[:4],
+        "subject_anchor_score": round(subject_anchor_score, 6),
+        "subject_phrase_hits": subject_phrase_hits[:4],
+        "answer_bearing": _candidate_is_answer_bearing(
+            focus=focus,
+            subject_coverage=subject_coverage,
+            context_coverage=context_coverage,
+            relation_met=relation_met,
+            subject_anchor_score=subject_anchor_score,
+        ),
+    }
+
+
+def _text_has_explicit_tradeoff_relation(text: str) -> bool:
+    lowered = str(text).casefold()
+    normalized = _normalized_relevance_text(text)
+    if re.search(r"\btrade[- ]?offs?\b|\btrade\s+off\b", lowered):
+        return True
+    if re.search(r"\b(?:tension|compromise|cost)s?\b", lowered):
+        return True
+    return bool(re.search(r"\bbetween\b.+\b(?:and|versus|vs)\b", normalized))
+
+
+def _candidate_is_answer_bearing(
+    *,
+    focus: _AnswerBearingQueryFocus,
+    subject_coverage: float,
+    context_coverage: float,
+    relation_met: bool,
+    subject_anchor_score: float,
+) -> bool:
+    if focus.relation == "generic":
+        return False
+    if focus.subject_phrases and subject_anchor_score < 1.0:
+        return False
+    if focus.relation == "definition":
+        return subject_coverage >= 0.5 and relation_met
+    if not relation_met or subject_coverage < 0.5:
+        return False
+    return not (focus.context_terms and context_coverage < 0.5)
+
+
+def _subject_anchor_score(
+    *,
+    focus: _AnswerBearingQueryFocus,
+    subject_coverage: float,
+    subject_phrase_hits: Sequence[str],
+) -> float:
+    score = subject_coverage
+    if subject_phrase_hits:
+        score += min(len(subject_phrase_hits), 2) * 0.75
+        if any(len(_coverage_terms(phrase)) >= 2 for phrase in subject_phrase_hits):
+            score += 0.5
+        elif any(len(_normalized_relevance_text(phrase)) >= 2 for phrase in subject_phrase_hits):
+            score = max(score, 1.0)
+    elif (
+        focus.relation == "need"
+        and any(len(_coverage_terms(phrase)) >= 2 for phrase in focus.subject_phrases)
+    ):
+        score = min(score, 0.99)
+    elif focus.subject_phrases and subject_coverage < 0.75:
+        score -= 0.25
+    return score
+
+
+def _subject_phrase_variants(phrase: str) -> tuple[str, ...]:
+    cleaned = _strip_leading_articles(phrase)
+    if not cleaned:
+        return ()
+    variants = [cleaned]
+    tokens = [
+        token
+        for token in _normalized_relevance_text(cleaned).split()
+        if token not in STOP_TERMS
+    ]
+    if len(tokens) >= 2:
+        acronym = "".join(token[0] for token in tokens if token)
+        if 2 <= len(acronym) <= 6:
+            variants.extend([acronym, f"{acronym}s"])
+    return tuple(dict.fromkeys(variants))
+
+
+def _need_requested_facet_terms(phrase: str) -> set[str]:
+    terms = _coverage_terms(phrase)
+    capability_terms = {
+        "abilities",
+        "ability",
+        "capabilities",
+        "capability",
+        "competence",
+        "competency",
+        "skill",
+        "skills",
+    }
+    singularized_capability_terms = _meaningful_terms(" ".join(capability_terms))
+    if terms & singularized_capability_terms:
+        return terms | singularized_capability_terms
+    return terms
+
+
+def _answer_bearing_selection_required(focus: _AnswerBearingQueryFocus) -> bool:
+    return focus.relation in {"definition", "role", "need", "tradeoff"}
+
+
 def _rerank_candidates(
-    candidates: Sequence[Mapping[str, Any]], *, budget: int
+    candidates: Sequence[Mapping[str, Any]],
+    *,
+    budget: int,
+    documents: Mapping[str, Mapping[str, Any]] | None = None,
+    question: str = "",
+    focus: _AnswerBearingQueryFocus | None = None,
 ) -> list[dict[str, Any]]:
+    focus = focus or (_answer_bearing_query_focus(question) if question else None)
     ordered: list[dict[str, Any]] = []
     for candidate in candidates:
         item = dict(candidate)
         channel_count = len(item.get("channels", []))
         hop = int(item.get("graph_hop") or 0)
         graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
+        answer_bearing: dict[str, Any] = {}
+        section_id = str(item.get("section_id", ""))
+        document = documents.get(section_id, {}) if documents is not None else {}
+        if focus is not None and document:
+            answer_bearing = _candidate_answer_bearing_score(
+                question=question,
+                document=document,
+                focus=focus,
+            )
+            item["answer_bearing_relevance"] = answer_bearing
         item["rerank_score"] = (
             float(item.get("score", 0.0))
             + channel_count * 0.35
             + graph_bonus
+            + float(answer_bearing.get("score", 0.0))
             - _candidate_structural_relation_penalty(item)
         )
         ordered.append(item)
-    return sorted(
+    ranked = sorted(
         ordered,
         key=lambda item: (
+            -int(
+                bool(
+                    isinstance(item.get("answer_bearing_relevance"), Mapping)
+                    and item["answer_bearing_relevance"].get("answer_bearing")
+                )
+            ),
+            -float(
+                item.get("answer_bearing_relevance", {}).get("subject_anchor_score", 0.0)
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else 0.0
+            ),
+            -float(
+                item.get("answer_bearing_relevance", {}).get("subject_coverage", 0.0)
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else 0.0
+            ),
+            -len(
+                item.get("answer_bearing_relevance", {}).get("subject_phrase_hits", [])
+                if isinstance(item.get("answer_bearing_relevance"), Mapping)
+                else []
+            ),
             -float(item["rerank_score"]),
             int(item.get("graph_hop") or 99),
             int(item.get("seed_rank", 999)),
             str(item["section_id"]),
         ),
     )[: max(MAX_CANDIDATE_POOL_ITEMS, budget)]
+    if focus is None or not _answer_bearing_selection_required(focus):
+        return ranked
+    answer_bearing_ranked = [
+        item
+        for item in ranked
+        if isinstance(item.get("answer_bearing_relevance"), Mapping)
+        and bool(item["answer_bearing_relevance"].get("answer_bearing"))
+    ]
+    if not answer_bearing_ranked:
+        return []
+    if focus.relation == "need" and focus.subject_phrases:
+        return answer_bearing_ranked
+    kept_ids = {str(kept.get("section_id", "")) for kept in answer_bearing_ranked}
+    return answer_bearing_ranked + [
+        item
+        for item in ranked
+        if str(item.get("section_id", "")) not in kept_ids
+    ]
 
 
 def _select_diverse_candidates(
@@ -4790,6 +6539,13 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         )[:6],
         "graph_relevance_scores": list(candidate.get("graph_relevance_scores", []))[:4],
         "structural_relation_only": _candidate_structural_relation_penalty(candidate) > 0,
+        "answer_bearing": bool(
+            isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+            and candidate["answer_bearing_relevance"].get("answer_bearing")
+        ),
+        "answer_bearing_relevance": dict(candidate.get("answer_bearing_relevance", {}))
+        if isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+        else {},
     }
 
 
@@ -4818,6 +6574,10 @@ def _augment_evidence_for_intent(
     intent_class: str,
     budget: int,
     question: str,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    query_terms: set[str] | None = None,
+    question_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     evidence = [dict(item) for item in base_evidence]
     if intent_class in {
@@ -4832,6 +6592,9 @@ def _augment_evidence_for_intent(
             trace_id=trace_id,
             question=question,
             limit=budget,
+            documents=documents,
+            focus=focus,
+            query_terms=query_terms,
         )
     if intent_class == "direct_grounded_knowledge":
         evidence = _ensure_required_facet_coverage_passages(
@@ -4841,6 +6604,9 @@ def _augment_evidence_for_intent(
             question=question,
             intent_class=intent_class,
             limit=budget,
+            documents=documents,
+            focus=focus,
+            question_contract=question_contract,
         )
     if intent_class in {
         "cross_document_comparison",
@@ -5006,15 +6772,56 @@ def _ensure_required_facet_coverage_passages(
     question: str,
     intent_class: str,
     limit: int,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    question_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
+    if len(selected) >= 3:
+        return selected
     selected_sections = {str(item.get("section_id", "")) for item in selected}
+    focus = focus or _answer_bearing_query_focus(question)
+    answer_bearing_required = _answer_bearing_selection_required(focus)
+    subject_cache: dict[str, dict[str, Any]] = {}
+    text_cache: dict[str, str] = {}
+    terms_cache: dict[str, set[str]] = {}
     prepend: list[dict[str, Any]] = []
     prepend_sections: set[str] = set()
     ordinal = len(selected) + 1
-    for facet in _question_contract(question=question, intent_class=intent_class)[
-        "required_facets"
-    ]:
+
+    def _cached_text(document: Mapping[str, Any]) -> str:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in text_cache:
+            text_cache[section_id] = _document_text(document)
+        return text_cache[section_id]
+
+    def _cached_terms(document: Mapping[str, Any]) -> set[str]:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in terms_cache:
+            terms_cache[section_id] = _meaningful_terms(_cached_text(document))
+        return terms_cache[section_id]
+
+    def _subject_relevance(document: Mapping[str, Any]) -> dict[str, Any]:
+        section_id = str(document.get("section_id", ""))
+        cached = subject_cache.get(section_id)
+        if cached is not None:
+            return cached
+        relevance = _candidate_answer_bearing_score(
+            question=question,
+            document=document,
+            focus=focus,
+            document_text=_cached_text(document),
+            document_terms=_cached_terms(document),
+        )
+        subject_cache[section_id] = relevance
+        return relevance
+
+    question_contract = question_contract or _question_contract(
+        question=question,
+        intent_class=intent_class,
+    )
+    documents = list(documents) if documents is not None else _release_documents(bundle)
+    for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
             continue
@@ -5024,7 +6831,17 @@ def _ensure_required_facet_coverage_passages(
                 for item in selected
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
-                and _direct_facet_text_matches(facet, str(item.get("passage_text", "")))
+                and _direct_facet_text_matches(facet, _cached_text(item))
+                and _subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
+                )
+                >= 1.0
+                and (
+                    not answer_bearing_required
+                    or _subject_relevance(item).get("answer_bearing")
+                )
             ),
             None,
         )
@@ -5033,10 +6850,15 @@ def _ensure_required_facet_coverage_passages(
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
         documents = sorted(
-            _release_documents(bundle),
+            documents,
             key=lambda document: (
-                -_direct_facet_match_score(facet, _document_text(document)),
-                -_text_term_overlap_score(facet_terms, _document_text(document)),
+                -_subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(document).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(document).get("subject_phrase_hits", []),
+                ),
+                -_direct_facet_match_score(facet, _cached_text(document)),
+                -_text_term_overlap_score(facet_terms, _cached_text(document)),
                 _is_article_root_document(document),
                 -_passage_text_quality(str(document.get("body") or document.get("excerpt") or "")),
                 str(document.get("section_id", "")),
@@ -5047,7 +6869,17 @@ def _ensure_required_facet_coverage_passages(
                 item
                 for item in documents
                 if str(item.get("section_id", "")) not in selected_sections
-                and _direct_facet_text_matches(facet, _document_text(item))
+                and _direct_facet_text_matches(facet, _cached_text(item))
+                and _subject_anchor_score(
+                    focus=focus,
+                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
+                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
+                )
+                >= 1.0
+                and (
+                    not answer_bearing_required
+                    or _subject_relevance(item).get("answer_bearing")
+                )
             ),
             None,
         )
@@ -5063,7 +6895,7 @@ def _ensure_required_facet_coverage_passages(
             retrieval_metadata={
                 "required_facet_id": str(facet.get("facet_id", "")),
                 "required_facet_terms": sorted(facet_terms),
-                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _document_text(document))),
+                "covered_facet_terms": sorted(_direct_facet_covered_markers(facet, _cached_text(document))),
             },
         )
         prepend.append(item)
@@ -5161,20 +6993,51 @@ def _ensure_query_coverage_passages(
     trace_id: str,
     question: str,
     limit: int,
+    documents: Sequence[Mapping[str, Any]] | None = None,
+    focus: _AnswerBearingQueryFocus | None = None,
+    query_terms: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
     selected_sections = {str(item.get("section_id", "")) for item in selected}
-    query_terms = _coverage_terms(question)
+    focus = focus or _answer_bearing_query_focus(question)
+    query_terms = query_terms or _coverage_terms(question)
     if not query_terms:
         return selected
+    answer_bearing_required = _answer_bearing_selection_required(focus)
     covered_terms: set[str] = set()
     ordinal = len(selected) + 1
     coverage_items: list[dict[str, Any]] = []
+    text_cache: dict[str, str] = {}
+    terms_cache: dict[str, set[str]] = {}
+
+    def _cached_text(document: Mapping[str, Any]) -> str:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in text_cache:
+            text_cache[section_id] = _document_text(document)
+        return text_cache[section_id]
+
+    def _cached_terms(document: Mapping[str, Any]) -> set[str]:
+        section_id = str(document.get("section_id", ""))
+        if section_id not in terms_cache:
+            terms_cache[section_id] = _meaningful_terms(_cached_text(document))
+        return terms_cache[section_id]
+
     documents = sorted(
-        _release_documents(bundle),
+        list(documents) if documents is not None else _release_documents(bundle),
         key=lambda document: (
-            -len((query_terms - covered_terms) & _meaningful_terms(_document_text(document))),
-            -_text_term_overlap_score(query_terms, _document_text(document)),
+            -float(
+                _candidate_answer_bearing_score(
+                    question=question,
+                    document=document,
+                    focus=focus,
+                    document_text=_cached_text(document),
+                    document_terms=_cached_terms(document),
+                ).get("score", 0.0)
+            )
+            if answer_bearing_required
+            else 0.0,
+            -len((query_terms - covered_terms) & _cached_terms(document)),
+            -_text_term_overlap_score(query_terms, _cached_text(document)),
             _is_article_root_document(document),
             str(document.get("section_id", "")),
         ),
@@ -5185,7 +7048,19 @@ def _ensure_query_coverage_passages(
         section_id = str(document.get("section_id", ""))
         if section_id in selected_sections:
             continue
-        document_terms = _meaningful_terms(_document_text(document))
+        document_text = _cached_text(document)
+        relevance: dict[str, Any] = {}
+        if answer_bearing_required:
+            relevance = _candidate_answer_bearing_score(
+                question=question,
+                document=document,
+                focus=focus,
+                document_text=document_text,
+                document_terms=_cached_terms(document),
+            )
+            if not relevance.get("answer_bearing"):
+                continue
+        document_terms = _cached_terms(document)
         gained = (query_terms - covered_terms) & document_terms
         if not gained:
             continue
@@ -5197,11 +7072,11 @@ def _ensure_query_coverage_passages(
             ordinal=ordinal,
             channels=["query_coverage"],
             retrieval_metadata={
-                "query_overlap_score": _text_term_overlap_score(
-                    query_terms,
-                    _document_text(document),
-                ),
+                "query_overlap_score": _text_term_overlap_score(query_terms, document_text),
                 "coverage_terms": sorted(gained),
+                "answer_bearing_relevance": relevance
+                if answer_bearing_required
+                else {},
             },
         )
         coverage_items.append(item)

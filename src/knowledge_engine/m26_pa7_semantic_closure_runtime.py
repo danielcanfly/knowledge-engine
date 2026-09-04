@@ -12,7 +12,6 @@ from typing import Any
 import httpx
 
 from . import m26_pa7_arbitrary_query_runtime as legacy
-from .m14_retrieval import retrieve_wiki_first
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_EDGE_COUNT,
@@ -33,7 +32,7 @@ PA7ArbitraryQueryError = legacy.PA7ArbitraryQueryError
 MAX_QUERY_CHARS = legacy.MAX_QUERY_CHARS
 RESPONSE_SCHEMA = legacy.RESPONSE_SCHEMA
 
-MAX_PROVIDER_EVIDENCE = 10
+MAX_PROVIDER_EVIDENCE = 6
 MAX_PROVIDER_SNIPPET_CHARS = 420
 MAX_PROVIDER_ANSWER_CHARS = 4096
 MIN_PROVIDER_OUTPUT_TOKENS = 1024
@@ -169,24 +168,13 @@ def run_owner_arbitrary_query(
 
     bundle = answer_bundle or load_production_answer_bundle()
     _assert_full_production_graph(bundle)
-
-    dense = (
-        dense_channel or legacy.dense_channel_from_env(require_remote=require_remote_dense)
-    ).search(
+    lexical, dense = legacy._run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
         top_k=8,
-    )
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+        event_sink=None,
     )
     evidence = legacy._select_evidence(
         bundle=bundle,
@@ -294,6 +282,10 @@ def _response_from_verification(
     intent_class: str,
     semantic_closure: Mapping[str, Any],
 ) -> dict[str, Any]:
+    semantic_closure = _mirror_verified_support_proof(
+        verification=verification,
+        semantic_closure=semantic_closure,
+    )
     response = {
         **legacy._base_response(
             gate=gate,
@@ -353,6 +345,99 @@ def _response_from_verification(
     return response
 
 
+def _mirror_verified_support_proof(
+    *,
+    verification: Mapping[str, Any],
+    semantic_closure: Mapping[str, Any],
+) -> dict[str, Any]:
+    closure = dict(semantic_closure)
+    citations = [
+        item for item in verification.get("citations", []) if isinstance(item, Mapping)
+    ]
+    if not citations:
+        return closure
+    existing = [item for item in closure.get("support_proof", []) if isinstance(item, Mapping)]
+    support_proof: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    def _merge_proof(
+        proof: Mapping[str, Any] | None,
+        citation: Mapping[str, Any],
+    ) -> dict[str, Any] | None:
+        evidence_id = str((proof or {}).get("evidence_id") or citation.get("evidence_id", ""))
+        locator_id = str((proof or {}).get("locator_id") or citation.get("locator_id", ""))
+        exact_quote_sha256 = str(
+            (proof or {}).get("exact_quote_sha256") or citation.get("exact_quote_sha256", "")
+        )
+        if not evidence_id or not locator_id or not exact_quote_sha256:
+            return None
+        merged = {
+            **dict(proof or {}),
+            "claim_id": str((proof or {}).get("claim_id") or citation.get("claim_id", "")),
+            "citation_id": str((proof or {}).get("citation_id") or citation.get("citation_id", "")),
+            "evidence_id": evidence_id,
+            "locator_id": locator_id,
+            "source_id": str((proof or {}).get("source_id") or citation.get("source_id", "")),
+            "source_identity": str(
+                (proof or {}).get("source_identity") or citation.get("source_identity", "")
+            ),
+            "section_id": str((proof or {}).get("section_id") or citation.get("section_id", "")),
+            "concept_id": str((proof or {}).get("concept_id") or citation.get("concept_id", "")),
+            "release_id": str((proof or {}).get("release_id") or citation.get("release_id", "")),
+            "source_locator": str(
+                (proof or {}).get("source_locator") or citation.get("source_locator", "")
+            ),
+            "support_text_sha256": str(
+                (proof or {}).get("support_text_sha256") or citation.get("support_text_sha256", "")
+            ),
+            "exact_quote_sha256": exact_quote_sha256,
+            "source_artifact_sha256": str(
+                (proof or {}).get("source_artifact_sha256")
+                or citation.get("source_artifact_sha256", "")
+            ),
+            "provenance_record_sha256": str(
+                (proof or {}).get("provenance_record_sha256")
+                or citation.get("provenance_record_sha256", "")
+            ),
+            "runtime_owned_locator": bool(
+                (proof or {}).get("runtime_owned_locator", citation.get("runtime_owned_locator", False))
+            ),
+            "supported": True,
+        }
+        return merged
+
+    for proof, citation in zip(existing, citations, strict=False):
+        merged = _merge_proof(proof, citation)
+        if merged is None:
+            continue
+        key = (
+            str(merged.get("evidence_id", "")),
+            str(merged.get("locator_id", "")),
+            str(merged.get("exact_quote_sha256", "")),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        support_proof.append(merged)
+
+    for citation in citations:
+        evidence_id = str(citation.get("evidence_id", ""))
+        locator_id = str(citation.get("locator_id", ""))
+        exact_quote_sha256 = str(citation.get("exact_quote_sha256", ""))
+        key = (evidence_id, locator_id, exact_quote_sha256)
+        if not evidence_id or key in seen:
+            continue
+        merged = _merge_proof(None, citation)
+        if merged is None:
+            continue
+        seen.add(key)
+        support_proof.append(merged)
+    if support_proof:
+        closure["support_proof"] = support_proof
+        closure["mirrored_verified_support_proof"] = True
+    return closure
+
+
 def _synthesize_and_verify(
     *,
     question: str,
@@ -363,13 +448,19 @@ def _synthesize_and_verify(
     requirements: Sequence[SemanticRequirement],
     endpoint_proof: Mapping[str, Any],
     allow_deterministic_recovery: bool = False,
+    max_attempts: int = 2,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     failures: list[str] = []
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
 
-    for attempt in (1, 2):
+    max_attempts = max(1, min(int(max_attempts), 2))
+
+    def can_retry(current_attempt: int) -> bool:
+        return current_attempt < max_attempts
+
+    for attempt in range(1, max_attempts + 1):
         compact_payload, label_map, snippet_map = _compact_provider_payload(
             question=question,
             intent_class=intent_class,
@@ -400,14 +491,14 @@ def _synthesize_and_verify(
                     failures.append(COMPACT_PROVIDER_TRUNCATED)
                 else:
                     failures.append(COMPACT_PROVIDER_PARSE_FAILED)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
             if parsed["status"] == "abstain":
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
@@ -435,6 +526,25 @@ def _synthesize_and_verify(
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
+            if _candidate_lacks_material_requirement_coverage(
+                candidate,
+                requirements=requirements,
+            ):
+                failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
+                if can_retry(attempt):
+                    repair_attempted = True
+                    continue
+                break
+            if _provider_partial_has_unresolved_material_gap(
+                candidate,
+                requirements=requirements,
+                unanswered_dimensions=unanswered_dimensions,
+            ):
+                failures.append("PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS")
+                if can_retry(attempt):
+                    repair_attempted = True
+                    continue
+                break
             semantic_review, review_raw = _call_semantic_entailment_review(
                 provider_client=provider_client,
                 question=question,
@@ -453,14 +563,14 @@ def _synthesize_and_verify(
                 claim_by_id,
             ):
                 failures.append("M26-PA7-ME-065")
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 partial = _verified_supported_review_partial(
@@ -495,7 +605,7 @@ def _synthesize_and_verify(
                 )
             except legacy.VerifiedAnswerGateError as exc:
                 failures.append(exc.code)
-                if attempt == 1:
+                if can_retry(attempt):
                     repair_attempted = True
                     continue
                 partial = _verified_supported_review_partial(
@@ -569,7 +679,7 @@ def _synthesize_and_verify(
         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
             code = getattr(exc, "code", type(exc).__name__)
             failures.append(str(code))
-            if attempt == 1:
+            if can_retry(attempt):
                 repair_attempted = True
                 continue
         except (LiveGateError, httpx.HTTPError) as exc:
@@ -699,6 +809,92 @@ def _verified_supported_review_partial(
         "dropped_claim_ids": dropped_claim_ids,
     }
     return answer, closure
+
+
+def _provider_partial_has_unresolved_material_gap(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+    unanswered_dimensions: Sequence[str],
+) -> bool:
+    if str(candidate.get("status", "")) != "partial_candidate":
+        return False
+    unresolved = {str(item).strip() for item in unanswered_dimensions if str(item).strip()}
+    if not requirements:
+        return bool(unresolved)
+    requirement_ids = {item.requirement_id for item in requirements}
+    unresolved_requirement_ids = {
+        item for item in unresolved if item in requirement_ids
+    }
+    covered_ids = _material_claim_requirement_coverage(
+        candidate,
+        requirements=requirements,
+    )
+    return not bool(covered_ids & (requirement_ids - unresolved_requirement_ids))
+
+
+def _candidate_lacks_material_requirement_coverage(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+) -> bool:
+    if not requirements:
+        return False
+    requirement_ids = {item.requirement_id for item in requirements}
+    return not bool(
+        _material_claim_requirement_coverage(
+            candidate,
+            requirements=requirements,
+        )
+        & requirement_ids
+    )
+
+
+def _material_claim_requirement_coverage(
+    candidate: Mapping[str, Any],
+    *,
+    requirements: Sequence[SemanticRequirement],
+) -> set[str]:
+    covered_ids: set[str] = set()
+    for raw_claim in legacy._list(candidate.get("claims"), "partial material claims"):
+        claim = legacy._object(raw_claim, "partial material claim")
+        claim_type = str(claim.get("claim_type", ""))
+        if claim_type != "MODEL_EXPLANATION" and not claim.get("support_refs"):
+            continue
+        claim_text = str(claim.get("surface_text", "")).strip()
+        covered_ids.update(
+            str(item)
+            for item in legacy._list(claim.get("facet_ids"), "partial claim facets")
+            if str(item)
+        )
+        covered_ids.update(
+            str(item)
+            for item in legacy._list(claim.get("covers"), "partial claim covers")
+            if str(item)
+        )
+        for requirement in requirements:
+            if _claim_text_covers_requirement(claim_text, requirement):
+                covered_ids.add(requirement.requirement_id)
+    return covered_ids
+
+
+def _claim_text_covers_requirement(
+    claim_text: str,
+    requirement: SemanticRequirement,
+) -> bool:
+    normalized = re.sub(r"\s+", " ", str(claim_text)).strip()
+    if not normalized:
+        return False
+    folded = normalized.casefold()
+    if requirement.exact_phrase:
+        return requirement.exact_phrase.casefold() in folded
+    return bool(
+        requirement.visible_patterns
+        and any(
+            re.search(pattern, normalized, flags=re.I)
+            for pattern in requirement.visible_patterns
+        )
+    )
 
 
 def _supported_review_partial_candidate(
@@ -1928,6 +2124,7 @@ def _semantic_requirements(
     q = question.casefold()
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
+    definition_parts = legacy._contextual_definition_query_parts(question)
 
     def add(
         requirement_id: str,
@@ -1959,6 +2156,46 @@ def _semantic_requirements(
             [re.escape(entity)],
             exact_phrase=entity,
         )
+
+    if definition_parts is not None:
+        head = str(definition_parts.get("definition_head", "")).strip()
+        context = str(definition_parts.get("context_modifier", "")).strip()
+        if head and "definition_head" not in seen:
+            add(
+                "definition_head",
+                (
+                    f"State {head} with a source-backed definitional predicate "
+                    "rather than an invented category."
+                ),
+                (
+                    head,
+                    *legacy._coverage_terms(head),
+                    *legacy._coverage_terms(question),
+                    "method",
+                    "means",
+                    "follow",
+                    "sop",
+                    "tool",
+                    "decision",
+                    "rules",
+                    "acceptance",
+                    "criteria",
+                    "task",
+                ),
+                (
+                    rf"\b{re.escape(head)}\b.{{0,120}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b",
+                    rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b.{{0,120}}\b{re.escape(head)}\b",
+                ),
+                exact_phrase=head,
+            )
+        if context and "context_modifier" not in seen:
+            add(
+                "context_modifier",
+                f"Keep the contextual modifier {context} explicit.",
+                tuple(legacy._coverage_terms(context)),
+                (rf"\b{re.escape(context)}\b",),
+                exact_phrase=context,
+            )
 
     if "production router" in q or (
         "router" in q
@@ -3053,9 +3290,87 @@ def _provider_evidence_order(
     question: str,
 ) -> list[Mapping[str, Any]]:
     qterms = legacy._meaningful_terms(question)
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_head_terms = (
+        legacy._coverage_terms(definition_parts["definition_head"])
+        if definition_parts
+        else set()
+    )
+    definition_predicate_terms = {
+        "acceptance",
+        "behavior",
+        "carry",
+        "carries",
+        "carrying",
+        "capability",
+        "criteria",
+        "decision",
+        "follow",
+        "follows",
+        "method",
+        "means",
+        "order",
+        "practice",
+        "procedure",
+        "role",
+        "rules",
+        "sop",
+        "task",
+        "tells",
+        "tool",
+        "uses",
+    }
     return sorted(
         evidence,
         key=lambda item: (
+            -int(
+                bool(
+                    (
+                        definition_head_terms
+                        & legacy._meaningful_terms(
+                            " ".join(
+                                str(item.get(key, ""))
+                                for key in (
+                                    "title",
+                                    "section_title",
+                                    "passage_text",
+                                    "concept_id",
+                                )
+                            )
+                        )
+                    )
+                    and (
+                        legacy._meaningful_terms(
+                            " ".join(
+                                str(item.get(key, ""))
+                                for key in (
+                                    "title",
+                                    "section_title",
+                                    "passage_text",
+                                    "concept_id",
+                                )
+                            )
+                        )
+                        & definition_predicate_terms
+                    )
+                )
+            ),
+            -int(
+                bool(
+                    definition_head_terms
+                    & legacy._meaningful_terms(
+                        " ".join(
+                            str(item.get(key, ""))
+                            for key in (
+                                "title",
+                                "section_title",
+                                "passage_text",
+                                "concept_id",
+                            )
+                        )
+                    )
+                )
+            ),
             -max(
                 [
                     _requirement_evidence_score(req, item)
@@ -3085,6 +3400,40 @@ def _provider_snippet(
     if item.get("evidence_type") == "graph_edge":
         return text[:MAX_PROVIDER_SNIPPET_CHARS]
     target_terms = set(legacy._meaningful_terms(question))
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_head_terms = (
+        legacy._coverage_terms(definition_parts["definition_head"])
+        if definition_parts
+        else set()
+    )
+    definition_predicate_terms = {
+        "acceptance",
+        "behavior",
+        "carry",
+        "carries",
+        "carrying",
+        "capability",
+        "criteria",
+        "decision",
+        "follow",
+        "follows",
+        "method",
+        "means",
+        "order",
+        "practice",
+        "procedure",
+        "role",
+        "rules",
+        "sop",
+        "task",
+        "tells",
+        "tool",
+        "uses",
+    }
+    if definition_parts:
+        target_terms |= definition_head_terms
+        if definition_parts["context_modifier"]:
+            target_terms |= legacy._coverage_terms(definition_parts["context_modifier"])
     for requirement in requirements:
         target_terms |= legacy._meaningful_terms(
             " ".join(requirement.evidence_terms)
@@ -3093,6 +3442,13 @@ def _provider_snippet(
     ranked = sorted(
         segments,
         key=lambda segment: (
+            -int(
+                bool(
+                    definition_head_terms & legacy._meaningful_terms(segment)
+                    and legacy._meaningful_terms(segment) & definition_predicate_terms
+                )
+            ),
+            -int(bool(definition_head_terms & legacy._meaningful_terms(segment))),
             -legacy._text_term_overlap_score(target_terms, segment),
             legacy._segment_noise_penalty(segment),
             legacy._thin_heading(segment),

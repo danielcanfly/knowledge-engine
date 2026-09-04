@@ -9,9 +9,9 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
-from .m14_retrieval import retrieve_wiki_first
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
@@ -426,6 +426,7 @@ def derive_semantic_requirements(
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
     lifecycle_requested = _requested_lifecycle_requirements(question)
+    definition_parts = legacy._contextual_definition_query_parts(question)
     lifecycle_ids = {
         "admission_policy",
         "durable_state",
@@ -477,6 +478,46 @@ def derive_semantic_requirements(
                 exact_phrase=exact_phrase,
             )
         )
+    if definition_parts is not None:
+        head = str(definition_parts.get("definition_head", "")).strip()
+        context = str(definition_parts.get("context_modifier", "")).strip()
+        if head and "definition_head" not in seen:
+            seen.add("definition_head")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="definition_head",
+                    instruction=(
+                        f"State {head} with a source-backed definitional predicate "
+                        "instead of an invented category."
+                    ),
+                    evidence_terms=(
+                        head,
+                        *tuple(str(term) for term in legacy._coverage_terms(head)),
+                        *tuple(
+                            sorted(
+                                legacy._coverage_terms(head)
+                                & legacy._coverage_terms(question)
+                            )
+                        ),
+                    ),
+                    visible_patterns=(
+                        rf"\b{re.escape(head)}\b.{{0,120}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b",
+                        rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b.{{0,120}}\b{re.escape(head)}\b",
+                    ),
+                    exact_phrase=head,
+                )
+            )
+        if context and "context_modifier" not in seen:
+            seen.add("context_modifier")
+            requirements.append(
+                SemanticRequirement(
+                    requirement_id="context_modifier",
+                    instruction=f"Keep the contextual modifier {context} explicit.",
+                    evidence_terms=tuple(legacy._coverage_terms(context)),
+                    visible_patterns=(rf"\b{re.escape(context)}\b",),
+                    exact_phrase=context,
+                )
+            )
     if _state_machine_replanner_question(question):
         requirements.append(_authority_boundary_requirement())
     if _route_replan_question(question):
@@ -847,7 +888,7 @@ def canonical_question_entities(question: str) -> list[str]:
 
 
 def _contract_compat_module() -> Any:
-    return runtime
+    return compatibility_v2
 
 
 def synthesize_and_verify(
@@ -860,15 +901,21 @@ def synthesize_and_verify(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    runtime_requirements = _runtime_semantic_requirements(requirements)
+    allow_deterministic_recovery = _definition_fallback_requirements_present(
+        question=question,
+        requirements=runtime_requirements,
+    )
     verification, closure = runtime._synthesize_and_verify(
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
         evidence=evidence,
         provider_client=provider_client,
-        requirements=requirements,
+        requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
-        allow_deterministic_recovery=False,
+        allow_deterministic_recovery=allow_deterministic_recovery,
+        max_attempts=1,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {
@@ -884,6 +931,73 @@ def synthesize_and_verify(
         "semantic_contract_fingerprint": fingerprint,
     }
     return verification, closure
+
+
+def _definition_fallback_requirements_present(
+    *,
+    question: str,
+    requirements: Sequence[Any],
+) -> bool:
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    if definition_parts is None:
+        return False
+    requirement_ids = {_semantic_requirement_id(item) for item in requirements}
+    if "definition_head" not in requirement_ids:
+        return False
+    if definition_parts.get("context_modifier"):
+        return "context_modifier" in requirement_ids
+    return True
+
+
+def _runtime_semantic_requirements(
+    requirements: Sequence[Any],
+) -> tuple[Any, ...]:
+    return tuple(
+        converted
+        for item in requirements
+        if (converted := _runtime_semantic_requirement(item)) is not None
+    )
+
+
+def _runtime_semantic_requirement(item: Any) -> Any | None:
+    if not isinstance(item, Mapping):
+        return item
+    requirement_id = _semantic_requirement_id(item)
+    if not requirement_id:
+        return None
+    return SemanticRequirement(
+        requirement_id=requirement_id,
+        instruction=_optional_text(item.get("instruction")),
+        evidence_terms=_optional_text_tuple(item.get("evidence_terms")),
+        visible_patterns=_optional_text_tuple(item.get("visible_patterns")),
+        exact_phrase=_optional_text(item.get("exact_phrase")),
+    )
+
+
+def _semantic_requirement_id(item: Any) -> str:
+    if isinstance(item, Mapping):
+        if "requirement_id" not in item:
+            return ""
+        value = item.get("requirement_id")
+    else:
+        value = getattr(item, "requirement_id", "")
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _optional_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _optional_text_tuple(value: Any) -> tuple[str, ...]:
+    if value is None or isinstance(value, (str, bytes)):
+        return ()
+    if not isinstance(value, Sequence):
+        return ()
+    return tuple(str(item) for item in value if item is not None)
 
 
 def _publish_support_proof_recovered_answer(
@@ -911,6 +1025,19 @@ def _publish_support_proof_recovered_answer(
     )
     if recovered is not None:
         return recovered
+    definition_recovered = _recover_definition_fallback_answer(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
+    )
+    if definition_recovered is not None:
+        return definition_recovered
     return dict(verification), dict(closure)
 
 
@@ -1051,6 +1178,134 @@ def _recover_supported_semantic_answer(
         "pre_recovery_failures": pre_recovery_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v3",
         "broad_deterministic_fallback_used": False,
+        "runtime_bound_semantic_repair_used": True,
+        "semantic_synthesis_recovery": {
+            "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
+            "case_specific": False,
+            "candidate_claim_count": len(candidate.get("claims", [])),
+            "internal_reference_leak_checked": True,
+            "unsupported_accepted_claims": int(
+                answer.get("unsupported_accepted_claims", 0)
+            ),
+        },
+    }
+
+
+def _recover_definition_fallback_answer(
+    *,
+    compatibility: Any,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    closure: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    if str(verification.get("status")) != "owner_only_safe_abstention":
+        return None
+    if legacy._contextual_definition_query_parts(question) is None:
+        return None
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    if not evidence:
+        return None
+    if int(verification.get("unsupported_accepted_claims", 0)) != 0:
+        return None
+    if not bool(verification.get("citation_locator_valid", True)):
+        return None
+    try:
+        candidate = legacy._deterministic_provider_candidate(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+        )
+    except Exception:
+        return None
+    if not isinstance(candidate, Mapping):
+        return None
+    try:
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                candidate,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=[],
+            repair_attempted=True,
+        )
+        compatibility._use_verified_natural_surface(
+            answer,
+            _public_candidate_surface(candidate, answer),
+        )
+    except Exception:
+        return None
+    if answer.get("status") != "owner_only_cited_answer":
+        return None
+    visible_failures = evaluate_visible_semantics(
+        str(answer.get("answer_text", "")),
+        requirements,
+        question,
+    )
+    if visible_failures:
+        return None
+    if _internal_reference_leaks(str(answer.get("answer_text", "")), question):
+        return None
+
+    support_failures, support_proof = (
+        compatibility._endpoint_aware_requirement_support_failures(
+            runtime=_RUNTIME_FACADE,
+            requirements=requirements,
+            evidence=_candidate_evidence(candidate, evidence),
+            endpoint_proof=endpoint_proof,
+        )
+    )
+    if support_failures:
+        return None
+    previous_mve = verification.get("multi_evidence_verification", {})
+    previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
+    pre_recovery_failures = _failure_codes(verification, closure)
+    answer["provider_call_count"] = int(verification.get("provider_call_count", 0))
+    answer["payg_equivalent_cost_usd"] = str(
+        verification.get("payg_equivalent_cost_usd", "0")
+    )
+    answer["repair_attempted"] = True
+    answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
+    answer["multi_evidence_verification"] = {
+        **dict(answer.get("multi_evidence_verification", {})),
+        "provider_attempt_telemetry": list(
+            previous_mve.get("provider_attempt_telemetry", [])
+        ),
+        "verification_failure_codes_by_attempt": pre_recovery_failures,
+        "repair_trigger": pre_recovery_failures,
+        "repair_result": "verified_definition_fallback",
+        "deterministic_evidence_synthesis_used": True,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "runtime_bound_semantic_repair_used": True,
+        "served_answer_surface": "verified_definition_fallback_surface",
+    }
+    recovered_closure = dict(closure)
+    recovered_closure.pop("local_repair_rejection_codes", None)
+    return answer, {
+        **recovered_closure,
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": support_proof,
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "pre_recovery_failures": pre_recovery_failures,
+        "provider_contract": "compact_runtime_bound_semantic_closure/v3",
+        "broad_deterministic_fallback_used": False,
+        "definition_fallback_used": True,
         "runtime_bound_semantic_repair_used": True,
         "semantic_synthesis_recovery": {
             "schema_version": "m26-aq-semantic-synthesis-recovery/v1",
@@ -2783,6 +3038,23 @@ def run_owner_arbitrary_query(
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: legacy.RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
+    return _response_with_contract(
+        legacy.run_owner_arbitrary_query(
+            root=root,
+            gate=gate,
+            question=question,
+            owner_subject_hash=owner_subject_hash,
+            public_request=public_request,
+            provider_client=provider_client,
+            dense_channel=dense_channel,
+            require_remote_dense=require_remote_dense,
+            max_provider_calls=max_provider_calls,
+            max_cost=max_cost,
+            answer_bundle=answer_bundle,
+            event_sink=event_sink,
+        )
+    )
+
     import time
 
     started = time.monotonic()
@@ -2892,22 +3164,17 @@ def run_owner_arbitrary_query(
                 )
             )
 
+    retrieval_started = time.monotonic()
     legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
     runtime._assert_full_production_graph(bundle)
-    dense = (
-        dense_channel or legacy.dense_channel_from_env(require_remote=require_remote_dense)
-    ).search(question=normalized_question, bundle=bundle, top_k=8)
-    lexical = retrieve_wiki_first(
-        query=normalized_question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=True,
-        provenance=bundle.provenance,
-        semantic_index=None,
-        limit=8,
+    lexical, dense = legacy._run_lexical_primary_retrieval(
+        question=normalized_question,
+        bundle=bundle,
+        dense_channel=dense_channel,
+        require_remote_dense=require_remote_dense,
+        top_k=8,
+        event_sink=event_sink,
     )
     evidence = legacy._select_evidence(
         bundle=bundle,
@@ -2932,6 +3199,7 @@ def run_owner_arbitrary_query(
         "stage.completed",
         stage="retrieval",
         selected_evidence_count=len(evidence),
+        latency_ms=int((time.monotonic() - retrieval_started) * 1000),
     )
 
     if not evidence or not legacy._has_meaningful_overlap(normalized_question, evidence):
@@ -2984,6 +3252,17 @@ def run_owner_arbitrary_query(
         provider_client=provider,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
+    )
+    verification, closure = _publish_support_proof_recovered_answer(
+        compatibility=_contract_compat_module(),
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
     )
     legacy._emit_runtime_event(
         event_sink,

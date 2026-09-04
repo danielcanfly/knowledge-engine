@@ -4,10 +4,13 @@ import json
 import os
 import subprocess
 import sys
+import time
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from jsonschema import Draft202012Validator
 
@@ -93,6 +96,28 @@ class ExplodingProvider:
 class ExplodingDense:
     def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
         raise AssertionError("retrieval must not run before owner admission")
+
+
+class FailingDense:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+        self.calls = 0
+
+    def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+        self.calls += 1
+        raise self.exc
+
+
+class SlowDense:
+    def __init__(self, sleep_seconds: float) -> None:
+        self.sleep_seconds = sleep_seconds
+        self.calls = 0
+
+    def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+        del question, bundle, top_k
+        self.calls += 1
+        time.sleep(self.sleep_seconds)
+        return {"backend_identity": {"backend": "too_slow"}, "candidates": []}
 
 
 class InvalidMultiEvidenceProvider:
@@ -233,6 +258,33 @@ class NaturalProseProvider:
         }
 
 
+class FastAnswerProvider:
+    def __init__(self, answer_text: str) -> None:
+        self.answer_text = answer_text
+        self.calls = 0
+        self.cost = Decimal("0")
+
+    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+        self.calls += 1
+        self.cost += Decimal("0.00001")
+        task = _task(payload)
+        passage = _passage_items(task["evidence_bundle"])[0]
+        body = {
+            "status": "answer",
+            "answer_text": self.answer_text,
+            "citation_ids": [passage["evidence_id"]],
+            "abstention_reason": None,
+        }
+        return {
+            "text": json.dumps(body),
+            "usage": {"input_tokens": 100, "output_tokens": 40},
+            "cost_usd": "0.00001",
+            "latency_ms": 5,
+            "response_id": f"fast-{self.calls}",
+            "call_class": call_class,
+        }
+
+
 class GraphExpandedCitationProvider:
     def __init__(self) -> None:
         self.calls = 0
@@ -326,6 +378,16 @@ def _task(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
     return json.loads(text)
+
+
+def _http_status_error(status_code: int) -> httpx.HTTPStatusError:
+    request = httpx.Request("GET", "https://dense.invalid/search")
+    response = httpx.Response(status_code, request=request)
+    return httpx.HTTPStatusError(
+        f"{status_code} from dense backend",
+        request=request,
+        response=response,
+    )
 
 
 def _first_sentence(passage: str) -> str:
@@ -447,24 +509,26 @@ def test_varied_questions_are_not_keyword_whitelisted() -> None:
         assert response["status"] == "owner_only_cited_answer"
 
 
-def test_ordinary_explanatory_query_uses_graph_expanded_evidence_without_graph_keywords() -> None:
+def test_ordinary_explanatory_query_stays_lean_without_graph_expansion() -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
         gate=load_json(GATE_PATH),
         question="Explain how harness acceptance components support permission-first execution.",
         owner_subject_hash=OWNER_SUBJECT_HASH,
-        provider_client=ExactSpanProvider(),
+        provider_client=FastAnswerProvider(
+            "Harness acceptance components support permission-first execution [claim_1_ref_1]."
+        ),
         dense_channel=LocalDenseProjectionChannel(),
     )
 
     assert response["status"] == "owner_only_cited_answer"
     assert response["intent_class"] == "direct_grounded_knowledge"
-    assert response["selected_evidence_count"] > 5
-    assert response["candidate_count_by_channel"]["graph_expanded_selected"] > 0
-    assert response["graph_observability"]["selected_graph_derived_evidence_count"] > 0
-    assert response["graph_observability"]["selected_graph_relation_types"]
-    assert any(
-        any(str(channel).startswith("graph_") for channel in item["channels"])
+    assert 3 <= response["selected_evidence_count"] <= 4
+    assert response["candidate_count_by_channel"]["graph_expanded_selected"] == 0
+    assert response["graph_observability"]["selected_graph_derived_evidence_count"] == 0
+    assert response["graph_observability"]["selected_graph_relation_types"] == []
+    assert all(
+        not any(str(channel).startswith("graph_") for channel in item["channels"])
         for item in response["selected_evidence"]
     )
 
@@ -555,6 +619,789 @@ def test_uncited_provider_prose_survives_when_structured_claims_verify() -> None
     assert "[claim_1_ref_1]" in response["answer_text"]
     assert response["citations"]
     assert response["unsupported_accepted_claims"] == 0
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected_http_status"),
+    [
+        (
+            httpx.ReadTimeout(
+                "dense timed out",
+                request=httpx.Request("GET", "https://dense.invalid/search"),
+            ),
+            None,
+        ),
+        (
+            httpx.ConnectError(
+                "dense network down",
+                request=httpx.Request("GET", "https://dense.invalid/search"),
+            ),
+            None,
+        ),
+        (_http_status_error(429), 429),
+        (_http_status_error(503), 503),
+    ],
+)
+def test_dense_transient_failures_degrade_without_blocking_lexical_primary_path(
+    exc: Exception,
+    expected_http_status: int | None,
+) -> None:
+    events: list[dict[str, Any]] = []
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=FailingDense(exc),
+        event_sink=events.append,
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["provider_invoked"] is True
+    assert response["candidate_count_by_channel"]["lexical"] > 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
+    assert response["retrieval_backend_identity"]["dense"]["availability"] == "unavailable"
+    assert response["retrieval_backend_identity"]["dense"]["degraded"] is True
+    assert response["retrieval_backend_identity"]["dense"]["reason_code"] == (
+        "DENSE_TRANSIENT_UNAVAILABLE"
+    )
+    assert response["unsupported_accepted_claims"] == 0
+    assert any(
+        event.get("type") == "stage.degraded"
+        and event.get("stage") == "retrieval"
+        and event.get("channel") == "dense"
+        and event.get("reason_code") == "DENSE_TRANSIENT_UNAVAILABLE"
+        and event.get("http_status") == expected_http_status
+        for event in events
+    )
+
+
+def test_dense_deadline_degrades_without_blocking_lexical_primary_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("M26_DENSE_SEARCH_DEADLINE_SECONDS", "0.01")
+    events: list[dict[str, Any]] = []
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What should a router define for permission-first controls?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=SlowDense(0.2),
+        event_sink=events.append,
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["candidate_count_by_channel"]["lexical"] > 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
+    dense_identity = response["retrieval_backend_identity"]["dense"]
+    assert dense_identity["availability"] == "unavailable"
+    assert dense_identity["degraded"] is True
+    assert dense_identity["reason_code"] == "DENSE_SEARCH_DEADLINE_EXCEEDED"
+    assert dense_identity["deadline_ms"] == 10
+    assert any(
+        event.get("type") == "stage.degraded"
+        and event.get("stage") == "retrieval"
+        and event.get("channel") == "dense"
+        and event.get("reason_code") == "DENSE_SEARCH_DEADLINE_EXCEEDED"
+        for event in events
+    )
+
+
+@pytest.mark.parametrize(
+    "status_code",
+    [401, 403],
+)
+def test_dense_authority_errors_propagate(status_code: int) -> None:
+    with pytest.raises(httpx.HTTPStatusError):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=FailingDense(_http_status_error(status_code)),
+        )
+
+
+def test_dense_pa7_errors_propagate() -> None:
+    with pytest.raises(PA7ArbitraryQueryError, match="PA7_DENSE_BACKEND_INVALID"):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=FailingDense(
+                PA7ArbitraryQueryError("PA7_DENSE_BACKEND_INVALID", "bad dense payload")
+            ),
+        )
+
+
+def test_require_remote_dense_missing_config_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    keys = [
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_AI_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "QDRANT_URL",
+        "QDRANT_API_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY",
+        "QDRANT_API_KEY",
+        "M26_PA7_DENSE_COLLECTION",
+        "QDRANT_COLLECTION",
+        "QDRANT_COLLECTION_NAME",
+    ]
+    for key in keys:
+        monkeypatch.delenv(key, raising=False)
+
+    with pytest.raises(PA7ArbitraryQueryError, match="PA7_REMOTE_DENSE_CONFIG_MISSING"):
+        run_owner_arbitrary_query(
+            root=ROOT,
+            gate=load_json(GATE_PATH),
+            question="What should a router define for permission-first controls?",
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=ExplodingProvider(),
+            dense_channel=None,
+            require_remote_dense=True,
+        )
+
+
+def test_lexical_only_insufficient_evidence_abstains_when_dense_unavailable() -> None:
+    response = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="What checksum proves zxqv nonexistent quasar asparagus ledger?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExplodingProvider(),
+        dense_channel=FailingDense(_http_status_error(429)),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_invoked"] is False
+    assert response["reason_codes"] == ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"]
+    assert response["candidate_count_by_channel"]["lexical"] == 0
+    assert response["candidate_count_by_channel"]["dense"] == 0
+
+
+def test_contextual_definition_query_splits_head_and_context_facets() -> None:
+    question = "What is a skill in an AI agent architecture?"
+
+    parts = runtime_module._contextual_definition_query_parts(question)
+    assert parts == {
+        "definition_head": "skill",
+        "context_modifier": "ai agent architecture",
+        "question_prefix": "what is",
+    }
+
+    facets = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )["required_facets"]
+    assert [item["facet_id"] for item in facets] == [
+        "definition_head",
+        "context_modifier",
+    ]
+
+
+def test_contextual_definition_query_accepts_source_backed_predicate() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            evidence_id="ev_skill",
+            concept_id="skill",
+        ),
+        _tesc_evidence(
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            evidence_id="ev_context",
+            concept_id="architecture",
+            source_identity="src_context",
+        ),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "A skill is a method the agent follows for a class of task in an AI agent "
+                "architecture [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "facet_ids": [
+                        "definition_head",
+                        "context_modifier",
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": support_refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    verified = runtime_module._verify_multi_evidence_provider_output(
+        trace_id="definition_positive",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_text=provider_text,
+    )
+
+    assert verified["terminal_status"] == "verified_answer_ready_candidate"
+    assert verified["covered_facets"] == ["context_modifier", "definition_head"]
+
+
+def test_contextual_definition_query_rejects_unbacked_category_mutation_even_with_review() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _tesc_evidence(
+            "Skill | What method should the agent follow for this class of task? SOP, tool order, decision rules, acceptance criteria.",
+            evidence_id="ev_skill",
+            concept_id="skill",
+        ),
+        _tesc_evidence(
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            evidence_id="ev_context",
+            concept_id="architecture",
+            source_identity="src_context",
+        ),
+    ]
+    support_refs = [
+        {
+            "evidence_id": item["evidence_id"],
+            "locator_id": item["locator_id"],
+            "exact_quote": item["passage_text"],
+        }
+        for item in evidence
+    ]
+    provider_text = json.dumps(
+        {
+            "schema_version": "aq3-provider-candidate/v3",
+            "status": "answer_candidate",
+            "relation": None,
+            "selected_evidence_ids": [item["evidence_id"] for item in evidence],
+            "answer_text": (
+                "A skill is a mechanism or module in an AI agent architecture [[claim_1]]."
+            ),
+            "claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "facet_ids": [
+                        "definition_head",
+                        "context_modifier",
+                    ],
+                    "support_mode": "exact_quote",
+                    "support_refs": support_refs,
+                }
+            ],
+            "missing_facets": [],
+            "abstention_reason": None,
+        }
+    )
+
+    with pytest.raises(runtime_module.VerifiedAnswerGateError) as exc:
+        runtime_module._verify_multi_evidence_provider_output(
+            trace_id="definition_negative",
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            provider_text=provider_text,
+            semantic_review={
+                "schema_version": runtime_module.SEMANTIC_REVIEW_SCHEMA_VERSION,
+                "claim_judgments": [
+                    {
+                        "claim_id": "claim_1",
+                        "verdict": "ENTAILED",
+                        "evidence_ids": ["ev_skill", "ev_context"],
+                    }
+                ],
+                "visible_coverage": {
+                    "verdict": "COVERED",
+                    "uncovered_assertions": [],
+                },
+            },
+        )
+
+    assert exc.value.code == "M26-PA7-ME-071"
+
+
+def test_answer_bearing_reranker_prefers_need_relation_support() -> None:
+    question = "What kind of skill does a Product Owner need?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Product Owner overview",
+            "section_title": "overview",
+            "body": "A Product Owner appears in the team directory and reporting chart.",
+            "concept_id": "product_owner",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Product Owner skill guidance",
+            "section_title": "guidance",
+            "body": (
+                "A Product Owner needs prioritization skill, stakeholder alignment, and "
+                "decision judgment."
+            ),
+            "concept_id": "product_owner",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 11.5,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 11.0,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
+
+
+def test_need_query_prefers_full_subject_over_facet_only_distractor() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Harness Theory overview",
+            "section_title": "overview",
+            "body": "Harness theory talks about skills and needs in general terms.",
+            "concept_id": "harness_theory",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Product Manager skill guidance",
+            "section_title": "guidance",
+            "body": (
+                "A Product Manager needs prioritization skill, stakeholder alignment, and "
+                "decision judgment."
+            ),
+            "concept_id": "product_manager",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 12.0,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 11.0,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert len(ranked) == 1
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    topic_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["doc_topic"],
+    )
+    assert topic_relevance["answer_bearing"] is False
+
+
+def _rerank_candidate(section_id: str, *, score: float, rank: int) -> dict[str, Any]:
+    return {
+        "section_id": section_id,
+        "channels": {"lexical"},
+        "score": score,
+        "seed_rank": rank,
+        "graph_hop": 0,
+        "graph_edges": [],
+        "relation_types": set(),
+        "graph_relevance_scores": [],
+    }
+
+
+def _document(
+    section_id: str,
+    *,
+    title: str,
+    body: str,
+    source_id: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "section_id": section_id,
+        "title": title,
+        "section_title": "Overview",
+        "description": body[:120],
+        "body": body,
+        "excerpt": body[:240],
+        "concept_id": section_id,
+        "source_id": source_id or section_id,
+    }
+
+
+def _bundle_with_documents(documents: list[dict[str, Any]]):
+    bundle = synthetic_full_production_answer_bundle()
+    lexical_index = dict(bundle.lexical_index)
+    lexical_index["documents"] = documents
+    provenance = {
+        "schema_version": "knowledge-engine-provenance/v1",
+        "release_id": bundle.release_id,
+        "records": [],
+    }
+    return replace(bundle, lexical_index=lexical_index, provenance=provenance)
+
+
+def test_a2_need_query_preserves_product_manager_subject_anchor() -> None:
+    question = "What kind of skill does a Product Manager need?"
+    focus = runtime_module._answer_bearing_query_focus(question)
+    assert focus.relation == "need"
+    assert focus.subject_terms == {"product", "manager"}
+    assert {"skill", "capability", "ability"}.issubset(focus.context_terms)
+    assert focus.subject_phrases[0] == "product manager"
+    assert "skill" not in focus.subject_phrases
+
+    documents = {
+        "mcp": _document(
+            "mcp",
+            title="Build Your Own MCP Server",
+            body=(
+                "MCP systems discuss products, managers, capabilities, skills, and what "
+                "an agent should use, but this passage is not about that job."
+            ),
+            source_id="daniel_blog_en__build-mcp-server-part-1",
+        ),
+        "harness": _document(
+            "harness",
+            title="Harness Theory Capability Engineering",
+            body=(
+                "Capability systems often separate tools, skills, hooks, plugins, and MCP. "
+                "A product label may have a manager field, but it does not describe the "
+                "job role."
+            ),
+            source_id="daniel_blog_en__harness-theory-part-5",
+        ),
+        "pm": _document(
+            "pm",
+            title="Product Manager skills",
+            body=(
+                "A Product Manager needs prioritization skill, user research judgment, "
+                "stakeholder communication, and decision trade-off skill."
+            ),
+            source_id="general_pm_skills",
+        ),
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [
+            _rerank_candidate("mcp", score=14.0, rank=1),
+            _rerank_candidate("harness", score=13.0, rank=2),
+            _rerank_candidate("pm", score=8.0, rank=3),
+        ],
+        budget=3,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked[0]["section_id"] == "pm"
+    assert len(ranked) == 1
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    harness_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["harness"],
+    )
+    assert harness_relevance["answer_bearing"] is False
+    assert harness_relevance["subject_phrase_hits"] == []
+
+    selected = runtime_module._select_evidence(
+        bundle=_bundle_with_documents(list(documents.values())),
+        lexical_result={
+            "results": [
+                {"section_id": "mcp", "score": 14.0, "citations": []},
+                {"section_id": "harness", "score": 13.0, "citations": []},
+                {"section_id": "pm", "score": 8.0, "citations": []},
+            ]
+        },
+        dense_result={"candidates": []},
+        trace_id="trace-a2-selection",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        allow_graph_expansion=False,
+    )
+    assert [item["section_id"] for item in selected] == ["pm"]
+
+
+def test_need_query_preserves_subject_anchor_for_security_engineer_capability() -> None:
+    question = "What kind of capability does a security engineer need?"
+    documents = {
+        "generic": _document(
+            "generic",
+            title="Capability catalog",
+            body=(
+                "Generic capability planning lists skills, tools, and abilities a system "
+                "may require without naming the role."
+            ),
+        ),
+        "subject": _document(
+            "subject",
+            title="Security engineer capability guidance",
+            body=(
+                "A security engineer needs incident triage capability, threat modeling, "
+                "log analysis, and careful escalation judgment."
+            ),
+        ),
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [
+            _rerank_candidate("generic", score=12.0, rank=1),
+            _rerank_candidate("subject", score=8.0, rank=2),
+        ],
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked[0]["section_id"] == "subject"
+    assert len(ranked) == 1
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    generic_relevance = runtime_module._candidate_answer_bearing_score(
+        question=question,
+        document=documents["generic"],
+    )
+    assert generic_relevance["answer_bearing"] is False
+
+
+def test_a1_skill_definition_selection_regression_keeps_small_non_graph_bundle() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    documents = [
+        _document(
+            "skill_answer",
+            title="AI agent architecture skills",
+            body=(
+                "A skill is a reusable capability an AI agent architecture can invoke "
+                "through bounded interfaces and verified inputs."
+            ),
+        ),
+        _document(
+            "loose_agent",
+            title="Agent architecture overview",
+            body="An AI agent architecture can contain routing, memory, and execution controls.",
+        ),
+    ]
+    bundle = _bundle_with_documents(documents)
+    lexical_result = {
+        "results": [
+            {"section_id": "skill_answer", "score": 12.0, "citations": []},
+            {"section_id": "loose_agent", "score": 10.0, "citations": []},
+        ]
+    }
+
+    selected = runtime_module._select_evidence(
+        bundle=bundle,
+        lexical_result=lexical_result,
+        dense_result={"candidates": []},
+        trace_id="trace-a1-regression",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        allow_graph_expansion=False,
+    )
+
+    assert 1 <= len(selected) <= 4
+    assert selected[0]["section_id"] == "skill_answer"
+    assert all("graph" not in channel for item in selected for channel in item["channels"])
+
+
+def test_required_facet_topup_cannot_bypass_present_subject_anchor() -> None:
+    question = "What kind of capability does a security engineer need?"
+    bundle = _bundle_with_documents(
+        [
+            _document(
+                "generic_capability",
+                title="Capability terms",
+                body=(
+                    "Capabilities, skills, and abilities are useful terms for systems "
+                    "that need extension points."
+                ),
+            )
+        ]
+    )
+
+    selected = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-facet-topup-subject-gate",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=4,
+    )
+
+    assert selected == []
+
+
+def test_need_query_fails_soft_without_subject_bearing_evidence() -> None:
+    question = "What kind of capability does a security engineer need?"
+    documents = {
+        "generic_capability": _document(
+            "generic_capability",
+            title="Capability terms",
+            body=(
+                "Capabilities, skills, and abilities are useful terms for systems that "
+                "need extension points."
+            ),
+        )
+    }
+
+    ranked = runtime_module._rerank_candidates(
+        [_rerank_candidate("generic_capability", score=12.0, rank=1)],
+        budget=1,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked == []
+
+
+def test_definition_reranker_prefers_subject_and_context_anchor() -> None:
+    question = "What is a capability in a planning agent architecture?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Planning agent architecture notes",
+            "section_title": "overview",
+            "body": "The planning agent architecture lists components and routes.",
+            "concept_id": "planning_agent_architecture",
+        },
+        "doc_answer": {
+            "section_id": "doc_answer",
+            "title": "Capability definition",
+            "section_title": "definition",
+            "body": (
+                "A capability is a method the agent follows in a planning agent "
+                "architecture."
+            ),
+            "concept_id": "planning_agent_architecture",
+        },
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 10.7,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+        {
+            "section_id": "doc_answer",
+            "channels": {"lexical"},
+            "score": 10.1,
+            "seed_rank": 2,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        },
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=2,
+        documents=documents,
+        question=question,
+    )
+
+    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
+    assert ranked[0]["answer_bearing_relevance"]["relation"] == "definition"
+
+
+def test_tradeoff_reranker_abstains_without_explicit_tradeoff_language() -> None:
+    question = "What trade-off does Widget Harness describe?"
+    documents = {
+        "doc_topic": {
+            "section_id": "doc_topic",
+            "title": "Widget Harness overview",
+            "section_title": "overview",
+            "body": "Widget Harness provides routing and release management for teams.",
+            "concept_id": "widget_harness",
+        }
+    }
+    candidates = [
+        {
+            "section_id": "doc_topic",
+            "channels": {"lexical"},
+            "score": 12.0,
+            "seed_rank": 1,
+            "graph_hop": 0,
+            "graph_edges": [],
+            "relation_types": set(),
+            "graph_relevance_scores": [],
+        }
+    ]
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=1,
+        documents=documents,
+        question=question,
+    )
+
+    assert ranked == []
 
 
 def test_owner_admission_blocks_retrieval_and_provider_for_public_or_non_owner() -> None:
@@ -1596,7 +2443,9 @@ def test_fas5_api_citation_shape_remains_compatible() -> None:
         gate=load_json(GATE_PATH),
         question="What should a router define for permission-first controls?",
         owner_subject_hash=OWNER_SUBJECT_HASH,
-        provider_client=ExactSpanProvider(),
+        provider_client=FastAnswerProvider(
+            "A router should define permission-first controls before execution [claim_1_ref_1]."
+        ),
         dense_channel=LocalDenseProjectionChannel(),
     )
 
@@ -1606,6 +2455,27 @@ def test_fas5_api_citation_shape_remains_compatible() -> None:
         citation
     )
     assert response["answer_claims"][0]["citation_ids"] == [citation["citation_id"]]
+
+
+def test_provider_evidence_item_is_compact_and_stable() -> None:
+    evidence = runtime_module._provider_evidence_item(_direct_semantic_evidence())
+
+    assert set(evidence) == {
+        "evidence_id",
+        "evidence_type",
+        "locator_id",
+        "source_id",
+        "source_identity",
+        "section_id",
+        "concept_id",
+        "text",
+        "text_sha256",
+        "text_role",
+        "channels",
+    }
+    assert evidence["evidence_id"] == "ev_semantic"
+    assert evidence["locator_id"] == "loc_semantic"
+    assert evidence["source_identity"] == "src_semantic"
 
 
 def test_provider_facet_ids_do_not_bypass_direct_semantic_coverage() -> None:

@@ -3,10 +3,12 @@ from __future__ import annotations
 import inspect
 import json
 import time
+from pathlib import Path
 from typing import Any
 
 import pytest
 
+from knowledge_engine import m26_aq_semantic_contract as contract
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine import m26_pa7_semantic_closure_runtime as closure_runtime
 from knowledge_engine.m26_aq_semantic_contract import (
@@ -33,7 +35,14 @@ from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _visible_semantic_failures,
 )
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
+from knowledge_engine.m26_production_promotion_closure import load_json
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
+from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
+
+ROOT = Path(__file__).resolve().parents[1]
+PILOT = ROOT / "pilot" / "m26"
+GATE_PATH = PILOT / "m26-pa-7-resolved-production-gate.json"
+OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 
 SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 
@@ -1842,6 +1851,185 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     assert closure["failures"] == []
 
 
+def test_provider_partial_without_requirement_coverage_abstains_deterministically() -> None:
+    question = (
+        "The ingestion service writes records to the datastore, but the datastore "
+        "does not initiate callbacks to the ingestion service."
+    )
+    evidence = [
+        _rich_passage(
+            "ev_datastore",
+            (
+                "The datastore persists indexed records. Operational failures usually "
+                "come from client behaviour rather than the datastore itself."
+            ),
+            "datastore-note",
+        )
+    ]
+    partial = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "partial",
+        "answer_text": (
+            "The supplied evidence mentions the datastore, but it does not verify a "
+            "callback direction."
+        ),
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+                "surface_text": (
+                    "The supplied evidence mentions the datastore, but it does not "
+                    "verify a callback direction."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": ["direct_answer"],
+            }
+        ],
+        "unanswered_dimensions": [
+            "Whether the ingestion service writes records to the datastore",
+            "Whether the datastore initiates callbacks to the ingestion service",
+        ],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([partial, partial])
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-partial-unresolved-material-gap",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_provider_partial_without_material_requirement_coverage_abstains() -> None:
+    question = (
+        "How should observability distinguish a translation failure from a sealed-M26 "
+        "downstream failure without exposing secrets?"
+    )
+    evidence = [
+        _rich_passage(
+            "ev_observability",
+            (
+                "Observability records trust-boundary metadata and omits secret-bearing "
+                "payload content."
+            ),
+            "observability-note",
+        )
+    ]
+    partial = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "partial",
+        "answer_text": (
+            "Observability should avoid logging secret-bearing payloads."
+        ),
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": (
+                    "Observability should avoid logging secret-bearing payloads."
+                ),
+                "evidence_labels": ["e1"],
+                "covers": [],
+            }
+        ],
+        "unanswered_dimensions": [],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([partial, partial])
+
+    answer, closure = _synthesize_and_verify(
+        question=question,
+        trace_id="trace-partial-no-requirement-facet",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="observability_failure_boundary",
+                instruction="Distinguish the failure boundary.",
+                evidence_terms=("observability", "boundary", "failure"),
+                visible_patterns=(r"\bobservability.{0,80}boundary",),
+            )
+        ],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
+def test_answer_candidate_without_material_requirement_facet_abstains() -> None:
+    evidence = [
+        _rich_passage(
+            "ev_router",
+            "Server-side routing inspects request metadata and policy constraints.",
+            "router-note",
+        )
+    ]
+    answer_candidate = {
+        "schema_version": "m26-fas-synthesis/v1",
+        "status": "answer",
+        "answer_text": "Server-side policy metadata is inspected.",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "Server-side policy metadata is inspected.",
+                "evidence_labels": ["e1"],
+                "covers": [],
+            }
+        ],
+        "unanswered_dimensions": [],
+        "abstention_reason": None,
+    }
+    provider = _ScriptedSemanticClosureProvider([answer_candidate, answer_candidate])
+
+    answer, closure = _synthesize_and_verify(
+        question="Explain how the router chooses a downstream provider.",
+        trace_id="trace-answer-no-requirement-facet",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[
+            SemanticRequirement(
+                requirement_id="router_decision",
+                instruction="Explain what the router inspects.",
+                evidence_terms=("router", "request", "metadata"),
+                visible_patterns=(r"\brouter.{0,80}request",),
+            )
+        ],
+        endpoint_proof={"schema_version": "test"},
+    )
+
+    assert [call_class for _, call_class in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["safe_abstention"] is True
+    assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
 def test_semantic_review_protocol_exposes_allowed_local_evidence_ids() -> None:
     question = "Explain router snapshots."
     evidence = [
@@ -2663,6 +2851,279 @@ def test_bb01_provider_abstention_recovers_to_visible_cited_route_replan_answer(
     assert len(candidate["claims"][0]["support_refs"]) >= 2
 
 
+def test_contextual_definition_query_derives_head_and_context_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = [item.requirement_id for item in requirements]
+
+    assert {"definition_head", "context_modifier"}.issubset(ids)
+    assert ids[0] == "definition_head"
+    assert ids[1] == "context_modifier"
+
+
+def test_contextual_definition_query_prioritizes_head_definition_in_compact_projection() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _passage(
+            "context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+        _passage(
+            "skill",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
+            "skill-note",
+        ),
+    ]
+    payload, label_map, snippet_map = _compact_provider_payload(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+        repair=False,
+        previous_failures=[],
+    )
+    task = json.loads(payload["messages"][0]["content"])
+    first_item = task["evidence"][0]
+
+    assert "skill" in first_item["text"].casefold()
+    assert "method" in first_item["text"].casefold()
+    assert label_map[first_item["id"]]["passage_text"].casefold().startswith("skill")
+    assert snippet_map[label_map[first_item["id"]]["evidence_id"]]
+
+
+def test_contract_routes_definition_fallback_from_semantic_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _rich_passage(
+            "ev_skill_predicate",
+            "A skill is a task-level capability wrapper.",
+            "skill-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_requirement_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["multi_evidence_verification"]["support_ref_count"] > 0
+    assert answer["citations"]
+    assert any(
+        citation["exact_quote_sha256"]
+        == sha256_bytes(b"A skill is a task-level capability wrapper.")
+        for citation in answer["citations"]
+    )
+
+
+def test_definition_fallback_requirement_bridge_accepts_mapping_shape() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    object_requirements = derive_semantic_requirements(
+        question, "direct_grounded_knowledge"
+    )
+    mapping_requirements = [
+        {"requirement_id": "definition_head", "exact_phrase": "skill"},
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+        },
+    ]
+
+    assert contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=object_requirements,
+    )
+    assert contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=mapping_requirements,
+    )
+    assert not contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=[{"exact_phrase": "skill"}],
+    )
+    assert not contract._definition_fallback_requirements_present(
+        question=question,
+        requirements=[{"requirement_id": "definition_head"}],
+    )
+
+
+def test_contract_routes_definition_fallback_from_mapping_requirements() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill is a task-level capability wrapper."
+    requirements = [
+        {
+            "requirement_id": "definition_head",
+            "exact_phrase": "skill",
+            "instruction": (
+                "State skill with a source-backed definitional predicate rather than "
+                "an invented category."
+            ),
+        },
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+            "instruction": "Keep the contextual modifier ai agent architecture explicit.",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_predicate", predicate, "skill-predicate"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_mapping_requirement_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["multi_evidence_verification"]["support_ref_count"] > 0
+    assert answer["citations"]
+    assert answer["unsupported_accepted_claims"] == 0
+    assert answer["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_contract_mapping_definition_fallback_accepts_function_predicate() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill tells the agent how to carry out a class of work."
+    requirements = [
+        {"requirement_id": "definition_head", "exact_phrase": "skill"},
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_function_predicate", predicate, "skill-note"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+
+    answer, closure = contract.synthesize_and_verify(
+        question=question,
+        trace_id="q1c_mapping_function_predicate_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=_AbstainingProvider(),
+        requirements=requirements,
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_cited_answer"
+    assert answer["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert closure["broad_deterministic_fallback_used"] is True
+    assert answer["citations"][0]["evidence_id"] == "ev_skill_function_predicate"
+    assert answer["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_contract_mapping_definition_fallback_preserves_negative_guards() -> None:
+    question = "What is a skill in an AI agent architecture?"
+    base = {
+        "question": question,
+        "intent_class": "direct_grounded_knowledge",
+        "provider_client": _AbstainingProvider(),
+        "endpoint_proof": {"required": False, "matched": False},
+    }
+    cases = [
+        (
+            [{"requirement_id": "context_modifier", "exact_phrase": "ai agent architecture"}],
+            [_rich_passage("ev_skill", "A skill is a task-level capability wrapper.", "skill")],
+        ),
+        (
+            [{"requirement_id": "definition_head", "exact_phrase": "skill"}],
+            [_rich_passage("ev_skill", "A skill is a task-level capability wrapper.", "skill")],
+        ),
+        (
+            [
+                {"requirement_id": "definition_head", "exact_phrase": "skill"},
+                {
+                    "requirement_id": "context_modifier",
+                    "exact_phrase": "ai agent architecture",
+                },
+            ],
+            [_rich_passage("ev_skill", "Skill is a broad label used in this article.", "skill")],
+        ),
+    ]
+
+    for index, (requirements, evidence) in enumerate(cases):
+        answer, closure = contract.synthesize_and_verify(
+            trace_id=f"q1c_mapping_guard_{index}",
+            evidence=evidence,
+            requirements=requirements,
+            **base,
+        )
+
+        assert answer["status"] == "owner_only_safe_abstention"
+        assert closure["broad_deterministic_fallback_used"] is False
+        assert answer["safe_abstention"] is True
+
+
+def test_contract_does_not_route_direct_intent_without_definition_requirements() -> None:
+    answer, closure = contract.synthesize_and_verify(
+        question="What operational guard keeps production unchanged?",
+        trace_id="direct_no_definition_bridge",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            _rich_passage(
+                "ev_guard",
+                "The production guard keeps canonical writes at zero.",
+                "guard-note",
+            )
+        ],
+        provider_client=_AbstainingProvider(),
+        requirements=[
+            SemanticRequirement(
+                requirement_id="production_guard",
+                instruction="State the production guard.",
+                evidence_terms=("production", "guard"),
+                visible_patterns=("production", "guard"),
+            )
+        ],
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert closure["broad_deterministic_fallback_used"] is False
+
+
 def test_bb02_supported_lifecycle_facets_recover_to_visible_answer() -> None:
     question = (
         "Why is persisted run state important when a client disconnects before "
@@ -3229,6 +3690,83 @@ def test_support_proof_recovery_publishes_into_final_response_envelope() -> None
     }
 
 
+def test_response_from_verification_mirrors_verified_citations_into_support_proof() -> None:
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            "A skill is a task method for an AI agent architecture.",
+            "skill-note",
+        ),
+    ]
+    verification = {
+        "status": "owner_only_cited_answer",
+        "terminal_status": "verified_answer_ready_candidate",
+        "answer_source": "provider_verified_runtime_bound_semantic_closure",
+        "safe_abstention": False,
+        "reason_codes": [],
+        "unsupported_accepted_claims": 0,
+        "citation_locator_valid": True,
+        "material_claim_support_verified": True,
+        "answer_text": "A skill is a task method for an AI agent architecture.",
+        "answer_claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "support_ref_count": 1,
+            }
+        ],
+        "citations": [
+            {
+                "citation_id": "claim_1_ref_1",
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "evidence_id": "ev_skill",
+                "evidence_type": "passage",
+                "locator_id": evidence[0]["locator_id"],
+                "source_id": evidence[0]["source_id"],
+                "source_identity": evidence[0]["source_identity"],
+                "section_id": evidence[0]["section_id"],
+                "concept_id": evidence[0]["concept_id"],
+                "release_id": evidence[0]["release_id"],
+                "source_locator": f"{evidence[0]['artifact_key']}#{evidence[0]['section_id']}",
+                "support_text_sha256": evidence[0]["passage_text_sha256"],
+                "exact_quote_sha256": sha256_bytes(
+                    evidence[0]["passage_text"].encode("utf-8")
+                ),
+                "source_artifact_sha256": evidence[0]["artifact_sha256"],
+                "provenance_record_sha256": evidence[0]["provenance_record_sha256"],
+                "runtime_owned_locator": True,
+            }
+        ],
+        "multi_evidence_verification": {"support_ref_count": 1},
+    }
+
+    response = _response_from_verification(
+        gate={"self_sha256": "gate-sha"},
+        bundle=None,
+        dense_result=None,
+        lexical_result=None,
+        evidence=evidence,
+        verification=verification,
+        trace_id="trace-support-proof-mirror",
+        question_sha="q" * 64,
+        started=time.monotonic(),
+        intent_class="direct_grounded_knowledge",
+        semantic_closure={
+            "failures": [],
+            "support_proof": [],
+            "semantic_contract": {"fingerprint": "fixture-fingerprint"},
+        },
+    )
+
+    assert response["semantic_closure"]["mirrored_verified_support_proof"] is True
+    assert response["semantic_closure"]["support_proof"]
+    assert response["semantic_closure"]["support_proof"][0]["evidence_id"] == "ev_skill"
+    assert response["semantic_closure"]["support_proof"][0]["exact_quote_sha256"] == sha256_bytes(
+        evidence[0]["passage_text"].encode("utf-8")
+    )
+
+
 def test_support_proof_recovery_publishes_two_facet_lifecycle_response() -> None:
     question = (
         "How should a long-running controlled agent recover after a client disconnect "
@@ -3293,6 +3831,361 @@ def test_support_proof_recovery_publishes_two_facet_lifecycle_response() -> None
         "durable",
         "completion",
     }
+
+
+def _stub_public_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    evidence: list[dict[str, Any]],
+    dense_http_status: int = 429,
+) -> None:
+    lexical_result = {
+        "backend_identity": {
+            "backend": "test_lexical_primary",
+            "availability": "available",
+            "degraded": False,
+        },
+        "results": [],
+    }
+    dense_result = {
+        "backend_identity": {
+            "backend": "test_dense",
+            "availability": "unavailable",
+            "degraded": True,
+            "reason_code": "DENSE_TRANSIENT_UNAVAILABLE",
+            "http_status": dense_http_status,
+        },
+        "candidates": [],
+    }
+    monkeypatch.setattr(
+        contract.legacy,
+        "_run_lexical_primary_retrieval",
+        lambda **kwargs: (lexical_result, dense_result),
+    )
+    monkeypatch.setattr(
+        contract.legacy,
+        "_select_evidence",
+        lambda **kwargs: list(evidence),
+    )
+    monkeypatch.setattr(
+        contract.runtime,
+        "_strengthen_evidence",
+        lambda **kwargs: (list(evidence), {"required": False, "matched": False}),
+    )
+    monkeypatch.setattr(
+        contract,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
+
+
+def test_public_contract_recovers_supported_answer_after_provider_abstention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    evidence = [
+        _rich_passage(
+            "ev_durable",
+            "Persisted server-side state preserves run progress after a client disconnect.",
+            "durable-note",
+        ),
+        _rich_passage(
+            "ev_completion",
+            (
+                "Completion verification and acceptance checks happen before the system "
+                "declares terminal success."
+            ),
+            "completion-note",
+        ),
+        _rich_passage(
+            "ev_observability",
+            "Observability exposes status and reattachment for the continuing run.",
+            "observability-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
+    assert response["provider_call_count"] == 2
+    assert response["safe_abstention"] is False
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["evidence_utilization_trace"]["selected_evidence_count"] == 3
+    assert response["evidence_utilization_trace"]["used_evidence_count"] > 0
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"]
+    lowered = response["answer_text"].casefold()
+    assert "persisted run state matters after a client disconnect" in lowered
+    assert "durable server-side state preserves run progress" in lowered
+
+
+def test_public_contract_recovers_definition_answer_after_provider_abstention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            (
+                "Skill | What method should the agent follow for this class of task? "
+                "SOP, tool order, decision rules, acceptance criteria."
+            ),
+            "skill-note",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert response["provider_call_count"] == 2
+    assert response["safe_abstention"] is False
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["evidence_utilization_trace"]["selected_evidence_count"] == 2
+    assert response["evidence_utilization_trace"]["used_evidence_count"] > 0
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"]
+    lowered = response["answer_text"].casefold()
+    assert "skill" in lowered
+    assert "architecture" in lowered
+
+
+def test_public_contract_definition_fallback_accepts_mapping_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill is a task-level capability wrapper."
+    requirements = [
+        {
+            "requirement_id": "definition_head",
+            "exact_phrase": "skill",
+            "instruction": (
+                "State skill with a source-backed definitional predicate rather than "
+                "an invented category."
+            ),
+        },
+        {
+            "requirement_id": "context_modifier",
+            "exact_phrase": "ai agent architecture",
+            "instruction": "Keep the contextual modifier ai agent architecture explicit.",
+        },
+    ]
+    evidence = [
+        _rich_passage("ev_skill_predicate", predicate, "skill-predicate"),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+    monkeypatch.setattr(
+        contract,
+        "derive_semantic_requirements",
+        lambda *_args, **_kwargs: list(requirements),
+    )
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert response["safe_abstention"] is False
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
+    assert response["multi_evidence_verification"]["support_ref_count"] > 0
+    assert response["semantic_closure"]["support_proof"]
+    assert response["unsupported_accepted_claims"] == 0
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_public_contract_preserves_safe_abstention_without_source_backed_definition_predicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill",
+            "Skill is a broad label used in this article.",
+            "skill-note",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["semantic_closure"]["support_proof"] == []
+
+
+def test_public_contract_definition_fallback_uses_selected_predicate_support_proof(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    evidence = [
+        _rich_passage(
+            "ev_skill_predicate",
+            "A skill is a task-level capability wrapper.",
+            "skill-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_source"] == "deterministic_verified_evidence_synthesis"
+    assert response["semantic_closure"]["support_proof"]
+    support = response["semantic_closure"]["support_proof"][0]
+    assert support["evidence_id"] == "ev_skill_predicate"
+    assert support["locator_id"] == evidence[0]["locator_id"]
+    assert support["exact_quote_sha256"] == sha256_bytes(
+        b"A skill is a task-level capability wrapper."
+    )
+    assert response["citations"]
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        b"A skill is a task-level capability wrapper."
+    )
+
+
+def test_public_contract_definition_fallback_accepts_function_predicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    predicate = "A skill tells the agent how to carry out a class of work."
+    evidence = [
+        _rich_passage(
+            "ev_skill_function_predicate",
+            predicate,
+            "skill-function-predicate",
+        ),
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["semantic_closure"]["support_proof"]
+    assert response["citations"][0]["evidence_id"] == "ev_skill_function_predicate"
+    assert response["citations"][0]["exact_quote_sha256"] == sha256_bytes(
+        predicate.encode("utf-8")
+    )
+
+
+def test_public_contract_definition_fallback_rejects_article_title_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = "What is a skill in an AI agent architecture?"
+    article_title = _rich_passage("ev_title", "Skill", "skill-title")
+    article_title["section_id"] = article_title["concept_id"]
+    evidence = [
+        article_title,
+        _rich_passage(
+            "ev_context",
+            "An AI agent architecture keeps the skill layer separate from routing.",
+            "context-note",
+        ),
+    ]
+    _stub_public_retrieval(monkeypatch, evidence=evidence)
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["semantic_closure"]["support_proof"] == []
+
+
+def test_public_contract_preserves_safe_abstention_without_selected_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    _stub_public_retrieval(monkeypatch, evidence=[])
+
+    response = contract.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question=question,
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=_AbstainingProvider(),
+    )
+
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_call_count"] == 0
+    assert response["reason_codes"] == ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"]
+    assert response["selected_evidence_count"] == 0
+    assert response["semantic_closure"]["support_proof"] == []
 
 
 def test_bb10_supported_lifecycle_facets_recover_to_visible_answer() -> None:
