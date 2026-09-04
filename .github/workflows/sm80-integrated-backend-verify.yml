@@ -1,0 +1,187 @@
+name: SM80 Integrated Backend Candidate Verify
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/m26-console-gate-a-repair-a-contract-convergence-20260904
+
+permissions:
+  contents: write
+
+jobs:
+  converge-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Fetch accepted page heads
+        shell: bash
+        run: |
+          for sha in \
+            8adf7191d201d94a8a17d320250cf0e8379643b3 \
+            f93c4be2c7f943571cb7fdcc095a029b4b267203 \
+            e1b7680259baca5ecc8d0d39f7ee0e3c37c50562 \
+            5da07c34eaac1d859cf6e28f3be5edd7041a1c0f \
+            d01965194fb3c9388c7554638a74fe09c75e4d3e \
+            b0e1292948612d314e8900af2082b1ac0f709d45 \
+            8a6d0d98ea5cc5b50e1ca892360f927601f4b4fd \
+            a2f1ef4af9dc199953e3392bc793246412675509 \
+            c6064af59fe022e1e04a77f894b4485151a1b62d \
+            35c0a324044b4f7a88a9e532577d7076431f43dc \
+            5f2779aed2e7d38b2c29d08c77e00b1c4db573e0 \
+            9aad8fe16b890d386114e9d4eebd6af74e235142; do
+            git fetch --no-tags origin "$sha"
+          done
+      - name: Assemble bounded integrated product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPAIR=cf4824a57e45dcb45a1503b36d55ff5bd34eaca7
+          git checkout --detach "$REPAIR"
+          git config user.name 'M26 Console SM80'
+          git config user.email 'sm80@users.noreply.github.com'
+          python - <<'PY'
+          import pathlib, subprocess
+          b01='7e03d03f196824049b95d0378ee13d1e28292f94'
+          repair='cf4824a57e45dcb45a1503b36d55ff5bd34eaca7'
+          lanes=[
+            ('P01',b01,'8adf7191d201d94a8a17d320250cf0e8379643b3'),
+            ('P02',repair,'f93c4be2c7f943571cb7fdcc095a029b4b267203'),
+            ('P03',repair,'e1b7680259baca5ecc8d0d39f7ee0e3c37c50562'),
+            ('P04',repair,'5da07c34eaac1d859cf6e28f3be5edd7041a1c0f'),
+            ('P05',b01,'d01965194fb3c9388c7554638a74fe09c75e4d3e'),
+            ('P06',repair,'b0e1292948612d314e8900af2082b1ac0f709d45'),
+            ('P07',b01,'8a6d0d98ea5cc5b50e1ca892360f927601f4b4fd'),
+            ('P08',b01,'a2f1ef4af9dc199953e3392bc793246412675509'),
+            ('P09',b01,'c6064af59fe022e1e04a77f894b4485151a1b62d'),
+            ('P10',repair,'35c0a324044b4f7a88a9e532577d7076431f43dc'),
+            ('P11',repair,'5f2779aed2e7d38b2c29d08c77e00b1c4db573e0'),
+            ('P12',repair,'9aad8fe16b890d386114e9d4eebd6af74e235142'),
+          ]
+          seam='src/knowledge_engine/m26_console_api.py'
+          copied={}
+          imports=[]; calls=[]
+          for lane,base,head in lanes:
+              subprocess.check_call(['git','merge-base','--is-ancestor',base,head])
+              files=subprocess.check_output(['git','diff','--name-only',base,head],text=True).splitlines()
+              for p in files:
+                  if not p or p.startswith('.github/workflows/') or p==seam:
+                      continue
+                  if p in copied:
+                      raise SystemExit(f'unexpected non-seam collision: {p} from {copied[p]} and {lane}')
+                  subprocess.check_call(['git','checkout',head,'--',p])
+                  copied[p]=lane
+              patch=subprocess.check_output(['git','diff','--unified=0',base,head,'--',seam],text=True)
+              for raw in patch.splitlines():
+                  if not raw.startswith('+') or raw.startswith('+++'):
+                      continue
+                  line=raw[1:]
+                  if line.startswith('from .') and line not in imports:
+                      imports.append(line)
+                  stripped=line.strip()
+                  if (stripped.startswith('install_') and stripped.endswith('(app)')) or stripped.startswith('app.include_router('):
+                      normalized='    '+stripped
+                      if normalized not in calls:
+                          calls.append(normalized)
+          base_text=subprocess.check_output(['git','show',f'{repair}:{seam}'],text=True)
+          lines=base_text.splitlines()
+          public_idx=next(i for i,l in enumerate(lines) if 'm26_translation_gateway_public_api' in l)
+          for line in reversed(imports): lines.insert(public_idx,line)
+          install_idx=next(i for i,l in enumerate(lines) if l.strip()=='install_admin_control_plane(app)')+1
+          for line in reversed(calls): lines.insert(install_idx,line)
+          pathlib.Path(seam).write_text('\n'.join(lines)+'\n')
+          print('COPIED_PATHS',len(copied))
+          for p,lane in sorted(copied.items()): print(lane,p)
+          print('UNION_IMPORTS')
+          print('\n'.join(imports))
+          print('UNION_CALLS')
+          print('\n'.join(calls))
+          if len(lanes)!=12 or len(calls)!=12:
+              raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
+          PY
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+          python -m ruff format src/knowledge_engine/m26_console_api.py
+          git add -A
+          if git diff --cached --name-only | grep -E '^\.github/workflows/'; then echo 'verifier workflow leaked into product tree'; exit 1; fi
+          if git diff --cached --name-only | grep -E '^openapi/CANONICAL_ADMIN_API_OPENAPI.yaml$'; then echo 'canonical OpenAPI unexpectedly changed'; exit 1; fi
+          git commit -m 'M26 Console SM80: converge P01-P12 backend candidate'
+          echo "CANDIDATE_SHA=$(git rev-parse HEAD)" | tee candidate.env
+          test "$(git rev-parse HEAD^)" = "$REPAIR"
+          git diff --name-status "$REPAIR" HEAD | tee candidate-diff.txt
+      - name: Focused lint and format
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(git diff --name-only HEAD^ HEAD -- 'src/knowledge_engine/*.py' 'tests/test_m26*.py' | tr '\n' ' ')
+          python -m ruff check $files
+          python -m ruff format --check $files
+          python -m compileall -q src/knowledge_engine
+      - name: Integrated console backend tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src pytest -q \
+            tests/test_m26_admin_control_plane.py \
+            tests/test_m26_admin_overview.py \
+            tests/test_m26_admin_ingestion.py \
+            tests/test_m26_admin_corpus.py \
+            tests/test_m26_admin_qa.py \
+            tests/test_m26_console_p05_ask_playground.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_m26_admin_usage.py \
+            tests/test_m26_admin_health.py \
+            tests/test_m26_jobs_rollback_api.py \
+            tests/test_m26_golden_questions_admin.py \
+            tests/test_m26_admin_settings.py \
+            tests/test_m26_admin_audit.py
+      - name: Public Ask and Admin route non-regression smoke
+        shell: bash
+        run: |
+          PYTHONPATH=src python - <<'PY'
+          from knowledge_engine.m26_console_api import create_app
+          app=create_app()
+          route_methods={(r.path,tuple(sorted(getattr(r,'methods',[]) or []))) for r in app.routes}
+          assert any(path=='/v1/answers' and 'POST' in methods for path,methods in route_methods), route_methods
+          expected={
+            '/v1/admin/overview','/v1/admin/ingestion/preflight','/v1/admin/corpus',
+            '/v1/admin/qa/events','/v1/admin/playground/retrieve','/v1/admin/suggested-questions',
+            '/v1/admin/usage','/v1/admin/health','/v1/admin/jobs','/v1/admin/evaluations/golden',
+            '/v1/admin/settings','/v1/admin/audit-log'
+          }
+          paths={r.path for r in app.routes}
+          missing=sorted(p for p in expected if p not in paths)
+          assert not missing, missing
+          print('PUBLIC_ASK_ROUTE_PRESENT=1')
+          print('EXPECTED_ADMIN_ROUTE_SURFACES_PRESENT=12')
+          PY
+      - name: Shared contract guardrails
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then
+            echo 'forbidden generic QA score semantics found'; exit 1
+          fi
+          git diff --exit-code HEAD^ HEAD -- openapi/CANONICAL_ADMIN_API_OPENAPI.yaml
+      - name: Exact candidate tree must remain clean
+        run: test -z "$(git status --porcelain)"
+      - name: Push exact tested candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push --force origin HEAD:refs/heads/m26-console/sm80-page-convergence-20260905
+          git rev-parse HEAD | tee candidate-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sm80-integrated-backend-evidence
+          path: |
+            candidate.env
+            candidate-sha.txt
+            candidate-diff.txt
+            src/knowledge_engine/m26_console_api.py
