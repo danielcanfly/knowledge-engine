@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import ast
+import asyncio
 import base64
 import hashlib
 import json
@@ -10,13 +10,14 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import Request as URLRequest, urlopen
+from urllib.request import Request as URLRequest
+from urllib.request import urlopen
 
 from fastapi import APIRouter, FastAPI, Request
 from pydantic import BaseModel, field_validator
 
-from .m26_admin_control_plane import AdminAPIError, request_id_from, require_capability
 from .m26_admin_contract import utc_now
+from .m26_admin_control_plane import AdminAPIError, request_id_from, require_capability
 
 DEFAULT_REPOSITORY = "danielcanfly/daniel-blog"
 DEFAULT_SOURCE_PATH = "src/data/m26-home-suggested-questions.mjs"
@@ -110,7 +111,8 @@ class GitHubSuggestedQuestionsSource:
         if not self.token:
             raise SuggestedQuestionsSourceUnavailable(
                 "SUGGESTED_QUESTIONS_SOURCE_CREDENTIAL_UNAVAILABLE",
-                "Server-side GitHub read credential is not configured for the private publication source.",
+                "Server-side GitHub read credential is not configured "
+                "for the private publication source.",
             )
         request = URLRequest(
             url,
@@ -196,7 +198,9 @@ class GitHubSuggestedQuestionsSource:
         )
 
 
-def _question_record(text: str, index: int, snapshot: SuggestedQuestionsSnapshot) -> dict[str, Any]:
+def _question_record(
+    text: str, index: int, snapshot: SuggestedQuestionsSnapshot
+) -> dict[str, Any]:
     stable_id = "sq_" + hashlib.sha256(text.encode()).hexdigest()[:16]
     return {
         "id": stable_id,
@@ -213,7 +217,9 @@ def _question_record(text: str, index: int, snapshot: SuggestedQuestionsSnapshot
     }
 
 
-def _available_envelope(request: Request, snapshot: SuggestedQuestionsSnapshot) -> dict[str, Any]:
+def _available_envelope(
+    request: Request, snapshot: SuggestedQuestionsSnapshot
+) -> dict[str, Any]:
     return {
         "request_id": request_id_from(request),
         "availability": {"status": "available", "reason_code": None, "detail": None},
@@ -253,7 +259,9 @@ def _available_envelope(request: Request, snapshot: SuggestedQuestionsSnapshot) 
 
 
 def _unavailable_envelope(
-    request: Request, source: GitHubSuggestedQuestionsSource, exc: SuggestedQuestionsSourceUnavailable
+    request: Request,
+    source: GitHubSuggestedQuestionsSource,
+    exc: SuggestedQuestionsSourceUnavailable,
 ) -> dict[str, Any]:
     return {
         "request_id": request_id_from(request),
