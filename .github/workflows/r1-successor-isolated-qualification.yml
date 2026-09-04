@@ -12,9 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Prove frozen parent ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor f96161ca191ea33cd90c7b9544df2a36451c5599 HEAD
+          test "$(git rev-list --parents -n 1 164b660a9e4c5f1724d7f3584712d185bef3cc1a | awk '{print $2}')" = 'f96161ca191ea33cd90c7b9544df2a36451c5599'
       - name: Install package
         run: python -m pip install -e .
       - name: Fetch frozen non-production 180-source candidate assets
