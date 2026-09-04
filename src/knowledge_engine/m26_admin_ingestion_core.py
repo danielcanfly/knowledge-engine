@@ -204,7 +204,11 @@ class InMemoryIngestionAdapter:
 
     def get_job(self, job_id: str) -> ReadObservation:
         match = next(
-            (item for item in self.jobs if item.get("job_id") == job_id or item.get("operation_id") == job_id),
+            (
+                item
+                for item in self.jobs
+                if item.get("job_id") == job_id or item.get("operation_id") == job_id
+            ),
             None,
         )
         if match is None:
@@ -235,9 +239,13 @@ class InMemoryIngestionAdapter:
                 "source_revision": self.source_revision,
                 "manifest_diff": {
                     "added": sorted(set(source) - set(current)),
-                    "changed": sorted(k for k in source.keys() & current.keys() if source[k] != current[k]),
+                    "changed": sorted(
+                        k for k in source.keys() & current.keys() if source[k] != current[k]
+                    ),
                     "deleted": sorted(set(current) - set(source)),
-                    "unchanged": sorted(k for k in source.keys() & current.keys() if source[k] == current[k]),
+                    "unchanged": sorted(
+                        k for k in source.keys() & current.keys() if source[k] == current[k]
+                    ),
                 },
                 "observed_at": utc_now(),
                 "production_write_attempts": 0,
@@ -269,7 +277,12 @@ class InMemoryIngestionAdapter:
 
     def confirm_job(self, operation_id: str, request: ConfirmJobRequest) -> None:
         dry_run = next(
-            (item for item in reversed(self.jobs) if item.get("kind") == "dry_run" and item.get("dry_run_id") == request.dry_run_id),
+            (
+                item
+                for item in reversed(self.jobs)
+                if item.get("kind") == "dry_run"
+                and item.get("dry_run_id") == request.dry_run_id
+            ),
             None,
         )
         if dry_run is None or dry_run.get("dry_run_digest") != request.dry_run_digest:
@@ -317,6 +330,10 @@ class InMemoryIngestionAdapter:
     def _normalize_document(item: Mapping[str, Any]) -> dict[str, str]:
         document_id = str(item.get("document_id", "")).strip()
         digest = str(item.get("digest", "")).strip().lower()
-        if not document_id or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        if (
+            not document_id
+            or len(digest) != 64
+            or any(ch not in "0123456789abcdef" for ch in digest)
+        ):
             raise ValueError("documents require document_id and lowercase sha256 digest")
         return {"document_id": document_id, "digest": digest}
