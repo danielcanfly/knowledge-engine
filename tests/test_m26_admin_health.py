@@ -203,6 +203,54 @@ def test_healthy_claim_without_observation_time_fails_closed() -> None:
     assert qdrant["availability"]["reason_code"] == "SYSTEM_HEALTH_OBSERVATION_TIME_REQUIRED"
 
 
+def test_naive_timestamp_is_not_authoritative_health_evidence() -> None:
+    observations = healthy_external_observations()
+    observations["metadata"] = {
+        "status": "healthy",
+        "source": "qualified_metadata_probe",
+        "observed_at": "2026-09-05T01:00:00",
+        "freshness": "live",
+        "detail": "Timestamp intentionally lacks timezone evidence.",
+    }
+    payload = TestClient(make_app(StaticHealthObserver(observations))).get(
+        "/v1/admin/health", headers=admin_headers()
+    ).json()
+
+    metadata = dependency(payload, "metadata")
+    assert metadata["status"] == "unknown"
+    assert metadata["observed_at"] is None
+    assert metadata["availability"]["reason_code"] == "SYSTEM_HEALTH_OBSERVATION_TIME_REQUIRED"
+
+
+def test_healthy_claim_with_unknown_freshness_fails_closed() -> None:
+    observations = healthy_external_observations()
+    observations["r2"] = {
+        "status": "healthy",
+        "source": "qualified_r2_probe",
+        "observed_at": "2026-09-05T01:00:00Z",
+        "freshness": "mystery",
+        "detail": "Freshness intentionally invalid.",
+    }
+    payload = TestClient(make_app(StaticHealthObserver(observations))).get(
+        "/v1/admin/health", headers=admin_headers()
+    ).json()
+
+    r2 = dependency(payload, "r2")
+    assert r2["status"] == "unknown"
+    assert r2["availability"]["status"] == "partial"
+    assert r2["availability"]["reason_code"] == "SYSTEM_HEALTH_FRESHNESS_REQUIRED"
+
+
+def test_non_finite_latency_is_dropped() -> None:
+    observations = healthy_external_observations()
+    observations["qdrant"]["latency_ms"] = float("nan")
+    payload = TestClient(make_app(StaticHealthObserver(observations))).get(
+        "/v1/admin/health", headers=admin_headers()
+    ).json()
+
+    assert dependency(payload, "qdrant")["latency_ms"] is None
+
+
 def test_observer_exception_is_fail_closed_and_does_not_leak_error_text() -> None:
     response = TestClient(make_app(ExplodingObserver())).get(
         "/v1/admin/health", headers=admin_headers()
