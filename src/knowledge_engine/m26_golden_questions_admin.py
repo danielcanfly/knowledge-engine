@@ -315,7 +315,11 @@ def golden_router() -> APIRouter:
     @router.get("/evaluations/golden", operation_id="listGoldenSets")
     async def list_golden_sets(request: Request) -> dict[str, Any]:
         require_capability(request, GOLDEN_READ_CAPABILITY)
-        provider = getattr(request.app.state, "admin_golden_evaluation_provider", UnavailableGoldenEvaluationProvider())
+        provider = getattr(
+            request.app.state,
+            "admin_golden_evaluation_provider",
+            UnavailableGoldenEvaluationProvider(),
+        )
         try:
             raw = provider.list_golden_sets(request)
         except Exception:
@@ -332,7 +336,11 @@ def golden_router() -> APIRouter:
     @router.get("/evaluations/runs", operation_id="listEvaluationRuns")
     async def list_evaluation_runs(request: Request) -> dict[str, Any]:
         require_capability(request, RUNS_READ_CAPABILITY)
-        provider = getattr(request.app.state, "admin_golden_evaluation_provider", UnavailableGoldenEvaluationProvider())
+        provider = getattr(
+            request.app.state,
+            "admin_golden_evaluation_provider",
+            UnavailableGoldenEvaluationProvider(),
+        )
         try:
             raw = provider.list_evaluation_runs(request)
         except Exception:
@@ -378,9 +386,9 @@ def golden_router() -> APIRouter:
             status_code=409,
             code=RUN_REQUEST_SCHEMA_REASON,
             message=(
-                "The frozen canonical startEvaluationRun operation has no request schema for dataset, "
-                "release, or selected/all identity. Starting a run is fail-closed until the shared "
-                "contract is repaired."
+                "The frozen canonical startEvaluationRun operation has no request schema "
+                "for dataset, release, or selected/all identity. Starting a run is "
+                "fail-closed until the shared contract is repaired."
             ),
             details={"canonical_openapi_version": CANONICAL_OPENAPI_VERSION},
         )
