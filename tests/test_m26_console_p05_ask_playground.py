@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from knowledge_engine.m26_admin_control_plane import AdminActor
 from knowledge_engine import m26_console_p05_ask_playground as p05
+from knowledge_engine.m26_admin_control_plane import AdminActor
 
 
 OWNER = AdminActor(
@@ -235,7 +235,9 @@ def test_exception_reason_code_prefers_stable_runtime_code() -> None:
         reason_code = "PA7_DENSE_BACKEND_INVALID"
 
     assert (
-        p05._exception_reason_code(RuntimeFailure("boom"), "PLAYGROUND_RETRIEVAL_FAILED")
+        p05._exception_reason_code(
+            RuntimeFailure("boom"), "PLAYGROUND_RETRIEVAL_FAILED"
+        )
         == "PA7_DENSE_BACKEND_INVALID"
     )
 
