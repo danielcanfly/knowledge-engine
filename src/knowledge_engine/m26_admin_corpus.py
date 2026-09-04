@@ -329,9 +329,9 @@ def install_admin_corpus(
     @router.get("/corpus", operation_id="listCorpus")
     async def list_corpus(
         request: Request,
-        q: str | None = Query(default=None, max_length=200),
-        state: str | None = None,
-        language: str | None = None,
+        q: str = Query(default=None, max_length=200),
+        state: str = None,
+        language: str = None,
     ) -> dict[str, Any]:
         snapshot, rows = service.read()
         rows = _filter_rows(rows, q=q, state=state, language=language)
