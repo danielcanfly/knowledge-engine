@@ -65,52 +65,38 @@ jobs:
             ('P12',repair,'9aad8fe16b890d386114e9d4eebd6af74e235142'),
           ]
           seam='src/knowledge_engine/m26_console_api.py'
-          copied={}
-          imports=[]; calls=[]
+          copied={}; imports=[]; calls=[]
           for lane,base,head in lanes:
               subprocess.check_call(['git','merge-base','--is-ancestor',base,head])
-              files=subprocess.check_output(['git','diff','--name-only',base,head],text=True).splitlines()
-              for p in files:
+              for p in subprocess.check_output(['git','diff','--name-only',base,head],text=True).splitlines():
                   if not p or p.startswith('.github/workflows/') or p==seam:
                       continue
                   if p in copied:
                       raise SystemExit(f'unexpected non-seam collision: {p} from {copied[p]} and {lane}')
-                  subprocess.check_call(['git','checkout',head,'--',p])
-                  copied[p]=lane
+                  subprocess.check_call(['git','checkout',head,'--',p]); copied[p]=lane
               patch=subprocess.check_output(['git','diff','--unified=0',base,head,'--',seam],text=True)
               for raw in patch.splitlines():
-                  if not raw.startswith('+') or raw.startswith('+++'):
-                      continue
-                  line=raw[1:]
-                  if line.startswith('from .') and line not in imports:
-                      imports.append(line)
-                  stripped=line.strip()
-                  if (stripped.startswith('install_') and stripped.endswith('(app)')) or stripped.startswith('app.include_router('):
+                  if not raw.startswith('+') or raw.startswith('+++'): continue
+                  line=raw[1:]; stripped=line.strip()
+                  if line.startswith('from .') and line not in imports: imports.append(line)
+                  if ((stripped.startswith('install_') and stripped.endswith('(app)')) or stripped.startswith('app.include_router(')):
                       normalized='    '+stripped
-                      if normalized not in calls:
-                          calls.append(normalized)
-          base_text=subprocess.check_output(['git','show',f'{repair}:{seam}'],text=True)
-          lines=base_text.splitlines()
+                      if normalized not in calls: calls.append(normalized)
+          if len(calls)!=12: raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
+          lines=subprocess.check_output(['git','show',f'{repair}:{seam}'],text=True).splitlines()
           public_idx=next(i for i,l in enumerate(lines) if 'm26_translation_gateway_public_api' in l)
           for line in reversed(imports): lines.insert(public_idx,line)
           install_idx=next(i for i,l in enumerate(lines) if l.strip()=='install_admin_control_plane(app)')+1
           for line in reversed(calls): lines.insert(install_idx,line)
           pathlib.Path(seam).write_text('\n'.join(lines)+'\n')
-          print('COPIED_PATHS',len(copied))
-          for p,lane in sorted(copied.items()): print(lane,p)
-          print('UNION_IMPORTS')
-          print('\n'.join(imports))
-          print('UNION_CALLS')
-          print('\n'.join(calls))
-          if len(lanes)!=12 or len(calls)!=12:
-              raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
+          print('COPIED_PATHS',len(copied)); print('UNION_CALLS',len(calls))
           PY
-          python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
+          python -m ruff check --fix src/knowledge_engine/m26_console_api.py
           python -m ruff format src/knowledge_engine/m26_console_api.py
           git add -A
-          if git diff --cached --name-only | grep -E '^\.github/workflows/'; then echo 'verifier workflow leaked into product tree'; exit 1; fi
-          if git diff --cached --name-only | grep -E '^openapi/CANONICAL_ADMIN_API_OPENAPI.yaml$'; then echo 'canonical OpenAPI unexpectedly changed'; exit 1; fi
+          test -z "$(git diff --cached --name-only | grep -E '^\.github/workflows/' || true)"
+          test -z "$(git diff --cached --name-only | grep -E '^openapi/CANONICAL_ADMIN_API_OPENAPI.yaml$' || true)"
           git commit -m 'M26 Console SM80: converge P01-P12 backend candidate'
           echo "CANDIDATE_SHA=$(git rev-parse HEAD)" | tee candidate.env
           test "$(git rev-parse HEAD^)" = "$REPAIR"
@@ -126,7 +112,6 @@ jobs:
       - name: Integrated console backend tests
         shell: bash
         run: |
-          set -euo pipefail
           PYTHONPATH=src pytest -q \
             tests/test_m26_admin_control_plane.py \
             tests/test_m26_admin_overview.py \
@@ -147,16 +132,11 @@ jobs:
           PYTHONPATH=src python - <<'PY'
           from knowledge_engine.m26_console_api import create_app
           app=create_app()
-          route_methods={(r.path,tuple(sorted(getattr(r,'methods',[]) or []))) for r in app.routes}
-          assert any(path=='/v1/answers' and 'POST' in methods for path,methods in route_methods), route_methods
-          expected={
-            '/v1/admin/overview','/v1/admin/ingestion/preflight','/v1/admin/corpus',
-            '/v1/admin/qa/events','/v1/admin/playground/retrieve','/v1/admin/suggested-questions',
-            '/v1/admin/usage','/v1/admin/health','/v1/admin/jobs','/v1/admin/evaluations/golden',
-            '/v1/admin/settings','/v1/admin/audit-log'
-          }
+          methods={(r.path,tuple(sorted(getattr(r,'methods',[]) or []))) for r in app.routes}
+          assert any(p=='/v1/answers' and 'POST' in m for p,m in methods)
           paths={r.path for r in app.routes}
-          missing=sorted(p for p in expected if p not in paths)
+          expected={'/v1/admin/overview','/v1/admin/ingestion/preflight','/v1/admin/corpus','/v1/admin/qa/events','/v1/admin/playground/retrieve','/v1/admin/suggested-questions','/v1/admin/usage','/v1/admin/health','/v1/admin/jobs','/v1/admin/evaluations/golden','/v1/admin/settings','/v1/admin/audit-log'}
+          missing=sorted(expected-paths)
           assert not missing, missing
           print('PUBLIC_ASK_ROUTE_PRESENT=1')
           print('EXPECTED_ADMIN_ROUTE_SURFACES_PRESENT=12')
@@ -165,16 +145,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then
-            echo 'forbidden generic QA score semantics found'; exit 1
-          fi
+          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then exit 1; fi
           git diff --exit-code HEAD^ HEAD -- openapi/CANONICAL_ADMIN_API_OPENAPI.yaml
-      - name: Exact candidate tree must remain clean
-        run: test -z "$(git status --porcelain)"
       - name: Push exact tested candidate
         shell: bash
         run: |
           set -euo pipefail
+          test -z "$(git status --porcelain)"
           git push --force origin HEAD:refs/heads/m26-console/sm80-page-convergence-20260905
           git rev-parse HEAD | tee candidate-sha.txt
       - uses: actions/upload-artifact@v4
