@@ -1,49 +1,82 @@
-name: Deploy Oracle VM
+name: M26 Daily IP Rate Limit Promotion Stager
 
 on:
   workflow_dispatch:
     inputs:
-      git_sha:
-        description: Commit SHA, branch, or tag to deploy
+      confirmation:
+        description: Type PROMOTE-M26-DAILY-IP-RATE-LIMIT
         required: true
-        default: main
+        type: string
+      accepted_release_sha:
+        description: Exact accepted backend runtime SHA
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: production-oracle
+  group: m26-daily-ip-rate-limit-production-stager
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  stage:
+    if: inputs.confirmation == 'PROMOTE-M26-DAILY-IP-RATE-LIMIT'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: production
     env:
+      EXPECTED_RELEASE_SHA: d9fb0e544a94656f285134814e57d91fbcd830c2
+      CURRENT_CONTAINER: m26-public-api-production-repair2-ownerhash-r2-auth-520aed
+      EXPECTED_CURRENT_IMAGE: sha256:fe246e352f30af7fe8fdd02b756d7abd1cb6d6ca6e2fd922ff730ed1686273ec
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
-      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git_sha }}
-      - name: Require deployment configuration
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+      - name: Validate dispatch authority
+        shell: bash
         run: |
           set -euo pipefail
-          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
-            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          test "${{ inputs.accepted_release_sha }}" = "$EXPECTED_RELEASE_SHA"
+          test "${{ inputs.confirmation }}" = "PROMOTE-M26-DAILY-IP-RATE-LIMIT"
+
+      - name: Checkout exact accepted backend runtime
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.accepted_release_sha }}
+          path: runtime-src
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd runtime-src
+          test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
+          test -f src/knowledge_engine/m26_daily_ip_rate_limit.py
+          grep -F 'knowledge_engine.m26_translation_gateway_public_api:app' src/knowledge_engine/m26_translation_gateway_public_api.py >/dev/null || true
+
+      - name: Require secure production inputs
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+          OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
+          IP_HASH_SECRET: ${{ secrets.ASK_RATE_LIMIT_IP_HASH_SECRET }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER OWNER_BYPASS_SHA IP_HASH_SECRET; do
+            test -n "${!name:-}" || { echo "missing required input: $name" >&2; exit 2; }
           done
+          python3 - <<'PY'
+          import os, re
+          owner = os.environ["OWNER_BYPASS_SHA"].strip().lower()
+          ip = os.environ["IP_HASH_SECRET"].strip()
+          assert re.fullmatch(r"[0-9a-f]{64}", owner)
+          assert len(ip) >= 32
+          print("PROMOTION_SECRET_SHAPE_GATE=PASS")
+          PY
+
       - name: Configure SSH
+        shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
         run: |
@@ -52,43 +85,130 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
-      - name: Prepare repository and production environment
-        env:
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+
+      - name: Fresh sealed production preflight
+        shell: bash
         run: |
           set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
-          umask 077
-          cat > /tmp/knowledge-engine.env <<EOF_ENV
-          APP_ENV=production
-          AUTH_MODE=$AUTH_MODE
-          JWT_ISSUER=$JWT_ISSUER
-          JWT_JWKS_URL=$JWT_JWKS_URL
-          JWT_AUDIENCE=$JWT_AUDIENCE
-          JWT_DEFAULT_AUDIENCES=public,internal
-          OBJECT_STORE_BACKEND=r2
-          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
-          R2_BUCKET=$R2_BUCKET
-          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
-          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
-          R2_REGION=auto
-          KNOWLEDGE_CHANNEL=production
-          CACHE_DIR=/var/lib/knowledge-engine/cache
-          LOG_LEVEL=INFO
-          EOF_ENV
-          scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "chmod 600 '$ORACLE_VM_DEPLOY_PATH/.env.next' && mv '$ORACLE_VM_DEPLOY_PATH/.env.next' '$ORACLE_VM_DEPLOY_PATH/.env'"
-          rm -f /tmp/knowledge-engine.env
-      - name: Deploy exact requested revision
-        env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "CURRENT_CONTAINER='$CURRENT_CONTAINER' EXPECTED_CURRENT_IMAGE='$EXPECTED_CURRENT_IMAGE' bash -s" <<'REMOTE'
+          set -euo pipefail
+          test "$(docker inspect --format '{{.Image}}' "$CURRENT_CONTAINER")" = "$EXPECTED_CURRENT_IMAGE"
+          docker inspect --format '{{json .Config.Cmd}}' "$CURRENT_CONTAINER" | grep -F 'knowledge_engine.m26_translation_gateway_public_api:app' >/dev/null
+          docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$CURRENT_CONTAINER" | grep -Fx 'unless-stopped' >/dev/null
+          docker inspect --format '{{.HostConfig.NetworkMode}}' "$CURRENT_CONTAINER" | grep -Fx 'bridge' >/dev/null
+          docker port "$CURRENT_CONTAINER" 8080/tcp | grep -F '127.0.0.1:18087' >/dev/null
+          curl --fail --silent --max-time 10 http://127.0.0.1:18087/v1/answers/health >/dev/null
+          if ss -ltn | grep -E '[:.]18089[[:space:]]' >/dev/null; then
+            echo "port 18089 is not free" >&2
+            exit 3
+          fi
+          echo "SEALED_PRODUCTION_PREFLIGHT=PASS"
+          REMOTE
+
+      - name: Build exact accepted image
+        shell: bash
         run: |
           set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+          IMAGE_TAG="m26-daily-ip-rate-limit:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
+          docker build --pull -t "$IMAGE_TAG" runtime-src
+          docker run --rm --entrypoint python "$IMAGE_TAG" - <<'PY'
+          import knowledge_engine.m26_daily_ip_rate_limit
+          import knowledge_engine.m26_translation_gateway_public_api
+          print("ACCEPTED_RUNTIME_IMPORT_GATE=PASS")
+          PY
+
+      - name: Load accepted image onto Oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker save "$IMAGE_TAG" | gzip -1 | \
+            ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'gzip -dc | docker load >/tmp/m26-daily-ip-rate-limit-docker-load.log'
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "docker image inspect '$IMAGE_TAG' >/dev/null"
+          echo "ORACLE_IMAGE_LOAD_GATE=PASS"
+
+      - name: Stage run-scoped production env without exposing values
+        shell: bash
+        env:
+          OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
+          IP_HASH_SECRET: ${{ secrets.ASK_RATE_LIMIT_IP_HASH_SECRET }}
+        run: |
+          set -euo pipefail
+          REMOTE_ENV="/tmp/m26-daily-ip-rate-limit-promotion-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.env"
+          echo "REMOTE_ENV=$REMOTE_ENV" >> "$GITHUB_ENV"
+
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "umask 077; docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' '$CURRENT_CONTAINER' > '${REMOTE_ENV}.base'; chmod 600 '${REMOTE_ENV}.base'"
+
+          fragment="$(mktemp)"
+          chmod 600 "$fragment"
+          {
+            printf 'M26_ASK_OWNER_BYPASS_TOKEN_SHA256=%s\n' "$OWNER_BYPASS_SHA"
+            printf 'M26_ASK_RATE_LIMIT_IP_HASH_SECRET=%s\n' "$IP_HASH_SECRET"
+            printf 'M26_ASK_DAILY_IP_LIMIT=10\n'
+            printf 'M26_ASK_RATE_LIMIT_DB_PATH=/var/lib/knowledge-engine/rate-limit/m26-daily-ip-rate-limit.sqlite3\n'
+            printf 'M26_ASK_RATE_LIMIT_DAY_TZ=UTC\n'
+          } > "$fragment"
+          scp "$fragment" "$ORACLE_VM_USER@$ORACLE_VM_HOST:${REMOTE_ENV}.fragment"
+          rm -f "$fragment"
+
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "REMOTE_ENV='$REMOTE_ENV' python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          path = Path(os.environ['REMOTE_ENV'])
+          base = Path(str(path) + '.base')
+          fragment = Path(str(path) + '.fragment')
+          drop = {
+              'M26_ASK_OWNER_BYPASS_TOKEN_SHA256',
+              'M26_ASK_RATE_LIMIT_IP_HASH_SECRET',
+              'M26_ASK_DAILY_IP_LIMIT',
+              'M26_ASK_RATE_LIMIT_DB_PATH',
+              'M26_ASK_RATE_LIMIT_DAY_TZ',
+          }
+          out = []
+          for line in base.read_text().splitlines():
+              if not line or '=' not in line:
+                  continue
+              key = line.split('=', 1)[0]
+              if key not in drop:
+                  out.append(line)
+          out.extend(fragment.read_text().splitlines())
+          path.write_text('\n'.join(out) + '\n')
+          os.chmod(path, 0o600)
+          values = dict(line.split('=', 1) for line in out if '=' in line)
+          assert re.fullmatch(r'[0-9a-f]{64}', values['M26_ASK_OWNER_BYPASS_TOKEN_SHA256'])
+          assert len(values['M26_ASK_RATE_LIMIT_IP_HASH_SECRET']) >= 32
+          assert values['M26_ASK_DAILY_IP_LIMIT'] == '10'
+          assert values['M26_ASK_RATE_LIMIT_DB_PATH'] == '/var/lib/knowledge-engine/rate-limit/m26-daily-ip-rate-limit.sqlite3'
+          assert values['M26_ASK_RATE_LIMIT_DAY_TZ'] == 'UTC'
+          base.unlink(missing_ok=True)
+          fragment.unlink(missing_ok=True)
+          print('RUN_SCOPED_ENV_GATE=PASS')
+          PY"
+
+      - name: Write non-secret staging receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          IMAGE_ID="$(ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "docker image inspect --format '{{.Id}}' '$IMAGE_TAG'")"
+          cat > artifacts/staging-receipt.json <<EOF
+          {
+            "accepted_release_sha": "$EXPECTED_RELEASE_SHA",
+            "image_tag": "$IMAGE_TAG",
+            "image_id": "$IMAGE_ID",
+            "remote_env_path": "$REMOTE_ENV",
+            "secret_values_recorded": false,
+            "production_container_mutated": false
+          }
+          EOF
+
+      - name: Upload non-secret staging receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-daily-ip-rate-limit-staging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/staging-receipt.json
+          if-no-files-found: error
+          retention-days: 7
