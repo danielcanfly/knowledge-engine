@@ -89,8 +89,6 @@ jobs:
                           calls.append(normalized)
           if len(calls)!=12:
               raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
-          # Canonical OpenAPI splits /ingestion/jobs by method ownership:
-          # GET list/detail are Jobs (P09), POST confirm remains Ingestion (P02).
           p02=pathlib.Path('src/knowledge_engine/m26_admin_ingestion.py')
           p02_text=p02.read_text()
           old_sig='def install_admin_ingestion_routes(app: FastAPI, *, adapter: Any | None = None) -> FastAPI:'
@@ -211,7 +209,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
+          git diff --exit-code HEAD
+          git diff --cached --exit-code HEAD
           git push --force origin HEAD:refs/heads/m26-console/sm80-page-convergence-20260905
           git rev-parse HEAD | tee candidate-sha.txt
       - uses: actions/upload-artifact@v4
