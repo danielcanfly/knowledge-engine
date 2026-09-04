@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from knowledge_engine.m26_admin_contract import AdminAPIError
@@ -8,6 +10,7 @@ from knowledge_engine.m26_admin_ingestion import (
     DryRunRequest,
     InMemoryIngestionAdapter,
     UnavailableIngestionAdapter,
+    _require_mutation_capability,
     build_dry_run_plan,
 )
 
@@ -111,3 +114,24 @@ def test_unqualified_production_adapter_is_explicitly_unavailable() -> None:
     assert observation.availability == "unavailable"
     assert observation.data is None
     assert observation.reason_code == "ADMIN_INGESTION_ADAPTER_UNQUALIFIED"
+
+
+def test_legacy_enabled_state_cannot_authorize_mutation_without_canonical_mapping() -> None:
+    legacy_gate = SimpleNamespace(
+        state="enabled",
+        reason_code="LEGACY_ENABLED",
+    )
+    provider = SimpleNamespace(get_capability=lambda _capability_id: legacy_gate)
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(admin_capability_provider=provider),
+        )
+    )
+
+    with pytest.raises(AdminAPIError) as caught:
+        _require_mutation_capability(request, "ingestion.job.confirm")
+
+    assert caught.value.status_code == 409
+    assert caught.value.code == "ADMIN_CAPABILITY_CANONICAL_MAPPING_REQUIRED"
+    assert caught.value.details["effective_state"] == "unavailable"
+    assert caught.value.details["mutation_authorized"] is False
