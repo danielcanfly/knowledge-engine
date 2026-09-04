@@ -26,4 +26,6 @@ Successful branch validation run: GitHub Actions `33890318197` on validation hea
 - Focused pytest: 24 passed, 2 dependency deprecation warnings.
 - FastAPI OpenAPI route-registration smoke: PASS.
 
-The temporary branch-only validation workflow was removed after the successful run. No deployment, DNS/Access mutation, R2/Qdrant write, or production-pointer mutation was performed.
+The product source and tests validated by that run are byte-identical to the final branch versions. Subsequent commits remove the temporary branch-only workflow and add this handoff note only.
+
+No deployment, DNS/Access mutation, R2/Qdrant write, or production-pointer mutation was performed.
