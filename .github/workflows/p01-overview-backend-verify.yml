@@ -37,5 +37,8 @@ jobs:
       - name: Focused P01 tests
         run: pytest -q tests/test_m26_admin_overview.py
 
-      - name: Repository regression gates
-        run: make ci
+      - name: Full repository pytest regression
+        run: pytest -q
+
+      - name: Compile regression
+        run: python -m compileall -q src tests scripts
