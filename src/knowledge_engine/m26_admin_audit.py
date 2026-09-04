@@ -97,12 +97,14 @@ def _freshness(value: Any) -> str:
     return value if isinstance(value, str) and value in _ALLOWED_FRESHNESS else "unknown"
 
 
-def _event_mapping(raw: AuditEvent | Mapping[str, Any]) -> Mapping[str, Any]:
-    return raw.to_payload() if isinstance(raw, AuditEvent) else raw
+def _normalize_event(raw: object) -> dict[str, Any] | None:
+    if isinstance(raw, AuditEvent):
+        value: Mapping[str, Any] = raw.to_payload()
+    elif isinstance(raw, Mapping):
+        value = raw
+    else:
+        return None
 
-
-def _normalize_event(raw: AuditEvent | Mapping[str, Any]) -> dict[str, Any] | None:
-    value = _event_mapping(raw)
     normalized: dict[str, Any] = {}
     for key in _REQUIRED_EVENT_FIELDS:
         item = _clean_string(value.get(key))
@@ -196,6 +198,12 @@ def build_audit_history_payload(request: Request) -> dict[str, Any]:
             reason_code="AUDIT_HISTORY_UNAVAILABLE",
             detail="No qualified durable audit history reader is configured.",
         )
+    if not isinstance(snapshot, AuditHistorySnapshot):
+        return _unavailable_payload(
+            request,
+            reason_code="AUDIT_HISTORY_READER_CONTRACT_INVALID",
+            detail="Audit history was withheld because the reader contract was invalid.",
+        )
 
     source = _clean_string(snapshot.source)
     if source is None:
@@ -252,7 +260,7 @@ def build_audit_history_payload(request: Request) -> dict[str, Any]:
 def audit_router() -> APIRouter:
     router = APIRouter(prefix=ADMIN_PREFIX, tags=["Audit"])
 
-    @router.get("/audit-log", operation_id="getAuditLog")
+    @router.get("/audit-log", operation_id="listAuditLog")
     async def audit_log(request: Request) -> dict[str, Any]:
         return build_audit_history_payload(request)
 
