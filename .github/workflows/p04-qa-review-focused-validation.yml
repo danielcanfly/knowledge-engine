@@ -32,5 +32,7 @@ jobs:
           set -euo pipefail
           ! grep -REn 'score_lt|score[[:space:]_-]*<|0[[:space:]]*[-–][[:space:]]*100|<85' \
             src/knowledge_engine/m26_admin_qa.py tests/test_m26_admin_qa.py
-          grep -F '/v1/admin/qa/events' src/knowledge_engine/m26_admin_qa.py
-          grep -F '/v1/admin/qa/export-markdown' src/knowledge_engine/m26_admin_qa.py
+          grep -F 'APIRouter(prefix="/v1/admin/qa"' src/knowledge_engine/m26_admin_qa.py
+          grep -F '@router.get("/events"' src/knowledge_engine/m26_admin_qa.py
+          grep -F '@router.get("/events/{trace_id}"' src/knowledge_engine/m26_admin_qa.py
+          grep -F '@router.post("/export-markdown"' src/knowledge_engine/m26_admin_qa.py
