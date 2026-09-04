@@ -1,0 +1,45 @@
+name: R1 Successor Isolated Qualification
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install package
+        run: python -m pip install -e .
+      - name: Fetch frozen non-production 180-source candidate assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r1-180
+          base='https://raw.githubusercontent.com/danielcanfly/knowledge-source/a738f20b16f10925c8adfe4d625be8db30fb269c/documents/daniel-blog-en-180-f5e20062/candidate-release'
+          curl --fail --location --retry 2 "$base/lexical-documents.jsonl" -o /tmp/r1-180/lexical-documents.jsonl
+          curl --fail --location --retry 2 "$base/semantic-inputs.jsonl" -o /tmp/r1-180/semantic-inputs.jsonl
+          printf '%s  %s\n' '1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf' /tmp/r1-180/lexical-documents.jsonl | sha256sum -c -
+          printf '%s  %s\n' '0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012' /tmp/r1-180/semantic-inputs.jsonl | sha256sum -c -
+      - name: Run first-bad-stage trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python tools/m26_r1_successor_trace.py \
+            --lexical /tmp/r1-180/lexical-documents.jsonl \
+            --semantic /tmp/r1-180/semantic-inputs.jsonl \
+            --out /tmp/r1-180/first-bad-stage.json | tee /tmp/r1-180/trace.log
+      - name: Upload trace evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: r1-successor-first-bad-stage
+          path: |
+            /tmp/r1-180/first-bad-stage.json
+            /tmp/r1-180/trace.log
+          retention-days: 7
