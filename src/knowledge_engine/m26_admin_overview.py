@@ -231,6 +231,20 @@ def _aggregate_availability(sections: Mapping[str, Mapping[str, Any]]) -> dict[s
     }
 
 
+def _aggregate_freshness(sections: Mapping[str, Mapping[str, Any]]) -> str:
+    if any(
+        section.get("availability", {}).get("status") != "available"
+        for section in sections.values()
+    ):
+        return "unknown"
+    freshness = {str(section.get("freshness", "unknown")) for section in sections.values()}
+    if len(freshness) == 1:
+        return freshness.pop()
+    if "stale" in freshness:
+        return "stale"
+    return "unknown"
+
+
 def _latest_observed_at(sections: Mapping[str, Mapping[str, Any]]) -> str | None:
     observations = [
         value
@@ -257,7 +271,7 @@ def build_overview_payload(request: Request) -> dict[str, Any]:
             "source_observed_at": _latest_observed_at(sections),
         },
         "observed_at": _latest_observed_at(sections),
-        "freshness": "near_live" if any(section["freshness"] == "live" for section in sections.values()) else "unknown",
+        "freshness": _aggregate_freshness(sections),
         "data": {"sections": sections},
     }
 
