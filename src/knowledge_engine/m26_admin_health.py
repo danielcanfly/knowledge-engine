@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from time import perf_counter
 from typing import Any, Protocol
 
@@ -107,9 +109,22 @@ def _string(value: Any) -> str | None:
 def _number(value: Any) -> float | int | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    if value < 0:
+    if value < 0 or not math.isfinite(float(value)):
         return None
     return value
+
+
+def _iso_datetime(value: Any) -> str | None:
+    candidate = _string(value)
+    if candidate is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return candidate
 
 
 def _freshness(value: Any) -> str:
@@ -133,7 +148,7 @@ def _normalize_observation(
 
     source = _string(raw.get("source"))
     raw_status = _string(raw.get("status"))
-    observed_at = _string(raw.get("observed_at"))
+    observed_at = _iso_datetime(raw.get("observed_at"))
     freshness = _freshness(raw.get("freshness"))
     error_code = _string(raw.get("error_code"))
     detail = _string(raw.get("detail")) or "No additional safe detail was returned."
@@ -155,9 +170,13 @@ def _normalize_observation(
     elif expected is not None and observed is not None and expected != observed:
         status = "warning"
         reason_code = "SYSTEM_HEALTH_IDENTITY_MISMATCH"
-    elif status == "healthy" and observed_at is None:
+
+    if status not in {"unknown", "unavailable"} and observed_at is None:
         status = "unknown"
         reason_code = "SYSTEM_HEALTH_OBSERVATION_TIME_REQUIRED"
+    elif status == "healthy" and freshness == "unknown":
+        status = "unknown"
+        reason_code = "SYSTEM_HEALTH_FRESHNESS_REQUIRED"
 
     availability = "available"
     if status == "unavailable":
@@ -317,12 +336,17 @@ def _observer_observations(
 def _aggregate_availability(rows: list[dict[str, Any]]) -> dict[str, Any]:
     states = [row["availability"]["status"] for row in rows]
     if states and all(state == "available" for state in states):
-        return _availability("available", None, "All required health observations are available.")
+        return _availability(
+            "available", None, "All required health observations are available."
+        )
     if any(state in {"available", "partial"} for state in states):
         return _availability(
             "partial",
             "SYSTEM_HEALTH_PARTIAL_DEPENDENCIES",
-            "System health is partially observable; one or more required dependencies lack qualified evidence.",
+            (
+                "System health is partially observable; one or more required "
+                "dependencies lack qualified evidence."
+            ),
         )
     return _availability(
         "unavailable",
@@ -337,7 +361,10 @@ def _aggregate_status(rows: list[dict[str, Any]]) -> str:
         return "healthy"
     if any(status in {"error", "failed"} for status in statuses):
         return "degraded"
-    if any(status in {"healthy", "warning", "degraded", "read_only"} for status in statuses):
+    if any(
+        status in {"healthy", "warning", "degraded", "read_only"}
+        for status in statuses
+    ):
         return "degraded"
     return "unknown"
 
@@ -384,7 +411,9 @@ def build_health_payload(
         "availability": _aggregate_availability(rows),
         "provenance": {
             "source": "m26_admin_system_health",
-            "resource_identity": {"dependency_keys": [item.key for item in DEPENDENCIES]},
+            "resource_identity": {
+                "dependency_keys": [item.key for item in DEPENDENCIES]
+            },
             "source_observed_at": latest,
         },
         "observed_at": latest,
