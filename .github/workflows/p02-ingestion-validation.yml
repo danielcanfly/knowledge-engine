@@ -22,12 +22,12 @@ jobs:
         run: PYTHONPATH=src pytest -q tests/test_m26_admin_ingestion.py
       - name: Ruff touched files
         run: ruff check src/knowledge_engine/m26_admin_ingestion.py src/knowledge_engine/m26_admin_ingestion_core.py tests/test_m26_admin_ingestion.py
-      - name: Console entrypoint import and route smoke
+      - name: Console entrypoint import and OpenAPI route smoke
         run: |
           PYTHONPATH=src python - <<'PY'
           from knowledge_engine.m26_console_api import create_app
           app = create_app()
-          paths = {route.path for route in app.routes}
+          paths = set(app.openapi()['paths'])
           expected = {
               '/v1/admin/index/current',
               '/v1/admin/index/audits',
