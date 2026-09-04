@@ -64,17 +64,28 @@ def _require_mutation_capability(request: Request, capability_id: str) -> None:
             message="Capability has not been qualified",
             details={"capability_id": capability_id, "effective_state": "unavailable"},
         )
-    effective_state = str(getattr(gate, "effective_state", getattr(gate, "state", "unavailable")))
-    mutation_authorized = bool(getattr(gate, "mutation_authorized", effective_state == "enabled"))
-    if effective_state != "enabled" or not mutation_authorized:
+    effective_state = getattr(gate, "effective_state", None)
+    mutation_authorized = getattr(gate, "mutation_authorized", None)
+    if effective_state is None or mutation_authorized is None:
+        raise AdminAPIError(
+            status_code=409,
+            code="ADMIN_CAPABILITY_CANONICAL_MAPPING_REQUIRED",
+            message="Canonical capability mapping is required before mutation",
+            details={
+                "capability_id": capability_id,
+                "effective_state": "unavailable",
+                "mutation_authorized": False,
+            },
+        )
+    if str(effective_state) != "enabled" or mutation_authorized is not True:
         raise AdminAPIError(
             status_code=409,
             code=str(getattr(gate, "reason_code", "ADMIN_CAPABILITY_DISABLED")),
             message="Capability is not authorized for mutation",
             details={
                 "capability_id": capability_id,
-                "effective_state": effective_state,
-                "mutation_authorized": mutation_authorized,
+                "effective_state": str(effective_state),
+                "mutation_authorized": mutation_authorized is True,
             },
         )
 
