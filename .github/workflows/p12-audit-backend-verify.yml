@@ -1,0 +1,35 @@
+name: P12 Audit Backend Verify
+
+on:
+  pull_request:
+    paths:
+      - 'src/knowledge_engine/m26_admin_audit.py'
+      - 'src/knowledge_engine/m26_console_api.py'
+      - 'tests/test_m26_admin_audit.py'
+      - '.github/workflows/p12-audit-backend-verify.yml'
+  push:
+    branches:
+      - 'm26-console/p12-audit-log-backend-20260904'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Ruff
+        run: >-
+          ruff check
+          src/knowledge_engine/m26_admin_audit.py
+          src/knowledge_engine/m26_console_api.py
+          tests/test_m26_admin_audit.py
+      - name: Focused tests
+        run: >-
+          pytest -q
+          tests/test_m26_admin_audit.py
+          tests/test_m26_admin_control_plane.py
