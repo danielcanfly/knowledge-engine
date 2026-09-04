@@ -4,10 +4,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from knowledge_engine.m26_admin_contract import AdminActor, AdminAPIError
-from knowledge_engine.m26_admin_control_plane import ACCESS_ASSERTION_HEADER, install_admin_control_plane
+from knowledge_engine.m26_admin_control_plane import (
+    ACCESS_ASSERTION_HEADER,
+    install_admin_control_plane,
+)
 from knowledge_engine.m26_admin_usage import (
-    StaticUsageProvider,
     WORKERS_AI_FREE_ALLOCATION,
+    StaticUsageProvider,
     install_admin_usage,
 )
 
@@ -102,7 +105,9 @@ def test_verified_limit_derives_remaining_and_floors_at_zero() -> None:
             }
         }
     }
-    payload = TestClient(make_app(provider)).get("/v1/admin/usage", headers=headers()).json()
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
     item = metric(payload, "workers_ai_neurons_day")
     assert item["value"] == 12_500
     assert item["remaining"]["value"] == 0.0
@@ -128,7 +133,9 @@ def test_unverified_limit_never_creates_remaining() -> None:
             }
         }
     }
-    payload = TestClient(make_app(provider)).get("/v1/admin/usage", headers=headers()).json()
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
     item = metric(payload, "requests_minute")
     assert item["limit"]["value"] == 100
     assert item["remaining"] is None
@@ -147,10 +154,14 @@ def test_wrong_unit_is_rejected_instead_of_silently_converted() -> None:
             }
         }
     }
-    payload = TestClient(make_app(provider)).get("/v1/admin/usage", headers=headers()).json()
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
     item = metric(payload, "tokens_hour")
     assert item["value"] is None
-    assert item["availability"]["reason_code"] == "USAGE_METRIC_INVALID_OR_UNQUALIFIED"
+    assert item["availability"]["reason_code"] == (
+        "USAGE_METRIC_INVALID_OR_UNQUALIFIED"
+    )
 
 
 def test_missing_timestamp_and_partial_coverage_are_explicitly_partial() -> None:
@@ -170,7 +181,9 @@ def test_missing_timestamp_and_partial_coverage_are_explicitly_partial() -> None
             }
         }
     }
-    payload = TestClient(make_app(provider)).get("/v1/admin/usage", headers=headers()).json()
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
     item = metric(payload, "requests_hour")
     assert item["value"] == 42
     assert item["observed_at"] is None
@@ -192,7 +205,9 @@ def test_stale_metric_preserves_stale_freshness() -> None:
             }
         }
     }
-    payload = TestClient(make_app(provider)).get("/v1/admin/usage", headers=headers()).json()
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
     assert metric(payload, "cache_reads_day")["freshness"] == "stale"
     assert payload["freshness"] == "stale"
 
@@ -222,14 +237,44 @@ def test_daily_reset_boundary_remains_midnight_utc_across_boundary_fixture() -> 
             }
         }
     }
-    client_before = TestClient(make_app(before))
-    client_after = TestClient(make_app(after))
-    before_payload = client_before.get("/v1/admin/usage", headers=headers()).json()
-    after_payload = client_after.get("/v1/admin/usage", headers=headers()).json()
-    assert before_payload["data"]["workers_ai_policy"]["allocation"]["reset_boundary"] == "00:00 UTC"
-    assert after_payload["data"]["workers_ai_policy"]["allocation"]["reset_boundary"] == "00:00 UTC"
+    before_payload = TestClient(make_app(before)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
+    after_payload = TestClient(make_app(after)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
+    before_reset = before_payload["data"]["workers_ai_policy"]["allocation"]
+    after_reset = after_payload["data"]["workers_ai_policy"]["allocation"]
+    assert before_reset["reset_boundary"] == "00:00 UTC"
+    assert after_reset["reset_boundary"] == "00:00 UTC"
     assert metric(before_payload, "workers_ai_neurons_day")["value"] == 9_999
     assert metric(after_payload, "workers_ai_neurons_day")["value"] == 1
+
+
+def test_ai_gateway_payload_is_redacted_and_never_trusted_without_source() -> None:
+    provider = {
+        "ai_gateway": {
+            "source": "qualified_gateway_analytics",
+            "observed_at": "2026-09-05T00:00:01Z",
+            "freshness": "near_live",
+            "value": {
+                "covered_requests": 12,
+                "api_key": "should-not-leak",
+            },
+        }
+    }
+    payload = TestClient(make_app(provider)).get(
+        "/v1/admin/usage", headers=headers()
+    ).json()
+    gateway = payload["data"]["ai_gateway"]
+    assert gateway["availability"]["status"] == "available"
+    assert gateway["value"]["covered_requests"] == 12
+    assert gateway["value"]["api_key"] == "[REDACTED]"
+
+    unqualified = TestClient(
+        make_app({"ai_gateway": {"value": {"covered_requests": 99}}})
+    ).get("/v1/admin/usage", headers=headers())
+    assert unqualified.json()["data"]["ai_gateway"]["value"] is None
 
 
 def test_admin_usage_auth_fails_closed_and_public_health_is_unchanged() -> None:
