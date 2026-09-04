@@ -1,0 +1,32 @@
+name: P03 Corpus Backend Validation
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Focused Ruff
+        run: python -m ruff check src/knowledge_engine/m26_admin_corpus.py tests/test_m26_admin_corpus.py
+      - name: Focused corpus tests
+        run: python -m pytest -q tests/test_m26_admin_corpus.py
+      - name: Console mount smoke
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m26_console_api import create_app
+          app = create_app()
+          paths = {route.path for route in app.routes}
+          assert '/v1/admin/corpus' in paths, paths
+          print('P03 corpus mount present')
+          PY
