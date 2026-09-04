@@ -61,7 +61,9 @@ def _section(
     }
 
 
-def _unavailable_section(*, reason_code: str, source: str, detail: str) -> dict[str, Any]:
+def _unavailable_section(
+    *, reason_code: str, source: str, detail: str
+) -> dict[str, Any]:
     return _section(
         availability="unavailable",
         reason_code=reason_code,
@@ -88,9 +90,12 @@ def _runtime_identity_section(request: Request, observed_at: str) -> dict[str, A
         return _section(
             availability="available",
             reason_code=None,
-            status="healthy",
+            status="unknown",
             source="admin_runtime_identity",
-            detail="Backend runtime identity includes an explicit deployment/build identifier.",
+            detail=(
+                "Backend runtime identity includes an explicit deployment/build "
+                "identifier; identity alone does not prove health."
+            ),
             observed_at=observed_at,
             freshness="live",
             value={"backend": app_identity, "runtime": explicit_identity},
@@ -101,7 +106,10 @@ def _runtime_identity_section(request: Request, observed_at: str) -> dict[str, A
         reason_code="OVERVIEW_BACKEND_BUILD_ID_UNAVAILABLE",
         status="unknown",
         source="admin_runtime_identity",
-        detail="Backend process identity is observable, but no explicit runtime git/image identifier is configured.",
+        detail=(
+            "Backend process identity is observable, but no explicit runtime "
+            "git/image identifier is configured."
+        ),
         observed_at=observed_at,
         freshness="live",
         value={"backend": app_identity, "runtime": None},
@@ -122,14 +130,20 @@ def _release_section(request: Request) -> dict[str, Any]:
         value = {
             "release_id": release_id,
             "manifest_sha256": getattr(bundle, "manifest_sha256", None),
-            "production_pointer_sha256": getattr(bundle, "production_pointer_sha256", None),
+            "production_pointer_sha256": getattr(
+                bundle, "production_pointer_sha256", None
+            ),
         }
         return _section(
             availability="available",
             reason_code=None,
-            status="healthy",
+            status="unknown",
             source="production_answer_bundle",
-            detail="Accepted production answer bundle loaded through the existing read-only integrity-checked loader.",
+            detail=(
+                "Accepted production answer bundle loaded through the existing "
+                "read-only integrity-checked loader. Readability identifies the "
+                "release but does not independently prove runtime health."
+            ),
             observed_at=observed_at,
             freshness="snapshot",
             value=value,
@@ -139,7 +153,10 @@ def _release_section(request: Request) -> dict[str, Any]:
         return _unavailable_section(
             reason_code="OVERVIEW_PRODUCTION_BUNDLE_UNAVAILABLE",
             source="production_answer_bundle",
-            detail="The accepted production answer bundle could not be read or integrity-validated. No release identity was inferred.",
+            detail=(
+                "The accepted production answer bundle could not be read or "
+                "integrity-validated. No release identity was inferred."
+            ),
         )
 
 
@@ -151,8 +168,14 @@ def _public_ask_section(request: Request, observed_at: str) -> dict[str, Any]:
     )
     try:
         payload = builder(base_url=str(request.base_url).rstrip("/"))
-        status = "healthy" if payload.get("ok") is True and payload.get("status") == "ok" else "warning"
-        reason_code = None if status == "healthy" else "OVERVIEW_PUBLIC_ASK_HEALTH_NOT_OK"
+        status = (
+            "healthy"
+            if payload.get("ok") is True and payload.get("status") == "ok"
+            else "warning"
+        )
+        reason_code = (
+            None if status == "healthy" else "OVERVIEW_PUBLIC_ASK_HEALTH_NOT_OK"
+        )
         return _section(
             availability="available",
             reason_code=reason_code,
@@ -177,7 +200,10 @@ def _public_ask_section(request: Request, observed_at: str) -> dict[str, Any]:
         return _unavailable_section(
             reason_code="OVERVIEW_PUBLIC_ASK_HEALTH_UNAVAILABLE",
             source="public_ask_in_process_health",
-            detail="Public Ask health evidence could not be collected; health was not inferred.",
+            detail=(
+                "Public Ask health evidence could not be collected; health was not "
+                "inferred."
+            ),
         )
 
 
@@ -186,43 +212,67 @@ def _optional_sources() -> dict[str, dict[str, Any]]:
         "index_audit": _unavailable_section(
             reason_code="OVERVIEW_INDEX_AUDIT_SOURCE_UNAVAILABLE",
             source="index_audit_read_model",
-            detail="No Gate-A-qualified current index-audit read source is wired into this backend base.",
+            detail=(
+                "No Gate-A-qualified current index-audit read source is wired into "
+                "this backend base."
+            ),
         ),
         "qa_exceptions_24h": _unavailable_section(
             reason_code="OVERVIEW_QA_EXCEPTIONS_SOURCE_UNAVAILABLE",
             source="qa_exception_read_model",
-            detail="No qualified 24-hour QA exception event source is wired. No generic numeric QA score or zero count is fabricated.",
+            detail=(
+                "No qualified 24-hour QA exception event source is wired. No "
+                "generic numeric QA score or zero count is fabricated."
+            ),
         ),
         "ingestion_jobs": _unavailable_section(
             reason_code="OVERVIEW_INGESTION_JOBS_SOURCE_UNAVAILABLE",
             source="ingestion_job_read_model",
-            detail="No qualified recent ingestion/job ledger is wired into this backend base.",
+            detail=(
+                "No qualified recent ingestion/job ledger is wired into this "
+                "backend base."
+            ),
         ),
         "usage_rate_limits": _unavailable_section(
             reason_code="OVERVIEW_USAGE_SOURCE_UNAVAILABLE",
             source="usage_read_model",
-            detail="No qualified usage/rate-limit telemetry source is wired; zero usage is not inferred.",
+            detail=(
+                "No qualified usage/rate-limit telemetry source is wired; zero "
+                "usage is not inferred."
+            ),
         ),
         "golden_evaluation": _unavailable_section(
             reason_code="OVERVIEW_GOLDEN_EVAL_SOURCE_UNAVAILABLE",
             source="golden_evaluation_read_model",
-            detail="No qualified current Golden evaluation result source is wired into this backend base.",
+            detail=(
+                "No qualified current Golden evaluation result source is wired "
+                "into this backend base."
+            ),
         ),
     }
 
 
-def _aggregate_availability(sections: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+def _aggregate_availability(
+    sections: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
     states = [
         str(section.get("availability", {}).get("status", "unavailable"))
         for section in sections.values()
     ]
     if states and all(state == "available" for state in states):
-        return {"status": "available", "reason_code": None, "detail": "All Overview sources are available."}
+        return {
+            "status": "available",
+            "reason_code": None,
+            "detail": "All Overview sources are available.",
+        }
     if any(state in {"available", "partial"} for state in states):
         return {
             "status": "partial",
             "reason_code": "OVERVIEW_PARTIAL_DEPENDENCIES",
-            "detail": "Overview is usable, but one or more dependency read models are unavailable or partial.",
+            "detail": (
+                "Overview is usable, but one or more dependency read models are "
+                "unavailable or partial."
+            ),
         }
     return {
         "status": "unavailable",
@@ -237,7 +287,9 @@ def _aggregate_freshness(sections: Mapping[str, Mapping[str, Any]]) -> str:
         for section in sections.values()
     ):
         return "unknown"
-    freshness = {str(section.get("freshness", "unknown")) for section in sections.values()}
+    freshness = {
+        str(section.get("freshness", "unknown")) for section in sections.values()
+    }
     if len(freshness) == 1:
         return freshness.pop()
     if "stale" in freshness:
@@ -294,4 +346,9 @@ def install_admin_overview(app: FastAPI) -> FastAPI:
     return app
 
 
-__all__ = ["OVERVIEW_SECTION_IDS", "build_overview_payload", "install_admin_overview", "overview_router"]
+__all__ = [
+    "OVERVIEW_SECTION_IDS",
+    "build_overview_payload",
+    "install_admin_overview",
+    "overview_router",
+]
