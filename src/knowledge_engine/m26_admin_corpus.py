@@ -4,7 +4,7 @@ from collections import Counter
 from collections.abc import Mapping
 from typing import Any, Protocol
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 
 from .m26_admin_contract import AdminAPIError, new_request_id, redact
 
@@ -21,17 +21,17 @@ _ALLOWED_FRESHNESS = {
 
 
 class CorpusAdapter(Protocol):
-    def read(self, *, task_id: str | None = None) -> Mapping[str, Any]: ...
+    def read(self) -> Mapping[str, Any]: ...
 
 
 class UnavailableCorpusAdapter:
-    def read(self, *, task_id: str | None = None) -> Mapping[str, Any]:
+    def read(self) -> Mapping[str, Any]:
         raise AdminAPIError(
             status_code=503,
             code="ADMIN_CORPUS_ADAPTER_UNAVAILABLE",
             message="Corpus reconciliation adapters are not configured",
             retryable=True,
-            details={"availability": "unavailable", "task_id": task_id},
+            details={"availability": "unavailable"},
         )
 
 
@@ -48,6 +48,18 @@ def _slug(source: Mapping[str, Any]) -> str:
         return explicit.casefold()
     leaf = (_text(source.get("source_path")) or "").rsplit("/", 1)[-1]
     return leaf.rsplit(".", 1)[0].casefold()
+
+
+def _language(
+    source: Mapping[str, Any], artifact: Mapping[str, Any]
+) -> str | None:
+    direct = _text(source.get("language")) or _text(artifact.get("language"))
+    if direct:
+        return direct
+    metadata = artifact.get("metadata_json")
+    if isinstance(metadata, Mapping):
+        return _text(metadata.get("language"))
+    return None
 
 
 def _record(
@@ -130,6 +142,7 @@ def _record(
             or _text(artifact.get("canonical_url"))
             or ""
         ),
+        "language": _language(source, artifact),
         "source_revision": source_revision,
         "artifact_markdown": artifact_markdown,
         "embedding_text": embedding_text,
@@ -198,15 +211,58 @@ def reconcile_corpus(snapshot: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: (row["source_path"], row["source_id"]))
 
 
+def _row_state(row: Mapping[str, Any]) -> str:
+    reasons = row.get("reasons", [])
+    if isinstance(reasons, list) and any("ORPHANED" in str(item) for item in reasons):
+        return "orphaned"
+    if bool(row.get("stale")):
+        return "stale"
+    if row.get("missing") or row.get("reasons"):
+        return "partial"
+    return "healthy"
+
+
+def _filter_rows(
+    rows: list[dict[str, Any]],
+    *,
+    q: str | None,
+    state: str | None,
+    language: str | None,
+) -> list[dict[str, Any]]:
+    query = _text(q)
+    state_filter = _text(state)
+    language_filter = _text(language)
+
+    if query:
+        needle = query.casefold()
+        rows = [
+            row
+            for row in rows
+            if any(
+                needle in str(row.get(field) or "").casefold()
+                for field in ("source_id", "source_path", "canonical_url")
+            )
+        ]
+    if state_filter:
+        wanted_state = state_filter.casefold()
+        rows = [row for row in rows if _row_state(row) == wanted_state]
+    if language_filter:
+        wanted_language = language_filter.casefold()
+        rows = [
+            row
+            for row in rows
+            if str(row.get("language") or "").casefold() == wanted_language
+        ]
+    return rows
+
+
 class CorpusReadService:
     def __init__(self, adapter: CorpusAdapter) -> None:
         self.adapter = adapter
 
-    def read(
-        self, *, task_id: str | None = None
-    ) -> tuple[Mapping[str, Any], list[dict[str, Any]]]:
+    def read(self) -> tuple[Mapping[str, Any], list[dict[str, Any]]]:
         try:
-            snapshot = self.adapter.read(task_id=task_id)
+            snapshot = self.adapter.read()
         except AdminAPIError:
             raise
         except Exception as exc:
@@ -228,6 +284,39 @@ class CorpusReadService:
         return snapshot, reconcile_corpus(snapshot)
 
 
+def _availability(
+    rows: list[dict[str, Any]], warnings: list[str]
+) -> dict[str, Any]:
+    partial = bool(warnings) or any(
+        row["missing"] or row["stale"] or row["reasons"] for row in rows
+    )
+    return {
+        "status": "partial" if partial else "available",
+        "reason_code": "CORPUS_PARTIAL_EVIDENCE" if partial else None,
+        "detail": "; ".join(warnings) if warnings else None,
+    }
+
+
+def _read_metadata(snapshot: Mapping[str, Any]) -> tuple[list[str], str | None, str]:
+    warnings = [
+        str(item) for item in snapshot.get("warnings", []) if str(item).strip()
+    ]
+    observed_at = _text(snapshot.get("observed_at"))
+    freshness = _text(snapshot.get("freshness")) or "unknown"
+    if freshness not in _ALLOWED_FRESHNESS:
+        freshness = "unknown"
+    return warnings, observed_at, freshness
+
+
+def _provenance(snapshot: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "source": CORPUS_SOURCE,
+        "resource_identity": {"contract_version": CONTRACT_VERSION},
+        "evidence_digest": _text(snapshot.get("evidence_digest")),
+        "source_observed_at": _text(snapshot.get("observed_at")),
+    }
+
+
 def install_admin_corpus(
     app: FastAPI,
     *,
@@ -240,44 +329,51 @@ def install_admin_corpus(
     @router.get("/corpus", operation_id="listCorpus")
     async def list_corpus(
         request: Request,
-        task_id: str | None = None,
+        q: str | None = Query(default=None, max_length=200),
+        state: str | None = None,
+        language: str | None = None,
     ) -> dict[str, Any]:
-        snapshot, rows = service.read(task_id=task_id)
-        warnings = [
-            str(item)
-            for item in snapshot.get("warnings", [])
-            if str(item).strip()
-        ]
-        partial = bool(warnings) or any(
-            row["missing"] or row["stale"] or row["reasons"] for row in rows
-        )
-        observed_at = _text(snapshot.get("observed_at"))
-        freshness = _text(snapshot.get("freshness")) or "unknown"
-        if freshness not in _ALLOWED_FRESHNESS:
-            freshness = "unknown"
-
+        snapshot, rows = service.read()
+        rows = _filter_rows(rows, q=q, state=state, language=language)
+        warnings, observed_at, freshness = _read_metadata(snapshot)
         request_id = (
             getattr(request.state, "admin_request_id", None) or new_request_id()
         )
         return {
             "request_id": request_id,
-            "availability": {
-                "status": "partial" if partial else "available",
-                "reason_code": "CORPUS_PARTIAL_EVIDENCE" if partial else None,
-                "detail": "; ".join(warnings) if warnings else None,
-            },
-            "provenance": {
-                "source": CORPUS_SOURCE,
-                "resource_identity": {
-                    "task_id": task_id,
-                    "contract_version": CONTRACT_VERSION,
-                },
-                "evidence_digest": _text(snapshot.get("evidence_digest")),
-                "source_observed_at": observed_at,
-            },
+            "availability": _availability(rows, warnings),
+            "provenance": _provenance(snapshot),
             "observed_at": observed_at,
             "freshness": freshness,
             "data": redact(rows),
+        }
+
+    @router.get("/corpus/{document_id}", operation_id="getCorpusDocument")
+    async def get_corpus_document(
+        request: Request,
+        document_id: str,
+    ) -> dict[str, Any]:
+        snapshot, rows = service.read()
+        warnings, observed_at, freshness = _read_metadata(snapshot)
+        row = next((item for item in rows if item["source_id"] == document_id), None)
+        request_id = (
+            getattr(request.state, "admin_request_id", None) or new_request_id()
+        )
+        if row is None:
+            availability = {
+                "status": "unavailable",
+                "reason_code": "CORPUS_DOCUMENT_NOT_OBSERVED",
+                "detail": "No authoritative corpus observation exists for this document id",
+            }
+        else:
+            availability = _availability([row], warnings)
+        return {
+            "request_id": request_id,
+            "availability": availability,
+            "provenance": _provenance(snapshot),
+            "observed_at": observed_at,
+            "freshness": freshness,
+            "data": redact(row),
         }
 
     app.include_router(router)
