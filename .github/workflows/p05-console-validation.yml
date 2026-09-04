@@ -33,4 +33,4 @@ jobs:
           tests/test_m26_admin_control_plane.py
           tests/test_m26_console_p05_ask_playground.py
       - name: Import smoke
-        run: python -c "from knowledge_engine.m26_console_api import create_app; app=create_app(); paths={r.path for r in app.routes if hasattr(r, 'path')}; assert '/v1/admin/playground/retrieve' in paths; assert '/v1/admin/playground/ask' in paths"
+        run: python -c "from knowledge_engine.m26_console_api import create_app; paths=set(create_app().openapi()['paths']); assert '/v1/admin/playground/retrieve' in paths; assert '/v1/admin/playground/ask' in paths"
