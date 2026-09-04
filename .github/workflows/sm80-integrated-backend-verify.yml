@@ -140,12 +140,10 @@ jobs:
           PYTHONPATH=src python - <<'PY'
           from knowledge_engine.m26_console_api import create_app
           app=create_app()
-          route_rows=[r for r in app.routes if getattr(r,'path',None)]
-          methods={(r.path,tuple(sorted(getattr(r,'methods',[]) or []))) for r in route_rows}
-          assert any(p=='/v1/answers' and 'POST' in m for p,m in methods)
-          paths={r.path for r in route_rows}
+          paths=app.openapi()["paths"]
+          assert "/v1/answers" in paths and "post" in paths["/v1/answers"]
           expected={'/v1/admin/overview','/v1/admin/ingestion/preflight','/v1/admin/corpus','/v1/admin/qa/events','/v1/admin/playground/retrieve','/v1/admin/suggested-questions','/v1/admin/usage','/v1/admin/health','/v1/admin/jobs','/v1/admin/evaluations/golden','/v1/admin/settings','/v1/admin/audit-log'}
-          missing=sorted(expected-paths)
+          missing=sorted(expected-set(paths))
           assert not missing, (missing, sorted(paths))
           print('PUBLIC_ASK_ROUTE_PRESENT=1')
           print('EXPECTED_ADMIN_ROUTE_SURFACES_PRESENT=12')
