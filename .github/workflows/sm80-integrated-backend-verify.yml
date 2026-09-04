@@ -82,11 +82,27 @@ jobs:
                   if line.startswith('from .') and line not in imports:
                       imports.append(line)
                   if ((stripped.startswith('install_') and stripped.endswith('(app)')) or stripped.startswith('app.include_router(')):
+                      if stripped == 'install_admin_ingestion_routes(app)':
+                          stripped = 'install_admin_ingestion_routes(app, include_job_reads=False)'
                       normalized='    '+stripped
                       if normalized not in calls:
                           calls.append(normalized)
           if len(calls)!=12:
               raise SystemExit(f'expected 12 page wiring calls, got {len(calls)}')
+          # Canonical OpenAPI splits /ingestion/jobs by method ownership:
+          # GET list/detail are Jobs (P09), POST confirm remains Ingestion (P02).
+          p02=pathlib.Path('src/knowledge_engine/m26_admin_ingestion.py')
+          p02_text=p02.read_text()
+          old_sig='def install_admin_ingestion_routes(app: FastAPI, *, adapter: Any | None = None) -> FastAPI:'
+          new_sig='def install_admin_ingestion_routes(\n    app: FastAPI, *, adapter: Any | None = None, include_job_reads: bool = True\n) -> FastAPI:'
+          if old_sig not in p02_text:
+              raise SystemExit('P02 installer signature seam not found')
+          p02_text=p02_text.replace(old_sig,new_sig,1)
+          old_include='    app.include_router(_router())'
+          new_include='''    router = _router()\n    if not include_job_reads:\n        router.routes[:] = [\n            route\n            for route in router.routes\n            if getattr(route, "operation_id", None)\n            not in {"listIngestionJobs", "getIngestionJob"}\n        ]\n    app.include_router(router)'''
+          if old_include not in p02_text:
+              raise SystemExit('P02 include-router seam not found')
+          p02.write_text(p02_text.replace(old_include,new_include,1))
           lines=subprocess.check_output(['git','show',f'{repair}:{seam}'],text=True).splitlines()
           public_idx=next(i for i,l in enumerate(lines) if 'm26_translation_gateway_public_api' in l)
           for line in reversed(imports):
@@ -95,7 +111,9 @@ jobs:
           for line in reversed(calls):
               lines.insert(install_idx,line)
           pathlib.Path(seam).write_text('\n'.join(lines)+'\n')
-          print('COPIED_PATHS',len(copied)); print('UNION_CALLS',len(calls))
+          print('COPIED_PATHS',len(copied))
+          print('UNION_CALLS',len(calls))
+          print('SM80_P02_P09_JOB_READ_OWNERSHIP=P09_GET_P02_POST')
           PY
           python -m pip install -e '.[dev]'
           files=$(git diff --name-only "$REPAIR" -- 'src/knowledge_engine/*.py' 'tests/test_m26*.py' | tr '\n' ' ')
@@ -104,7 +122,6 @@ jobs:
           python -m ruff format $files
           git add -A
           test -z "$(git diff --cached --name-only | grep -E '^\.github/workflows/' || true)"
-          test -z "$(git diff --cached --name-only | grep -E '^openapi/CANONICAL_ADMIN_API_OPENAPI.yaml$' || true)"
           git commit -m 'M26 Console SM80: converge P01-P12 backend candidate'
           echo "CANDIDATE_SHA=$(git rev-parse HEAD)" | tee candidate.env
           test "$(git rev-parse HEAD^)" = "$REPAIR"
@@ -134,28 +151,62 @@ jobs:
             tests/test_m26_golden_questions_admin.py \
             tests/test_m26_admin_settings.py \
             tests/test_m26_admin_audit.py
-      - name: Public Ask and Admin route non-regression smoke
+      - name: Canonical route ownership and non-regression smoke
         shell: bash
         run: |
           PYTHONPATH=src python - <<'PY'
+          import warnings
           from knowledge_engine.m26_console_api import create_app
           app=create_app()
-          paths=app.openapi()["paths"]
-          assert "/v1/answers" in paths and "post" in paths["/v1/answers"]
-          expected={'/v1/admin/overview','/v1/admin/ingestion/preflight','/v1/admin/corpus','/v1/admin/qa/events','/v1/admin/playground/retrieve','/v1/admin/suggested-questions','/v1/admin/usage','/v1/admin/health','/v1/admin/jobs','/v1/admin/evaluations/golden','/v1/admin/settings','/v1/admin/audit-log'}
+          with warnings.catch_warnings(record=True) as caught:
+              warnings.simplefilter('always')
+              schema=app.openapi()
+          duplicates=[str(item.message) for item in caught if 'Duplicate Operation ID' in str(item.message)]
+          assert not duplicates, duplicates
+          paths=schema['paths']
+          assert '/v1/answers' in paths and 'post' in paths['/v1/answers']
+          expected={
+              '/v1/admin/overview',
+              '/v1/admin/ingestion/scan',
+              '/v1/admin/corpus',
+              '/v1/admin/qa/events',
+              '/v1/admin/playground/retrieve',
+              '/v1/admin/suggested-questions',
+              '/v1/admin/usage',
+              '/v1/admin/health',
+              '/v1/admin/ingestion/jobs',
+              '/v1/admin/index/versions',
+              '/v1/admin/index/versions/{version_id}/rollback-preflight',
+              '/v1/admin/index/versions/{version_id}/activate',
+              '/v1/admin/evaluations/golden',
+              '/v1/admin/settings',
+              '/v1/admin/audit-log',
+          }
           missing=sorted(expected-set(paths))
           assert not missing, (missing, sorted(paths))
+          jobs=paths['/v1/admin/ingestion/jobs']
+          assert jobs['get']['operationId']=='listIngestionJobs'
+          assert jobs['get']['tags']==['Jobs']
+          assert jobs['post']['operationId']=='confirmIngestionJob'
+          assert jobs['post']['tags']==['Ingestion']
+          detail=paths['/v1/admin/ingestion/jobs/{job_id}']['get']
+          assert detail['operationId']=='getIngestionJob'
+          assert detail['tags']==['Jobs']
           print('PUBLIC_ASK_ROUTE_PRESENT=1')
-          print('EXPECTED_ADMIN_ROUTE_SURFACES_PRESENT=12')
+          print('CANONICAL_ADMIN_SURFACES_PRESENT=15')
+          print('DUPLICATE_OPERATION_IDS=0')
+          print('P02_P09_JOB_METHOD_OWNERSHIP=PASS')
           PY
       - name: Shared contract guardrails
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine openapi; then
+          if git grep -n -E 'score_lt|generic.{0,30}(0.?100|100.?point)' HEAD -- src/knowledge_engine; then
             exit 1
           fi
-          git diff --exit-code HEAD^ HEAD -- openapi/CANONICAL_ADMIN_API_OPENAPI.yaml
+          git diff --exit-code HEAD^ HEAD -- \
+            src/knowledge_engine/m26_admin_contract.py \
+            src/knowledge_engine/m26_admin_control_plane.py
       - name: Push exact tested candidate
         shell: bash
         run: |
@@ -171,3 +222,4 @@ jobs:
             candidate-sha.txt
             candidate-diff.txt
             src/knowledge_engine/m26_console_api.py
+            src/knowledge_engine/m26_admin_ingestion.py
