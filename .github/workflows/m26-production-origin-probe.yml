@@ -1,0 +1,181 @@
+name: M26 Production Origin Repair
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/m26-production-origin-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair-and-prove:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: m23-r3-diagnostic
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Prepare SSH
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+          done
+          bash scripts/configure_oracle_ssh.sh
+          mkdir -p artifacts/m26-production-origin-repair
+
+      - name: Apply bounded Nginx path split with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="artifacts/m26-production-origin-repair/repair-evidence.txt"
+          ssh oracle-knowledge 'bash -se' <<'REMOTE' > "$out"
+          set -euo pipefail
+
+          marker='# M26_CANONICAL_ANSWERS_ORIGIN_SPLIT'
+          link=/etc/nginx/sites-enabled/llamaindex-demo
+          target="$(readlink -f "$link")"
+          test -n "$target" && test -f "$target"
+          echo "target=$target"
+          echo "accepted_container=$(docker inspect m26-public-api-staging-d6288072 --format '{{.Config.Image}}' 2>/dev/null || true)"
+
+          accepted_status="$(curl --silent --show-error -o /tmp/m26-accepted-health-before.json -w '%{http_code}' http://127.0.0.1:18081/v1/answers/health || true)"
+          echo "accepted_health_before=$accepted_status"
+          test "$accepted_status" = 200
+          grep -F 'm26-translation-in-gateway/v1' /tmp/m26-accepted-health-before.json >/dev/null
+          grep -F '"legacy_api_rag_surface_canonical":false' /tmp/m26-accepted-health-before.json >/dev/null
+
+          legacy_before_status="$(curl -k --silent --show-error --resolve api.danielcanfly.com:443:127.0.0.1 -o /tmp/m26-legacy-health-before.json -w '%{http_code}' https://api.danielcanfly.com/health || true)"
+          echo "legacy_health_before=$legacy_before_status"
+          test "$legacy_before_status" = 200
+          legacy_before_identity="$(python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/m26-legacy-health-before.json'))
+          print((p.get('build_sha') or '') + '|' + (p.get('deployment_fingerprint') or ''))
+          PY
+          )"
+          test "$legacy_before_identity" != '|'
+          echo "legacy_identity_before=$legacy_before_identity"
+
+          before_sha="$(sudo -n sha256sum "$target" | awk '{print $1}')"
+          echo "nginx_sha_before=$before_sha"
+          backup_dir=/etc/nginx/m26-backups
+          sudo -n install -d -m 0750 "$backup_dir"
+          backup="$backup_dir/llamaindex-demo.$(date -u +%Y%m%dT%H%M%SZ).bak"
+          sudo -n cp -a "$target" "$backup"
+          echo "backup=$backup"
+
+          rollback() {
+            echo 'rollback=BEGIN'
+            sudo -n cp -a "$backup" "$target"
+            sudo -n nginx -t
+            sudo -n systemctl reload nginx
+            echo 'rollback=COMPLETE'
+          }
+
+          if ! sudo -n grep -Fq "$marker" "$target"; then
+            tmp="$(mktemp)"
+            sudo -n cat "$target" > "$tmp"
+            python3 - "$tmp" <<'PY'
+          import pathlib, sys
+          path=pathlib.Path(sys.argv[1])
+          text=path.read_text()
+          marker='# M26_CANONICAL_ANSWERS_ORIGIN_SPLIT'
+          if marker in text:
+              raise SystemExit(0)
+          anchor='''    client_max_body_size 25m;\n\n    location / {\n        proxy_pass http://127.0.0.1:18000;'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'expected exactly one production anchor, found {text.count(anchor)}')
+          block='''    # M26_CANONICAL_ANSWERS_ORIGIN_SPLIT\n    location = /v1/answers {\n        proxy_pass http://127.0.0.1:18081;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_set_header Connection "";\n        proxy_buffering off;\n        proxy_request_buffering off;\n        proxy_cache off;\n        proxy_connect_timeout 30s;\n        proxy_send_timeout 120s;\n        proxy_read_timeout 120s;\n    }\n\n    location = /v1/answers/health {\n        proxy_pass http://127.0.0.1:18081;\n        proxy_http_version 1.1;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_set_header Connection "";\n        proxy_buffering off;\n        proxy_cache off;\n        proxy_connect_timeout 30s;\n        proxy_send_timeout 120s;\n        proxy_read_timeout 120s;\n    }\n\n'''
+          text=text.replace(anchor, '    client_max_body_size 25m;\n\n'+block+'    location / {\n        proxy_pass http://127.0.0.1:18000;', 1)
+          path.write_text(text)
+          PY
+            sudo -n install -m 0644 "$tmp" "$target"
+            rm -f "$tmp"
+            echo 'patch_applied=true'
+          else
+            echo 'patch_applied=false_already_present'
+          fi
+
+          after_sha="$(sudo -n sha256sum "$target" | awk '{print $1}')"
+          echo "nginx_sha_after=$after_sha"
+          echo '--- bounded nginx excerpt ---'
+          sudo -n awk '/M26_CANONICAL_ANSWERS_ORIGIN_SPLIT/{show=1} show{print} /location \/ \{/{if(show){exit}}' "$target"
+          echo '--- end excerpt ---'
+
+          if ! sudo -n nginx -t; then
+            echo 'validation=NGINX_TEST_FAILED'
+            rollback
+            exit 20
+          fi
+          sudo -n systemctl reload nginx
+          sleep 1
+
+          direct_health_status="$(curl -k --silent --show-error --resolve api.danielcanfly.com:443:127.0.0.1 -o /tmp/m26-origin-health-after.json -w '%{http_code}' https://api.danielcanfly.com/v1/answers/health || true)"
+          echo "direct_origin_m26_health_after=$direct_health_status"
+          if [ "$direct_health_status" != 200 ] || ! grep -F 'm26-translation-in-gateway/v1' /tmp/m26-origin-health-after.json >/dev/null; then
+            echo 'validation=M26_ORIGIN_HEALTH_FAILED'
+            head -c 2000 /tmp/m26-origin-health-after.json 2>/dev/null || true
+            rollback
+            exit 21
+          fi
+
+          admission_headers=/tmp/m26-origin-admission-headers.txt
+          admission_body=/tmp/m26-origin-admission-body.txt
+          admission_status="$(curl -k --silent --show-error --resolve api.danielcanfly.com:443:127.0.0.1 -X POST -H 'Origin: https://staging.danielcanfly.com' -H 'Content-Type: application/json' -H 'Accept: text/event-stream' --data '{}' -D "$admission_headers" -o "$admission_body" -w '%{http_code}' https://api.danielcanfly.com/v1/answers || true)"
+          admission_content_type="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{gsub(/\r/,"",$0); sub(/^[^:]+:[[:space:]]*/,"",$0); print; exit}' "$admission_headers")"
+          echo "direct_origin_missing_auth_status=$admission_status"
+          echo "direct_origin_missing_auth_content_type=$admission_content_type"
+          if [ "$admission_status" != 401 ] || printf '%s' "$admission_content_type" | grep -qi '^text/event-stream'; then
+            echo 'validation=M26_ORIGIN_ADMISSION_FAILED'
+            head -c 2000 "$admission_body" 2>/dev/null || true
+            rollback
+            exit 22
+          fi
+
+          legacy_after_status="$(curl -k --silent --show-error --resolve api.danielcanfly.com:443:127.0.0.1 -o /tmp/m26-legacy-health-after.json -w '%{http_code}' https://api.danielcanfly.com/health || true)"
+          echo "legacy_health_after=$legacy_after_status"
+          legacy_after_identity="$(python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/m26-legacy-health-after.json'))
+          print((p.get('build_sha') or '') + '|' + (p.get('deployment_fingerprint') or ''))
+          PY
+          )"
+          echo "legacy_identity_after=$legacy_after_identity"
+          if [ "$legacy_after_status" != 200 ] || [ "$legacy_after_identity" != "$legacy_before_identity" ]; then
+            echo 'validation=LEGACY_PRODUCTION_IDENTITY_DRIFT'
+            rollback
+            exit 23
+          fi
+
+          accepted_after_status="$(curl --silent --show-error -o /tmp/m26-accepted-health-after.json -w '%{http_code}' http://127.0.0.1:18081/v1/answers/health || true)"
+          echo "accepted_health_after=$accepted_after_status"
+          if [ "$accepted_after_status" != 200 ]; then
+            echo 'validation=ACCEPTED_RUNTIME_REGRESSED'
+            rollback
+            exit 24
+          fi
+
+          echo 'rollback_armed=false'
+          echo 'M26_PRODUCTION_ORIGIN_PATH_SPLIT=PASS'
+          REMOTE
+          cat "$out"
+
+      - name: Upload repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-production-origin-repair-${{ github.sha }}
+          path: artifacts/m26-production-origin-repair
+          if-no-files-found: error
+          retention-days: 30
