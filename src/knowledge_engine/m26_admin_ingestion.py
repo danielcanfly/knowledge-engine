@@ -5,7 +5,12 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, Request
 
 from .m26_admin_contract import AdminAPIError
-from .m26_admin_control_plane import actor_from, append_audit_event, build_audit_event, request_id_from
+from .m26_admin_control_plane import (
+    actor_from,
+    append_audit_event,
+    build_audit_event,
+    request_id_from,
+)
 from .m26_admin_ingestion_core import (
     ConfirmJobRequest,
     DryRunRequest,
