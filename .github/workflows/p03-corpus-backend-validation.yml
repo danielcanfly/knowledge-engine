@@ -26,7 +26,7 @@ jobs:
           python - <<'PY'
           from knowledge_engine.m26_console_api import create_app
           app = create_app()
-          paths = {getattr(route, 'path', None) for route in app.routes}
+          paths = set(app.openapi().get('paths', {}))
           assert '/v1/admin/corpus' in paths, paths
-          print('P03 corpus mount present')
+          print('P03 corpus mount present in console OpenAPI')
           PY
