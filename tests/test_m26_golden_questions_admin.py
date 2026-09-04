@@ -298,7 +298,7 @@ def test_run_start_fails_closed_when_capability_is_not_mutation_authorized() -> 
     assert response.json()["error"]["code"] == "TEST_QUALIFIED"
 
 
-def test_even_enabled_run_capability_is_blocked_by_missing_canonical_request_schema_and_audited() -> None:
+def test_enabled_run_is_blocked_by_missing_request_schema_and_audited() -> None:
     app = make_app(start_state="enabled")
     client = TestClient(app)
     response = client.post(
@@ -324,8 +324,10 @@ def test_openapi_keeps_frozen_no_body_shape_instead_of_inventing_page_private_sc
     post = schema["paths"]["/v1/admin/evaluations/runs"]["post"]
     assert post["operationId"] == "startEvaluationRun"
     assert "requestBody" not in post
-    assert schema["paths"]["/v1/admin/evaluations/golden"]["get"]["operationId"] == "listGoldenSets"
-    assert schema["paths"]["/v1/admin/evaluations/runs"]["get"]["operationId"] == "listEvaluationRuns"
+    golden_get = schema["paths"]["/v1/admin/evaluations/golden"]["get"]
+    runs_get = schema["paths"]["/v1/admin/evaluations/runs"]["get"]
+    assert golden_get["operationId"] == "listGoldenSets"
+    assert runs_get["operationId"] == "listEvaluationRuns"
 
 
 def test_public_health_is_not_wrapped_or_gated_by_admin_changes() -> None:
