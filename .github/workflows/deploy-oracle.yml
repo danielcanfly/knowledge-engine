@@ -1,14 +1,12 @@
-name: M26 Daily IP Rate Limit Promotion Stager
+name: M26 Daily IP Rate Limit Secret Restager
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type PROMOTE-M26-DAILY-IP-RATE-LIMIT
         required: true
         type: string
-      accepted_release_sha:
-        description: Exact accepted backend runtime SHA
+      expected_image_id:
         required: true
         type: string
 
@@ -16,46 +14,32 @@ permissions:
   contents: read
 
 concurrency:
-  group: m26-daily-ip-rate-limit-production-stager
+  group: m26-daily-ip-rate-limit-production-restager
   cancel-in-progress: false
 
 jobs:
-  stage:
-    if: inputs.confirmation == 'PROMOTE-M26-DAILY-IP-RATE-LIMIT'
+  restage:
+    if: inputs.confirmation == 'RESTAGE-M26-DAILY-IP-RATE-LIMIT'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     environment: production
     env:
-      EXPECTED_RELEASE_SHA: d9fb0e544a94656f285134814e57d91fbcd830c2
       CURRENT_CONTAINER: m26-public-api-production-repair2-ownerhash-r2-auth-520aed
       EXPECTED_CURRENT_IMAGE: sha256:fe246e352f30af7fe8fdd02b756d7abd1cb6d6ca6e2fd922ff730ed1686273ec
+      EXISTING_IMAGE_TAG: m26-daily-ip-rate-limit:33833281606-1
+      EXPECTED_STAGED_IMAGE_ID: sha256:c5bcfbf63b43300c57ad92637c41bfc72dac8148dccabb2eea18f5751bfba8b1
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
 
     steps:
-      - name: Validate dispatch authority
+      - name: Validate authority
         shell: bash
         run: |
           set -euo pipefail
-          test "${{ inputs.accepted_release_sha }}" = "$EXPECTED_RELEASE_SHA"
-          test "${{ inputs.confirmation }}" = "PROMOTE-M26-DAILY-IP-RATE-LIMIT"
+          test "${{ inputs.confirmation }}" = "RESTAGE-M26-DAILY-IP-RATE-LIMIT"
+          test "${{ inputs.expected_image_id }}" = "$EXPECTED_STAGED_IMAGE_ID"
 
-      - name: Checkout exact accepted backend runtime
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.accepted_release_sha }}
-          path: runtime-src
-
-      - name: Verify exact source
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd runtime-src
-          test "$(git rev-parse HEAD)" = "$EXPECTED_RELEASE_SHA"
-          test -f src/knowledge_engine/m26_daily_ip_rate_limit.py
-          grep -F 'knowledge_engine.m26_translation_gateway_public_api:app' src/knowledge_engine/m26_translation_gateway_public_api.py >/dev/null || true
-
-      - name: Require secure production inputs
+      - name: Require secure inputs
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
@@ -68,10 +52,8 @@ jobs:
           done
           python3 - <<'PY'
           import os, re
-          owner = os.environ["OWNER_BYPASS_SHA"].strip().lower()
-          ip = os.environ["IP_HASH_SECRET"].strip()
-          assert re.fullmatch(r"[0-9a-f]{64}", owner)
-          assert len(ip) >= 32
+          assert re.fullmatch(r"[0-9a-f]{64}", os.environ["OWNER_BYPASS_SHA"].strip().lower())
+          assert len(os.environ["IP_HASH_SECRET"].strip()) >= 32
           print("PROMOTION_SECRET_SHAPE_GATE=PASS")
           PY
 
@@ -86,56 +68,27 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
 
-      - name: Fresh sealed production preflight
+      - name: Verify restored baseline and reusable image
         shell: bash
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
-            "CURRENT_CONTAINER='$CURRENT_CONTAINER' EXPECTED_CURRENT_IMAGE='$EXPECTED_CURRENT_IMAGE' bash -s" <<'REMOTE'
+            "CURRENT_CONTAINER='$CURRENT_CONTAINER' EXPECTED_CURRENT_IMAGE='$EXPECTED_CURRENT_IMAGE' EXISTING_IMAGE_TAG='$EXISTING_IMAGE_TAG' EXPECTED_STAGED_IMAGE_ID='$EXPECTED_STAGED_IMAGE_ID' bash -s" <<'REMOTE'
           set -euo pipefail
           test "$(docker inspect --format '{{.Image}}' "$CURRENT_CONTAINER")" = "$EXPECTED_CURRENT_IMAGE"
-          docker inspect --format '{{json .Config.Cmd}}' "$CURRENT_CONTAINER" | grep -F 'knowledge_engine.m26_translation_gateway_public_api:app' >/dev/null
-          docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$CURRENT_CONTAINER" | grep -Fx 'unless-stopped' >/dev/null
-          docker inspect --format '{{.HostConfig.NetworkMode}}' "$CURRENT_CONTAINER" | grep -Fx 'bridge' >/dev/null
-          docker port "$CURRENT_CONTAINER" 8080/tcp | grep -F '127.0.0.1:18087' >/dev/null
+          test "$(docker image inspect --format '{{.Id}}' "$EXISTING_IMAGE_TAG")" = "$EXPECTED_STAGED_IMAGE_ID"
           curl --fail --silent --max-time 10 http://127.0.0.1:18087/v1/answers/health >/dev/null
-          if ss -ltn | grep -E '[:.]18089[[:space:]]' >/dev/null; then
-            echo "port 18089 is not free" >&2
-            exit 3
-          fi
-          echo "SEALED_PRODUCTION_PREFLIGHT=PASS"
+          echo "RESTORED_BASELINE_AND_REUSABLE_IMAGE=PASS"
           REMOTE
 
-      - name: Build exact accepted image
-        shell: bash
-        run: |
-          set -euo pipefail
-          IMAGE_TAG="m26-daily-ip-rate-limit:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
-          docker build --pull -t "$IMAGE_TAG" runtime-src
-          docker run --rm --entrypoint python "$IMAGE_TAG" - <<'PY'
-          import knowledge_engine.m26_daily_ip_rate_limit
-          import knowledge_engine.m26_translation_gateway_public_api
-          print("ACCEPTED_RUNTIME_IMPORT_GATE=PASS")
-          PY
-
-      - name: Load accepted image onto Oracle
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker save "$IMAGE_TAG" | gzip -1 | \
-            ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'gzip -dc | docker load >/tmp/m26-daily-ip-rate-limit-docker-load.log'
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "docker image inspect '$IMAGE_TAG' >/dev/null"
-          echo "ORACLE_IMAGE_LOAD_GATE=PASS"
-
-      - name: Stage run-scoped production env without exposing values
+      - name: Restage run-scoped env
         shell: bash
         env:
           OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
           IP_HASH_SECRET: ${{ secrets.ASK_RATE_LIMIT_IP_HASH_SECRET }}
         run: |
           set -euo pipefail
-          REMOTE_ENV="/tmp/m26-daily-ip-rate-limit-promotion-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.env"
+          REMOTE_ENV="/tmp/m26-daily-ip-rate-limit-promotion-${{ github.run_id }}-${{ github.run_attempt }}.env"
           echo "REMOTE_ENV=$REMOTE_ENV" >> "$GITHUB_ENV"
 
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
@@ -169,7 +122,7 @@ jobs:
           }
           out = []
           for line in base.read_text().splitlines():
-              if not line or '=' not in line:
+              if '=' not in line:
                   continue
               key = line.split('=', 1)[0]
               if key not in drop:
@@ -185,30 +138,28 @@ jobs:
           assert values['M26_ASK_RATE_LIMIT_DAY_TZ'] == 'UTC'
           base.unlink(missing_ok=True)
           fragment.unlink(missing_ok=True)
-          print('RUN_SCOPED_ENV_GATE=PASS')
+          print('RUN_SCOPED_ENV_RESTAGE=PASS')
           PY"
 
-      - name: Write non-secret staging receipt
+      - name: Non-secret receipt
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          IMAGE_ID="$(ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "docker image inspect --format '{{.Id}}' '$IMAGE_TAG'")"
-          cat > artifacts/staging-receipt.json <<EOF
+          cat > artifacts/restaging-receipt.json <<EOF
           {
-            "accepted_release_sha": "$EXPECTED_RELEASE_SHA",
-            "image_tag": "$IMAGE_TAG",
-            "image_id": "$IMAGE_ID",
+            "reused_image_tag": "$EXISTING_IMAGE_TAG",
+            "reused_image_id": "$EXPECTED_STAGED_IMAGE_ID",
             "remote_env_path": "$REMOTE_ENV",
-            "secret_values_recorded": false,
-            "production_container_mutated": false
+            "production_container_mutated": false,
+            "image_rebuilt": false,
+            "secret_values_recorded": false
           }
           EOF
 
-      - name: Upload non-secret staging receipt
+      - name: Upload receipt
         uses: actions/upload-artifact@v4
         with:
-          name: m26-daily-ip-rate-limit-staging-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/staging-receipt.json
-          if-no-files-found: error
+          name: m26-rate-limit-restaging-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/restaging-receipt.json
           retention-days: 7
