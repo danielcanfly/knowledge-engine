@@ -1,0 +1,88 @@
+name: SM80 Backend Collision Census
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/m26-console-gate-a-repair-a-contract-convergence-20260904
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch accepted page heads
+        shell: bash
+        run: |
+          for sha in \
+            8adf7191d201d94a8a17d320250cf0e8379643b3 \
+            f93c4be2c7f943571cb7fdcc095a029b4b267203 \
+            e1b7680259baca5ecc8d0d39f7ee0e3c37c50562 \
+            5da07c34eaac1d859cf6e28f3be5edd7041a1c0f \
+            d01965194fb3c9388c7554638a74fe09c75e4d3e \
+            b0e1292948612d314e8900af2082b1ac0f709d45 \
+            8a6d0d98ea5cc5b50e1ca892360f927601f4b4fd \
+            a2f1ef4af9dc199953e3392bc793246412675509 \
+            c6064af59fe022e1e04a77f894b4485151a1b62d \
+            35c0a324044b4f7a88a9e532577d7076431f43dc \
+            5f2779aed2e7d38b2c29d08c77e00b1c4db573e0 \
+            9aad8fe16b890d386114e9d4eebd6af74e235142; do
+            git fetch --no-tags origin "$sha"
+          done
+      - name: Compute backend path collision census
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          b01='7e03d03f196824049b95d0378ee13d1e28292f94'
+          repair='cf4824a57e45dcb45a1503b36d55ff5bd34eaca7'
+          lanes={
+            'P01':(b01,'8adf7191d201d94a8a17d320250cf0e8379643b3'),
+            'P02':(repair,'f93c4be2c7f943571cb7fdcc095a029b4b267203'),
+            'P03':(repair,'e1b7680259baca5ecc8d0d39f7ee0e3c37c50562'),
+            'P04':(repair,'5da07c34eaac1d859cf6e28f3be5edd7041a1c0f'),
+            'P05':(b01,'d01965194fb3c9388c7554638a74fe09c75e4d3e'),
+            'P06':(repair,'b0e1292948612d314e8900af2082b1ac0f709d45'),
+            'P07':(b01,'8a6d0d98ea5cc5b50e1ca892360f927601f4b4fd'),
+            'P08':(b01,'a2f1ef4af9dc199953e3392bc793246412675509'),
+            'P09':(b01,'c6064af59fe022e1e04a77f894b4485151a1b62d'),
+            'P10':(repair,'35c0a324044b4f7a88a9e532577d7076431f43dc'),
+            'P11':(repair,'5f2779aed2e7d38b2c29d08c77e00b1c4db573e0'),
+            'P12':(repair,'9aad8fe16b890d386114e9d4eebd6af74e235142'),
+          }
+          by_path={}; lane_files={}
+          for lane,(base,head) in lanes.items():
+              out=subprocess.check_output(['git','diff','--name-only',base,head], text=True).splitlines()
+              files=[p for p in out if p and not p.startswith('.github/workflows/')]
+              lane_files[lane]=files
+              for p in files:
+                  try: blob=subprocess.check_output(['git','rev-parse',f'{head}:{p}'], text=True).strip()
+                  except subprocess.CalledProcessError: blob='DELETED'
+                  by_path.setdefault(p,[]).append({'lane':lane,'blob':blob})
+          collisions=[]
+          for p,items in sorted(by_path.items()):
+              if len(items)>1:
+                  blobs=sorted(set(i['blob'] for i in items))
+                  collisions.append({'path':p,'lanes':[i['lane'] for i in items], 'unique_blobs':len(blobs), 'classification':'IDENTICAL' if len(blobs)==1 else 'DIVERGENT'})
+          report={'authoritative_integration_base':repair,'lane_files':lane_files,'collisions':collisions}
+          print('SM80_BACKEND_COLLISION_CENSUS_JSON_BEGIN')
+          print(json.dumps(report,indent=2,sort_keys=True))
+          print('SM80_BACKEND_COLLISION_CENSUS_JSON_END')
+          with open('backend-collision-census.json','w') as f: json.dump(report,f,indent=2,sort_keys=True)
+          with open('backend-collision-census.md','w') as f:
+              f.write('# SM80 backend collision census\n\n')
+              f.write(f'Total non-workflow paths: {len(by_path)}\n\n')
+              f.write('| Path | Lanes | Classification | Unique blobs |\n|---|---|---|---:|\n')
+              for c in collisions: f.write(f"| `{c['path']}` | {', '.join(c['lanes'])} | {c['classification']} | {c['unique_blobs']} |\n")
+          PY
+          cat backend-collision-census.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sm80-backend-collision-census
+          path: |
+            backend-collision-census.json
+            backend-collision-census.md
