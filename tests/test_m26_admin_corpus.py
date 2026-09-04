@@ -33,6 +33,35 @@ def snapshot(
     }
 
 
+def healthy_snapshot(*, source_id: str = "s1", language: str | None = None):
+    source: dict[str, Any] = {
+        "source_id": source_id,
+        "source_path": f"posts/{source_id}.md",
+        "canonical_url": f"https://example/{source_id}",
+    }
+    if language:
+        source["language"] = language
+    return snapshot(
+        sources=[source],
+        artifacts=[
+            {
+                "source_id": source_id,
+                "artifact_markdown": f"{source_id}.md",
+                "embedding_text": f"{source_id}.txt",
+                "manifest_record": f"m:{source_id}",
+                "release_marker": "release-2",
+            }
+        ],
+        vectors=[
+            {
+                "source_id": source_id,
+                "vector_presence": True,
+                "release_marker": "release-2",
+            }
+        ],
+    )
+
+
 def test_corpus_happy_path_preserves_source_and_active_release_identity():
     rows = reconcile_corpus(
         snapshot(
@@ -187,12 +216,12 @@ def test_rename_does_not_silently_collapse_old_artifact_into_new_source():
 
 
 class BoomAdapter:
-    def read(self, *, task_id: str | None = None) -> Mapping[str, Any]:
+    def read(self) -> Mapping[str, Any]:
         raise RuntimeError("r2 down")
 
 
 class MalformedAdapter:
-    def read(self, *, task_id: str | None = None) -> Any:
+    def read(self) -> Any:
         return []
 
 
@@ -200,7 +229,7 @@ class FixtureAdapter:
     def __init__(self, value: Mapping[str, Any]) -> None:
         self.value = value
 
-    def read(self, *, task_id: str | None = None) -> Mapping[str, Any]:
+    def read(self) -> Mapping[str, Any]:
         return self.value
 
 
@@ -236,37 +265,17 @@ def test_route_returns_repair_a_envelope_with_nullable_observation():
     assert payload["availability"]["status"] == "partial"
     assert payload["availability"]["reason_code"] == "CORPUS_PARTIAL_EVIDENCE"
     assert payload["provenance"]["source"] == CORPUS_SOURCE
-    assert payload["provenance"]["resource_identity"]["contract_version"] == (
-        "1.1.0-gate-a-repair-a"
-    )
+    assert payload["provenance"]["resource_identity"] == {
+        "contract_version": "1.1.0-gate-a-repair-a"
+    }
     assert payload["observed_at"] is None
     assert payload["freshness"] == "snapshot"
     assert payload["data"][0]["source_id"] == "s1"
 
 
 def test_route_available_happy_path_has_no_fabricated_observed_at():
-    value = snapshot(
-        sources=[{"source_id": "s1", "source_path": "posts/a.md"}],
-        artifacts=[
-            {
-                "source_id": "s1",
-                "artifact_markdown": "a.md",
-                "embedding_text": "a.txt",
-                "manifest_record": "m:s1",
-                "release_marker": "release-2",
-            }
-        ],
-        vectors=[
-            {
-                "source_id": "s1",
-                "vector_presence": True,
-                "release_marker": "release-2",
-            }
-        ],
-    )
-
     app = FastAPI()
-    install_admin_corpus(app, adapter=FixtureAdapter(value))
+    install_admin_corpus(app, adapter=FixtureAdapter(healthy_snapshot()))
     payload = TestClient(app).get("/v1/admin/corpus").json()
 
     assert payload["availability"] == {
@@ -275,3 +284,109 @@ def test_route_available_happy_path_has_no_fabricated_observed_at():
         "detail": None,
     }
     assert payload["observed_at"] is None
+
+
+def test_list_route_exposes_only_canonical_query_parameters():
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(healthy_snapshot()))
+    operation = app.openapi()["paths"]["/v1/admin/corpus"]["get"]
+    parameters = {
+        item["name"]: item for item in operation["parameters"] if item["in"] == "query"
+    }
+
+    assert set(parameters) == {"q", "state", "language"}
+    assert parameters["q"]["schema"]["maxLength"] == 200
+    assert operation["operationId"] == "listCorpus"
+
+
+def test_list_route_applies_q_filter_to_source_identity_fields():
+    value = snapshot(
+        sources=[
+            {"source_id": "alpha", "source_path": "posts/alpha.md"},
+            {"source_id": "beta", "source_path": "posts/beta.md"},
+        ]
+    )
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(value))
+
+    payload = TestClient(app).get("/v1/admin/corpus?q=alpha").json()
+
+    assert [row["source_id"] for row in payload["data"]] == ["alpha"]
+
+
+def test_list_route_state_filter_uses_observed_reconciliation_state():
+    value = healthy_snapshot(source_id="fresh")
+    value["sources"].append({"source_id": "stale", "source_path": "posts/stale.md"})
+    value["artifacts"].append(
+        {
+            "source_id": "stale",
+            "artifact_markdown": "stale.md",
+            "embedding_text": "stale.txt",
+            "manifest_record": "m:stale",
+            "release_marker": "release-1",
+        }
+    )
+    value["vectors"].append(
+        {
+            "source_id": "stale",
+            "vector_presence": True,
+            "release_marker": "release-1",
+        }
+    )
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(value))
+
+    payload = TestClient(app).get("/v1/admin/corpus?state=stale").json()
+
+    assert [row["source_id"] for row in payload["data"]] == ["stale"]
+
+
+def test_list_route_language_filter_requires_observed_language_evidence():
+    value = healthy_snapshot(source_id="english", language="en")
+    other = healthy_snapshot(source_id="unknown")
+    value["sources"].extend(other["sources"])
+    value["artifacts"].extend(other["artifacts"])
+    value["vectors"].extend(other["vectors"])
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(value))
+
+    payload = TestClient(app).get("/v1/admin/corpus?language=en").json()
+
+    assert [row["source_id"] for row in payload["data"]] == ["english"]
+    assert payload["data"][0]["language"] == "en"
+
+
+def test_list_route_rejects_q_longer_than_canonical_maximum():
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(healthy_snapshot()))
+
+    response = TestClient(app).get(f"/v1/admin/corpus?q={'x' * 201}")
+
+    assert response.status_code == 422
+
+
+def test_detail_route_materializes_canonical_document_read():
+    app = FastAPI()
+    install_admin_corpus(
+        app,
+        adapter=FixtureAdapter(healthy_snapshot(source_id="document-1", language="en")),
+    )
+    operation = app.openapi()["paths"]["/v1/admin/corpus/{document_id}"]["get"]
+
+    response = TestClient(app).get("/v1/admin/corpus/document-1")
+
+    assert operation["operationId"] == "getCorpusDocument"
+    assert response.status_code == 200
+    assert response.json()["availability"]["status"] == "available"
+    assert response.json()["data"]["source_id"] == "document-1"
+
+
+def test_detail_route_missing_document_is_explicit_unavailable_not_fake_empty():
+    app = FastAPI()
+    install_admin_corpus(app, adapter=FixtureAdapter(healthy_snapshot()))
+
+    payload = TestClient(app).get("/v1/admin/corpus/missing").json()
+
+    assert payload["availability"]["status"] == "unavailable"
+    assert payload["availability"]["reason_code"] == "CORPUS_DOCUMENT_NOT_OBSERVED"
+    assert payload["data"] is None
