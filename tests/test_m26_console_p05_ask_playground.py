@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from knowledge_engine import m26_console_p05_ask_playground as p05
 from knowledge_engine.m26_admin_control_plane import AdminActor
 
-
 OWNER = AdminActor(
     actor_id="cfaccess:test-owner",
     subject="cloudflare-access-subject",
