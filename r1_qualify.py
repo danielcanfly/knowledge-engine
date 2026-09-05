@@ -210,7 +210,13 @@ contract = {
     "R1 bounded retrieval/context qualification completed against the frozen baseline and the read-only R0 candidate release. The repaired seam recovers the expected source into the candidate set for all 12 exact cohort cases; selected evidence remains source-grounded and is recorded in raw traces. Focused guards, same-family controls, A3 metamorphic controls, admitted true-abstain controls, cost/latency, mutation counters, and contract freeze are included.\n\n"
     "Terminal: `M26_AQV2_SM_R1_RETRIEVAL_CONTEXT_FIX_VALIDATED_READY_FOR_INTEGRATION`\n"
 )
-(OUT / "BRANCH_PARENT_COMMIT.txt").write_text(subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True) + subprocess.check_output(["git", "rev-parse", "HEAD^"], cwd=ROOT, text=True) + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True))
+branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip()
+parent = subprocess.check_output(["git", "rev-parse", "HEAD^"], cwd=ROOT, text=True).strip()
+head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+(OUT / "BRANCH_PARENT_COMMIT.txt").write_text(f"branch={branch}\nparent={parent}\ncommit={head}\n")
+(OUT / "IMPLEMENTATION_DIFF.patch").write_text(
+    subprocess.check_output(["git", "diff", "f96161ca191ea33cd90c7b9544df2a36451c5599..HEAD", "--", "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py", "tests/test_m26_r1_source_coverage.py"], cwd=ROOT, text=True)
+)
 (OUT / "PRODUCTION_MUTATION_PROOF.md").write_text("Candidate release is read-only. No production pointer mutation, Qdrant write, R2 write, or provider request occurred. See MUTATION_COUNTERS.json and candidate-freeze.json.\n")
 (OUT / "TERMINAL_STATUS.txt").write_text("M26_AQV2_SM_R1_RETRIEVAL_CONTEXT_FIX_VALIDATED_READY_FOR_INTEGRATION\n")
 (OUT / "RAW_COMMANDS.log").write_text(
