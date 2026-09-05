@@ -1,25 +1,12 @@
 from pathlib import Path
-from typing import Any
 
 from knowledge_engine.m26_console_api import app
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _route_paths(routes: list[Any]) -> set[str]:
-    paths: set[str] = set()
-    for route in routes:
-        path = getattr(route, "path", None)
-        if isinstance(path, str):
-            paths.add(path)
-        nested = getattr(route, "routes", None)
-        if isinstance(nested, list):
-            paths.update(_route_paths(nested))
-    return paths
-
-
 def test_combined_runtime_exposes_public_and_admin_routes() -> None:
-    paths = _route_paths(app.routes)
+    paths = set(app.openapi()["paths"])
     assert "/v1/answers" in paths
     assert "/v1/answers/health" in paths
     assert "/v1/admin/session" in paths
