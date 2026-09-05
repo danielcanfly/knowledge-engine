@@ -26,6 +26,17 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
+from .m26_gemini_dense_fallback import (
+    GEMINI_DIMENSION,
+    GEMINI_MODEL,
+    GEMINI_PROVIDER,
+    GEMINI_TRANSIENT_HTTP_STATUSES,
+    M26_GEMINI_CANDIDATE_RELEASE_ID,
+    M26_GEMINI_COLLECTION,
+    GeminiDenseConfig,
+    GeminiEmbeddingConfig,
+    GeminiQdrantDenseChannel,
+)
 from .m26_pa5_v8_live import MODEL as MINIMAX_MODEL
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
@@ -739,7 +750,193 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
     return LocalDenseProjectionChannel()
 
 
-_DENSE_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+def _env_enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _dense_collection_name(dense_backend: DenseChannel) -> str | None:
+    config = getattr(dense_backend, "config", None)
+    value = getattr(config, "qdrant_collection", None)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def gemini_dense_channel_from_env(
+    *,
+    bundle: ProductionAnswerBundle,
+    primary_dense_backend: DenseChannel,
+) -> DenseChannel | None:
+    """Build the candidate-only Gemini secondary channel when explicitly enabled.
+
+    Missing/invalid configuration is fail-closed once the candidate feature is enabled.
+    Leaving the feature disabled preserves the pre-SM-GF runtime exactly.
+    """
+    if not _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED"):
+        return None
+    if bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
+            "Gemini dense fallback is scoped to the frozen M26 candidate release",
+        )
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    qdrant_url = os.environ.get("QDRANT_URL", "").strip()
+    qdrant_api_key = (
+        os.environ.get("QDRANT_API_KEY_READ")
+        or os.environ.get("QDRANT_READ_ONLY_API_KEY")
+        or os.environ.get("QDRANT_API_KEY")
+        or ""
+    ).strip()
+    collection = (
+        os.environ.get("M26_GEMINI_DENSE_COLLECTION") or M26_GEMINI_COLLECTION
+    ).strip()
+    missing = [
+        name
+        for name, value in {
+            "GEMINI_API_KEY": api_key,
+            "QDRANT_URL": qdrant_url,
+            "QDRANT_READ_KEY": qdrant_api_key,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_DENSE_CONFIG_MISSING",
+            "missing enabled Gemini dense fallback configuration: " + ",".join(missing),
+        )
+    return GeminiQdrantDenseChannel(
+        GeminiDenseConfig(
+            embedding=GeminiEmbeddingConfig(
+                api_key=api_key,
+                timeout_seconds=_float_from_env(
+                    "M26_GEMINI_EMBED_TIMEOUT_SECONDS", 10.0
+                ),
+            ),
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            qdrant_collection=collection,
+            timeout_seconds=_float_from_env(
+                "M26_GEMINI_QDRANT_TIMEOUT_SECONDS", 10.0
+            ),
+            primary_qdrant_collection=_dense_collection_name(primary_dense_backend),
+        )
+    )
+
+
+def _dense_provider_identity(backend_identity: Mapping[str, Any]) -> tuple[str, str, int | None]:
+    provider = str(
+        backend_identity.get("dense_provider")
+        or backend_identity.get("embedding_provider")
+        or ""
+    ).strip()
+    model = str(
+        backend_identity.get("dense_model")
+        or backend_identity.get("embedding_model")
+        or ""
+    ).strip()
+    dimension = backend_identity.get("dense_dimension")
+    if isinstance(dimension, bool) or not isinstance(dimension, int):
+        raw_dimension = backend_identity.get("vector_dimension")
+        dimension = raw_dimension if isinstance(raw_dimension, int) and not isinstance(raw_dimension, bool) else None
+    if not provider and model == CLOUDFLARE_MODEL:
+        provider = "cloudflare-workers-ai"
+    if not provider and backend_identity.get("backend") == "local_release_dense_projection_v1":
+        provider = "local-projection"
+    if not model and backend_identity.get("backend") == "local_release_dense_projection_v1":
+        model = "local-hashed-projection-v1"
+    return provider or "unknown", model or "unknown", dimension
+
+
+def _annotate_primary_dense_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    annotated = dict(result)
+    identity = dict(
+        result.get("backend_identity", {})
+        if isinstance(result.get("backend_identity"), Mapping)
+        else {}
+    )
+    provider, model, dimension = _dense_provider_identity(identity)
+    identity.update(
+        {
+            "dense_provider": provider,
+            "dense_model": model,
+            "dense_dimension": dimension,
+            "fallback_reason": "NONE",
+            "fallback_attempted": False,
+            "fallback_succeeded": False,
+            "retrieval_mode": (
+                "hybrid_bge" if model == CLOUDFLARE_MODEL else "hybrid_dense"
+            ),
+        }
+    )
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+def _annotate_lexical_only_result(
+    result: Mapping[str, Any],
+    *,
+    fallback_reason: str,
+    fallback_attempted: bool,
+    fallback_succeeded: bool = False,
+    fallback_identity: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    annotated = dict(result)
+    identity = dict(
+        result.get("backend_identity", {})
+        if isinstance(result.get("backend_identity"), Mapping)
+        else {}
+    )
+    provider, model, dimension = _dense_provider_identity(identity)
+    identity.update(
+        {
+            "dense_provider": provider,
+            "dense_model": model,
+            "dense_dimension": dimension,
+            "fallback_reason": fallback_reason,
+            "fallback_attempted": fallback_attempted,
+            "fallback_succeeded": fallback_succeeded,
+            "retrieval_mode": "lexical_only",
+        }
+    )
+    if fallback_identity is not None:
+        identity["fallback_dense_identity"] = dict(fallback_identity)
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+def _annotate_gemini_fallback_success(
+    fallback_result: Mapping[str, Any],
+    *,
+    primary_result: Mapping[str, Any],
+    fallback_reason: str,
+) -> dict[str, Any]:
+    annotated = dict(fallback_result)
+    identity = dict(
+        fallback_result.get("backend_identity", {})
+        if isinstance(fallback_result.get("backend_identity"), Mapping)
+        else {}
+    )
+    identity.update(
+        {
+            "dense_provider": GEMINI_PROVIDER,
+            "dense_model": GEMINI_MODEL,
+            "dense_dimension": GEMINI_DIMENSION,
+            "fallback_reason": fallback_reason,
+            "fallback_attempted": True,
+            "fallback_succeeded": True,
+            "retrieval_mode": "hybrid_gemini",
+            "primary_dense_identity": dict(
+                primary_result.get("backend_identity", {})
+                if isinstance(primary_result.get("backend_identity"), Mapping)
+                else {}
+            ),
+        }
+    )
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+_DENSE_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
 _DENSE_TRANSIENT_REASON_CODE = "DENSE_TRANSIENT_UNAVAILABLE"
 _DENSE_TIMEOUT_REASON_CODE = "DENSE_SEARCH_DEADLINE_EXCEEDED"
 
@@ -801,6 +998,7 @@ def _run_dense_search_with_deadline(
     top_k: int,
     deadline_seconds: float,
     event_sink: RuntimeEventSink | None,
+    timeout_reason_code: str = _DENSE_TIMEOUT_REASON_CODE,
 ) -> dict[str, Any]:
     started = time.monotonic()
     results: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
@@ -832,7 +1030,7 @@ def _run_dense_search_with_deadline(
             "stage.degraded",
             stage="retrieval",
             channel="dense",
-            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            reason_code=timeout_reason_code,
             http_status=None,
             deadline_ms=deadline_ms,
             elapsed_ms=elapsed_ms,
@@ -840,7 +1038,7 @@ def _run_dense_search_with_deadline(
         return _degraded_dense_result(
             dense_backend,
             http_status=None,
-            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            reason_code=timeout_reason_code,
             deadline_ms=deadline_ms,
             elapsed_ms=elapsed_ms,
         )
@@ -850,11 +1048,87 @@ def _run_dense_search_with_deadline(
     return payload
 
 
+def _run_dense_attempt_with_transient_policy(
+    *,
+    dense_backend: DenseChannel,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    top_k: int,
+    deadline_seconds: float,
+    event_sink: RuntimeEventSink | None,
+    transient_statuses: set[int] | frozenset[int],
+    transient_reason_code: str,
+    timeout_reason_code: str,
+) -> dict[str, Any]:
+    try:
+        return _run_dense_search_with_deadline(
+            dense_backend=dense_backend,
+            question=question,
+            bundle=bundle,
+            top_k=top_k,
+            deadline_seconds=deadline_seconds,
+            event_sink=event_sink,
+            timeout_reason_code=timeout_reason_code,
+        )
+    except (httpx.TimeoutException, httpx.NetworkError):
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=transient_reason_code,
+            http_status=None,
+        )
+        return _degraded_dense_result(
+            dense_backend, http_status=None, reason_code=transient_reason_code
+        )
+    except httpx.HTTPStatusError as exc:
+        http_status = _dense_http_status(exc)
+        if http_status not in transient_statuses:
+            raise
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=transient_reason_code,
+            http_status=http_status,
+        )
+        return _degraded_dense_result(
+            dense_backend,
+            http_status=http_status,
+            reason_code=transient_reason_code,
+        )
+
+
+def _dense_degraded_identity(result: Mapping[str, Any]) -> dict[str, Any]:
+    identity = result.get("backend_identity")
+    return dict(identity) if isinstance(identity, Mapping) else {}
+
+
+def _primary_failure_is_gemini_eligible(result: Mapping[str, Any]) -> bool:
+    identity = _dense_degraded_identity(result)
+    if identity.get("degraded") is not True:
+        return False
+    reason = str(identity.get("reason_code", ""))
+    status = identity.get("http_status")
+    return (
+        reason
+        in {
+            _DENSE_TRANSIENT_REASON_CODE,
+            _DENSE_TIMEOUT_REASON_CODE,
+            "DENSE_FORCED_GEMINI_QUALIFICATION",
+        }
+        or (isinstance(status, int) and status in _DENSE_TRANSIENT_HTTP_STATUSES)
+    )
+
+
 def _run_lexical_primary_retrieval(
     *,
     question: str,
     bundle: ProductionAnswerBundle,
     dense_channel: DenseChannel | None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool,
     top_k: int,
     event_sink: RuntimeEventSink | None,
@@ -876,40 +1150,115 @@ def _run_lexical_primary_retrieval(
         lexical_index=bundle.lexical_index,
         question=question,
     )
-    dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
-    try:
-        dense = _run_dense_search_with_deadline(
-            dense_backend=dense_backend,
+    primary = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
+    fallback = dense_fallback_channel
+    if fallback is not None and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
+            "Gemini dense fallback is candidate-release only",
+        )
+    force_gemini = _env_enabled("M26_GEMINI_DENSE_FORCE")
+    if force_gemini and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FORCE_RELEASE_MISMATCH",
+            "forced Gemini qualification is candidate-release only",
+        )
+    if fallback is None and (
+        force_gemini or _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED")
+    ):
+        fallback = gemini_dense_channel_from_env(
+            bundle=bundle,
+            primary_dense_backend=primary,
+        )
+    if force_gemini:
+        if fallback is None:
+            raise PA7ArbitraryQueryError(
+                "PA7_GEMINI_FORCE_CONFIG_MISSING",
+                "forced Gemini qualification requires a configured secondary channel",
+            )
+        dense = _degraded_dense_result(
+            primary,
+            http_status=None,
+            reason_code="DENSE_FORCED_GEMINI_QUALIFICATION",
+        )
+    else:
+        dense = _run_dense_attempt_with_transient_policy(
+            dense_backend=primary,
             question=question,
             bundle=bundle,
             top_k=top_k,
             deadline_seconds=_dense_search_deadline_seconds(),
             event_sink=event_sink,
+            transient_statuses=_DENSE_TRANSIENT_HTTP_STATUSES,
+            transient_reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            timeout_reason_code=_DENSE_TIMEOUT_REASON_CODE,
         )
-    except (httpx.TimeoutException, httpx.NetworkError):
+
+    if not _primary_failure_is_gemini_eligible(dense):
+        return lexical, _annotate_primary_dense_result(dense)
+
+    primary_identity = _dense_degraded_identity(dense)
+    primary_reason = str(primary_identity.get("reason_code") or _DENSE_TRANSIENT_REASON_CODE)
+    if fallback is None:
+        return lexical, _annotate_lexical_only_result(
+            dense,
+            fallback_reason=primary_reason,
+            fallback_attempted=False,
+        )
+
+    _emit_runtime_event(
+        event_sink,
+        "stage.fallback_started",
+        stage="retrieval",
+        channel="dense",
+        dense_provider=GEMINI_PROVIDER,
+        dense_model=GEMINI_MODEL,
+        fallback_reason=primary_reason,
+    )
+    gemini_result = _run_dense_attempt_with_transient_policy(
+        dense_backend=fallback,
+        question=question,
+        bundle=bundle,
+        top_k=top_k,
+        deadline_seconds=_float_from_env("M26_GEMINI_DENSE_SEARCH_DEADLINE_SECONDS", 2.0),
+        event_sink=event_sink,
+        transient_statuses=GEMINI_TRANSIENT_HTTP_STATUSES,
+        transient_reason_code="GEMINI_DENSE_TRANSIENT_UNAVAILABLE",
+        timeout_reason_code="GEMINI_DENSE_SEARCH_DEADLINE_EXCEEDED",
+    )
+    gemini_identity = _dense_degraded_identity(gemini_result)
+    if gemini_identity.get("degraded") is not True:
         _emit_runtime_event(
             event_sink,
-            "stage.degraded",
+            "stage.fallback_completed",
             stage="retrieval",
             channel="dense",
-            reason_code=_DENSE_TRANSIENT_REASON_CODE,
-            http_status=None,
+            dense_provider=GEMINI_PROVIDER,
+            dense_model=GEMINI_MODEL,
+            fallback_succeeded=True,
         )
-        dense = _degraded_dense_result(dense_backend, http_status=None)
-    except httpx.HTTPStatusError as exc:
-        http_status = _dense_http_status(exc)
-        if http_status not in _DENSE_TRANSIENT_HTTP_STATUSES:
-            raise
-        _emit_runtime_event(
-            event_sink,
-            "stage.degraded",
-            stage="retrieval",
-            channel="dense",
-            reason_code=_DENSE_TRANSIENT_REASON_CODE,
-            http_status=http_status,
+        return lexical, _annotate_gemini_fallback_success(
+            gemini_result, primary_result=dense, fallback_reason=primary_reason
         )
-        dense = _degraded_dense_result(dense_backend, http_status=http_status)
-    return lexical, dense
+
+    _emit_runtime_event(
+        event_sink,
+        "stage.fallback_completed",
+        stage="retrieval",
+        channel="dense",
+        dense_provider=GEMINI_PROVIDER,
+        dense_model=GEMINI_MODEL,
+        fallback_succeeded=False,
+        reason_code=str(gemini_identity.get("reason_code", "")),
+        http_status=gemini_identity.get("http_status"),
+    )
+    return lexical, _annotate_lexical_only_result(
+        dense,
+        fallback_reason=primary_reason,
+        fallback_attempted=True,
+        fallback_succeeded=False,
+        fallback_identity=gemini_identity,
+    )
 
 
 def _augment_source_coverage_candidates(
@@ -1086,6 +1435,7 @@ def run_owner_arbitrary_query(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
@@ -1100,6 +1450,7 @@ def run_owner_arbitrary_query(
         public_request=public_request,
         provider_client=provider_client,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
@@ -1223,6 +1574,7 @@ def run_owner_arbitrary_query(
         question=normalized_question,
         bundle=bundle,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
@@ -1519,6 +1871,13 @@ def _retrieval_response_fields(
             "actual_question_reaches_retrieval": True,
             "lexical": True,
             "dense": True,
+            "dense_provider": backend_identity.get("dense_provider"),
+            "dense_model": backend_identity.get("dense_model"),
+            "dense_dimension": backend_identity.get("dense_dimension"),
+            "fallback_reason": backend_identity.get("fallback_reason", "NONE"),
+            "fallback_attempted": bool(backend_identity.get("fallback_attempted", False)),
+            "fallback_succeeded": bool(backend_identity.get("fallback_succeeded", False)),
+            "retrieval_mode": backend_identity.get("retrieval_mode", "hybrid_dense"),
             "graph": True,
             "provenance": True,
             "parent_expansion": parent_expansion["expanded_section_count"] > 0,
@@ -1608,6 +1967,7 @@ def _run_fast_public_query(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
@@ -1700,6 +2060,7 @@ def _run_fast_public_query(
         question=normalized_question,
         bundle=bundle,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
