@@ -1,0 +1,58 @@
+name: M26 AQV2 R1 Successor Qualification
+
+on:
+  push:
+    branches:
+      - m26-aqv2-sm-r1-successor-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-trace:
+    runs-on: ubuntu-latest
+    env:
+      R0_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      R0_SOURCE_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
+      R0_BLOG_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
+      R0_LEXICAL_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download exact non-production R0 lexical candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r1-successor
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/danielcanfly/knowledge-source/${R0_SOURCE_SHA}/documents/daniel-blog-en-180-f5e20062/candidate-release/lexical-documents.jsonl" \
+            -o /tmp/r1-successor/lexical-documents.jsonl
+          printf '%s  %s\n' "$R0_LEXICAL_SHA256" /tmp/r1-successor/lexical-documents.jsonl | sha256sum -c -
+          test "$(wc -l < /tmp/r1-successor/lexical-documents.jsonl)" -eq 4424
+      - name: Run first-bad-stage trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/m26_aqv2_r1_successor_trace.py \
+            --lexical-jsonl /tmp/r1-successor/lexical-documents.jsonl \
+            --output /tmp/r1-successor/first-bad-stage.json \
+            | tee /tmp/r1-successor/trace.log
+      - name: Record immutable qualification identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > /tmp/r1-successor/engine-commit.txt
+          git rev-parse HEAD^ > /tmp/r1-successor/engine-parent.txt
+          printf '%s\n' "$R0_RELEASE_ID" > /tmp/r1-successor/r0-release-id.txt
+          printf '%s\n' "$R0_SOURCE_SHA" > /tmp/r1-successor/r0-source-sha.txt
+          printf '%s\n' "$R0_BLOG_SHA" > /tmp/r1-successor/r0-blog-sha.txt
+      - name: Upload isolated trace evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-aqv2-r1-successor-first-bad-stage
+          path: /tmp/r1-successor/*
+          if-no-files-found: error
+          retention-days: 30
