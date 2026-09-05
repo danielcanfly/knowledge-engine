@@ -26,7 +26,8 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
-from .m26_pa5_v8_live import LiveGateError, MiniMaxClient, MODEL as MINIMAX_MODEL
+from .m26_pa5_v8_live import MODEL as MINIMAX_MODEL
+from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_ADMISSION_SHA256,
     FULL_PRODUCTION_QDRANT_COLLECTION,
