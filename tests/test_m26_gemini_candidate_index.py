@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 SCRIPT = (
     Path(__file__).resolve().parents[1] / "scripts" / "m26_gemini_candidate_index.py"
 )
