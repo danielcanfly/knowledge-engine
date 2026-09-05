@@ -167,9 +167,9 @@ write_csv(
     [[control_id, question, " ".join(sorted(module._coverage_terms(question))), len(source_set(question)), 1, "PASS" if not source_set(question) else "PASS_ADMITTED_UNSUPPORTED"] for control_id, question in abstain],
 )
 
-pytest_cmd = [sys.executable, "-m", "pytest", "-q", "tests/test_m26_r1_source_coverage.py"]
+pytest_cmd = [sys.executable, "-m", "pytest", "-q", "tests/test_m26_r1_source_coverage.py", "tests/test_m26_r2_selection_context.py"]
 pytest_result = subprocess.run(pytest_cmd, cwd=ROOT, env={"PYTHONPATH": str(ROOT / "src")}, capture_output=True, text=True)
-(OUT / "PASSING_GUARD_RESULTS.csv").write_text("guard,command,exit_code,status\nfocused_source_coverage,pytest -q tests/test_m26_r1_source_coverage.py,%d,%s\n" % (pytest_result.returncode, "PASS" if pytest_result.returncode == 0 else "FAIL"))
+(OUT / "PASSING_GUARD_RESULTS.csv").write_text("guard,command,exit_code,status\nfocused_selection_context,pytest -q tests/test_m26_r1_source_coverage.py tests/test_m26_r2_selection_context.py,%d,%s\n" % (pytest_result.returncode, "PASS" if pytest_result.returncode == 0 else "FAIL"))
 (OUT / "PASSING_GUARD_OUTPUT.txt").write_text(pytest_result.stdout + pytest_result.stderr)
 
 baseline_ms = [float(row["elapsed_ms"]) for row in baseline.values()]
@@ -228,7 +228,7 @@ parent = "f96161ca191ea33cd90c7b9544df2a36451c5599"
 (OUT / "CANDIDATE_POOL_ENVELOPE.md").write_text("# Candidate pool envelope\n\nR1 seed retrieval remains 8. Repair-2 narrows prior 128-source backfill to at most 40 unseen-source representatives, one per source. Candidate pool remains capped at 40. Selection uses a bounded evidence budget of 12 and rank-stratified seed checkpoints; no global top-k inflation or post-R1 corpus scan is used.\n")
 (OUT / "RAW_COMMANDS.log").write_text(
     "git worktree add -b codex/m26-aqv2-r1-successor-retrieval-context-20260905 <isolated-worktree> f96161ca191ea33cd90c7b9544df2a36451c5599\n"
-    "PYTHONPATH=src pytest -q tests/test_m26_r1_source_coverage.py\n"
+    "PYTHONPATH=src pytest -q tests/test_m26_r1_source_coverage.py tests/test_m26_r2_selection_context.py\n"
     "PYTHONPATH=src python r2_qualify.py <worktree> <read-only-R0-candidate> <return-dir>\n"
     "git diff --check\n"
     "python -m compileall -q src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\n"
