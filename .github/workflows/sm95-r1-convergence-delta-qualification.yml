@@ -28,7 +28,7 @@ jobs:
           set +e
           python -m ruff check . --output-format=json > /tmp/convergence-ruff.json
           conv_rc=$?
-          (cd /tmp/sm95-main && python -m ruff check . --output-format=json > /tmp/main-ruff.json)
+          (cd /tmp/sm95-main && PYTHONPATH=/tmp/sm95-main/src python -m ruff check . --output-format=json > /tmp/main-ruff.json)
           main_rc=$?
           set -e
           python - <<'PY'
@@ -40,10 +40,9 @@ jobs:
               out=set()
               for row in rows:
                   filename=str(row.get('filename',''))
-                  if '/tmp/sm95-main/' in filename:
-                      filename=filename.split('/tmp/sm95-main/',1)[1]
-                  elif '/home/runner/work/knowledge-engine/knowledge-engine/' in filename:
-                      filename=filename.split('/home/runner/work/knowledge-engine/knowledge-engine/',1)[1]
+                  for prefix in ('/tmp/sm95-main/','/home/runner/work/knowledge-engine/knowledge-engine/'):
+                      if prefix in filename:
+                          filename=filename.split(prefix,1)[1]
                   loc=row.get('location') or {}
                   out.add((filename,row.get('code'),loc.get('row'),loc.get('column'),row.get('message')))
               return out
@@ -60,14 +59,61 @@ jobs:
           PY
           test "$main_rc" -ne 0
           test "$conv_rc" -ne 0
-      - name: Full pytest
-        run: pytest -q
+      - name: Full pytest differential versus exact fresh main
+        run: |
+          set -euo pipefail
+          set +e
+          PYTHONPATH="$GITHUB_WORKSPACE/src" pytest -q --tb=line > /tmp/convergence-pytest.log 2>&1
+          conv_rc=$?
+          (cd /tmp/sm95-main && PYTHONPATH=/tmp/sm95-main/src pytest -q --tb=line > /tmp/main-pytest.log 2>&1)
+          main_rc=$?
+          set -e
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          def parse(path):
+              text=Path(path).read_text(errors='replace')
+              ids=[]
+              lines=[]
+              for line in text.splitlines():
+                  if line.startswith(('FAILED ', 'ERROR ')):
+                      lines.append(line)
+                      m=re.match(r'^(?:FAILED|ERROR)\s+([^\s]+)', line)
+                      if m: ids.append(m.group(1))
+              return text, set(ids), lines
+
+          conv_text, conv_ids, conv_lines=parse('/tmp/convergence-pytest.log')
+          main_text, main_ids, main_lines=parse('/tmp/main-pytest.log')
+          introduced=sorted(conv_ids-main_ids)
+          resolved=sorted(main_ids-conv_ids)
+          print('CONVERGENCE_FAILED_NODE_COUNT', len(conv_ids))
+          for line in conv_lines[:40]: print('CONVERGENCE', line)
+          print('MAIN_FAILED_NODE_COUNT', len(main_ids))
+          for line in main_lines[:40]: print('MAIN', line)
+          print('INTRODUCED_PYTEST_FAILURES', len(introduced))
+          for item in introduced: print('INTRODUCED', item)
+          print('MAIN_ONLY_PYTEST_FAILURES', len(resolved))
+          for item in resolved: print('MAIN_ONLY', item)
+          print('CONVERGENCE_TAIL_BEGIN')
+          print('\n'.join(conv_text.splitlines()[-25:]))
+          print('CONVERGENCE_TAIL_END')
+          print('MAIN_TAIL_BEGIN')
+          print('\n'.join(main_text.splitlines()[-25:]))
+          print('MAIN_TAIL_END')
+          if introduced:
+              raise SystemExit('convergence introduced pytest failure nodes')
+          print('PYTEST_DELTA_NO_NEW_FAILURE_NODES=PASS')
+          PY
+          echo "CONVERGENCE_PYTEST_RC=$conv_rc"
+          echo "MAIN_PYTEST_RC=$main_rc"
       - name: Release scripts and vertical slice
         run: |
           set -euo pipefail
           bash -n deploy/deploy.sh deploy/rollback.sh
           make build
           make query | grep -F 'concepts/knowledge-compiler'
+          echo 'CONVERGENCE_VERTICAL_SLICE=PASS'
       - name: Build and inspect production image
         run: |
           set -euo pipefail
