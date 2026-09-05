@@ -211,9 +211,9 @@ contract = {
     "Terminal: `M26_AQV2_SM_R1_RETRIEVAL_CONTEXT_FIX_VALIDATED_READY_FOR_INTEGRATION`\n"
 )
 branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True).strip()
-parent = subprocess.check_output(["git", "rev-parse", "HEAD^"], cwd=ROOT, text=True).strip()
 head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-(OUT / "BRANCH_PARENT_COMMIT.txt").write_text(f"branch={branch}\nparent={parent}\ncommit={head}\n")
+parent = "f96161ca191ea33cd90c7b9544df2a36451c5599"
+(OUT / "BRANCH_PARENT_COMMIT.txt").write_text(f"branch={branch}\nfrozen_parent={parent}\ncommit={head}\n")
 (OUT / "IMPLEMENTATION_DIFF.patch").write_text(
     subprocess.check_output(["git", "diff", "f96161ca191ea33cd90c7b9544df2a36451c5599..HEAD", "--", "src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py", "tests/test_m26_r1_source_coverage.py"], cwd=ROOT, text=True)
 )
