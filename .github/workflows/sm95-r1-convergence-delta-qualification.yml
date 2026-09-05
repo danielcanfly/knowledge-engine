@@ -1,0 +1,86 @@
+name: SM95-R1 Convergence Delta Qualification
+
+on:
+  push:
+    branches:
+      - m26-console/sm95-r1-convergence-qualification-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Prove no new Ruff diagnostics versus fresh main
+        run: |
+          set -euo pipefail
+          git worktree add --detach /tmp/sm95-main 41552828693b0135c701445fe1fd298c632ce42c
+          set +e
+          python -m ruff check . --output-format=json > /tmp/convergence-ruff.json
+          conv_rc=$?
+          (cd /tmp/sm95-main && python -m ruff check . --output-format=json > /tmp/main-ruff.json)
+          main_rc=$?
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load(path: str):
+              rows=json.loads(Path(path).read_text())
+              out=set()
+              for row in rows:
+                  filename=str(row.get('filename',''))
+                  if '/tmp/sm95-main/' in filename:
+                      filename=filename.split('/tmp/sm95-main/',1)[1]
+                  elif '/home/runner/work/knowledge-engine/knowledge-engine/' in filename:
+                      filename=filename.split('/home/runner/work/knowledge-engine/knowledge-engine/',1)[1]
+                  loc=row.get('location') or {}
+                  out.add((filename,row.get('code'),loc.get('row'),loc.get('column'),row.get('message')))
+              return out
+          main=load('/tmp/main-ruff.json')
+          conv=load('/tmp/convergence-ruff.json')
+          introduced=sorted(conv-main)
+          print('MAIN_RUFF_DIAGNOSTICS', len(main))
+          print('CONVERGENCE_RUFF_DIAGNOSTICS', len(conv))
+          print('INTRODUCED_RUFF_DIAGNOSTICS', len(introduced))
+          if introduced:
+              for item in introduced[:50]: print('INTRODUCED', item)
+              raise SystemExit(1)
+          print('RUFF_DELTA_NO_NEW_DIAGNOSTICS=PASS')
+          PY
+          test "$main_rc" -ne 0
+          test "$conv_rc" -ne 0
+      - name: Full pytest
+        run: pytest -q
+      - name: Release scripts and vertical slice
+        run: |
+          set -euo pipefail
+          bash -n deploy/deploy.sh deploy/rollback.sh
+          make build
+          make query | grep -F 'concepts/knowledge-compiler'
+      - name: Build and inspect production image
+        run: |
+          set -euo pipefail
+          docker build --tag knowledge-engine:sm95-r1-convergence .
+          python - <<'PY'
+          import json, subprocess
+          image=json.loads(subprocess.check_output(['docker','inspect','knowledge-engine:sm95-r1-convergence']))[0]
+          cfg=image['Config']
+          cmd=cfg.get('Cmd') or []
+          health=((cfg.get('Healthcheck') or {}).get('Test') or [])
+          assert 'knowledge_engine.m26_console_api:app' in cmd, cmd
+          assert any('/v1/answers/health' in x for x in health), health
+          assert not any('/v1/health' in x for x in health), health
+          print('CONVERGENCE_IMAGE_CMD=PASS')
+          print('CONVERGENCE_IMAGE_HEALTHCHECK=PASS')
+          PY
