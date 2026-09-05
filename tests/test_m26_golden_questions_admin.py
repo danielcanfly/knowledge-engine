@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Mapping
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from knowledge_engine.m26_admin_control_plane import (
@@ -15,9 +16,8 @@ from knowledge_engine.m26_admin_control_plane import (
     install_admin_control_plane,
 )
 from knowledge_engine.m26_golden_questions_admin import (
-    RUN_REQUEST_SCHEMA_REASON,
+    RUNNER_UNAVAILABLE_REASON,
     StaticGoldenEvaluationProvider,
-    UnavailableGoldenEvaluationProvider,
     install_golden_questions_admin,
 )
 
@@ -29,16 +29,29 @@ OWNER = AdminActor(
     issuer="https://team.cloudflareaccess.com",
     audience=("aud-1",),
 )
+RELEASE = {
+    "release_id": "release-b",
+    "index_identity": "qdrant:collection-b@sha256:index-b",
+    "config_identity": "sha256:config-b",
+    "runtime_sha256": "sha256:runtime-b",
+    "collection": "collection-b",
+    "manifest_sha256": "sha256:manifest-b",
+    "provider_id": "provider-test",
+    "model_id": "model-test",
+    "provider_config_hash": "sha256:provider-b",
+}
+DATASET = {
+    "dataset_id": "representative-ask",
+    "version": "2026.09.05",
+    "dataset_hash": "sha256:dataset-v7",
+}
+SCORING = {"version": "semantic-v3", "hash": "sha256:scoring-v3"}
 
 
 class FakeAuthenticator:
     def authenticate(self, assertion: str | None) -> AdminActor:
         if assertion != "valid-assertion":
-            raise AdminAPIError(
-                status_code=403,
-                code="ADMIN_ACCESS_ASSERTION_INVALID",
-                message="invalid",
-            )
+            raise AdminAPIError(status_code=403, code="ADMIN_ACCESS_ASSERTION_INVALID", message="invalid")
         return OWNER
 
 
@@ -64,33 +77,33 @@ def gate(capability_id: str, state: str) -> CapabilityGate:
     )
 
 
-def admin_headers(**extra: str) -> dict[str, str]:
-    headers = {
+def admin_headers(key: str = "p10-test-idempotency-0001") -> dict[str, str]:
+    return {
         "origin": "https://console.danielcanfly.com",
         ACCESS_ASSERTION_HEADER: "valid-assertion",
+        "content-type": "application/json",
+        "idempotency-key": key,
     }
-    headers.update(extra)
-    return headers
 
 
-def provider() -> StaticGoldenEvaluationProvider:
+def provider(*, contract_status: str = "available") -> StaticGoldenEvaluationProvider:
+    contract: dict[str, Any]
+    if contract_status == "available":
+        contract = {"status": "available", "release": RELEASE}
+    else:
+        contract = {"status": "blocked", "reason_code": "RUN_TARGET_NOT_QUALIFIED"}
     golden = {
         "source": "fixture_registry",
         "observed_at": "2026-09-05T00:00:00Z",
         "freshness": "snapshot",
         "evidence_digest": "sha256:golden",
         "resource_identity": {"registry_revision": "golden-r7"},
+        "run_request_contract": contract,
         "sets": [
             {
-                "dataset_id": "representative-ask",
-                "version": "2026.09.05",
-                "dataset_hash": "sha256:dataset-v7",
+                **DATASET,
                 "state": "active",
-                "scoring_contract": {
-                    "version": "semantic-v3",
-                    "hash": "sha256:scoring-v3",
-                    "metrics": ["faithfulness", "completeness", "contradiction"],
-                },
+                "scoring_contract": {**SCORING, "metrics": ["faithfulness", "completeness"]},
                 "cases": [
                     {
                         "case_id": "gq-001",
@@ -104,7 +117,6 @@ def provider() -> StaticGoldenEvaluationProvider:
                         "case_id": "gq-002",
                         "question": "How is an outage classified?",
                         "expectation_hash": "sha256:exp-2",
-                        "expected_source_ids": [],
                         "expected_traits": ["error-not-quality-fail"],
                     },
                 ],
@@ -122,11 +134,7 @@ def provider() -> StaticGoldenEvaluationProvider:
                 "run_id": "run-old",
                 "state": "warn",
                 "mode": "all",
-                "dataset": {
-                    "dataset_id": "representative-ask",
-                    "version": "2026.09.05",
-                    "dataset_hash": "sha256:dataset-v7",
-                },
+                "dataset": DATASET,
                 "release": {
                     "release_id": "release-a",
                     "index_identity": "qdrant:collection-a@sha256:index-a",
@@ -143,64 +151,68 @@ def provider() -> StaticGoldenEvaluationProvider:
                 "progress": {"completed": 2, "total": 2},
                 "summary": {"pass": 1, "fail": 0, "error": 1},
                 "case_results": [
-                    {
-                        "case_id": "gq-001",
-                        "state": "pass",
-                        "answer": "Grounded answer",
-                        "metrics": {"faithfulness": 1.0},
-                        "trace_id": "trace-old-1",
-                    },
+                    {"case_id": "gq-001", "state": "pass", "metrics": {"faithfulness": 1.0}},
                     {
                         "case_id": "gq-002",
                         "state": "error",
                         "error": {"code": "PROVIDER_UNAVAILABLE", "retryable": True},
                         "metrics": {},
-                        "trace_id": "trace-old-2",
                     },
                 ],
-            },
-            {
-                "run_id": "run-new",
-                "state": "pass",
-                "mode": "selected",
-                "dataset": {
-                    "dataset_id": "representative-ask",
-                    "version": "2026.09.05",
-                    "dataset_hash": "sha256:dataset-v7",
-                },
-                "release": {
-                    "release_id": "release-b",
-                    "index_identity": "qdrant:collection-b@sha256:index-b",
-                    "config_identity": "sha256:config-b",
-                    "provider_config_hash": "sha256:provider-b",
-                },
-                "scoring_contract": {
-                    "version": "semantic-v3",
-                    "hash": "sha256:scoring-v3",
-                    "metrics": ["faithfulness", "completeness"],
-                },
-                "created_at": "2026-09-05T00:00:00Z",
-                "completed_at": "2026-09-05T00:00:30Z",
-                "progress": {"completed": 1, "total": 1},
-                "summary": {"pass": 1, "fail": 0, "error": 0},
-                "case_results": [
-                    {
-                        "case_id": "gq-001",
-                        "state": "pass",
-                        "answer": "New grounded answer",
-                        "retrieval": {"source_ids": ["post-a"]},
-                        "evidence": {"citation_ids": ["post-a"]},
-                        "metrics": {"faithfulness": 1.0, "completeness": 1.0},
-                        "trace_id": "trace-new-1",
-                    }
-                ],
-            },
+            }
         ],
     }
     return StaticGoldenEvaluationProvider(golden=golden, runs=runs)
 
 
-def make_app(*, start_state: str = "disabled", use_provider: bool = True) -> FastAPI:
+class InertAcceptedRunner:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.requests: list[Mapping[str, Any]] = []
+
+    def start_run(
+        self, request: Request, *, operation_id: str, run_request: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        del request
+        self.calls += 1
+        self.requests.append(dict(run_request))
+        case_ids = list(run_request.get("case_ids", []))
+        return {
+            "run_id": operation_id,
+            "state": "pass",
+            "mode": run_request["mode"],
+            "dataset": run_request["dataset"],
+            "release": run_request["release"],
+            "scoring_contract": {**run_request["scoring_contract"], "metrics": ["faithfulness"]},
+            "created_at": "2026-09-05T00:02:00Z",
+            "completed_at": "2026-09-05T00:02:01Z",
+            "progress": {"completed": len(case_ids), "total": len(case_ids)},
+            "summary": {"pass": len(case_ids), "fail": 0, "error": 0},
+            "case_results": [
+                {"case_id": case_id, "state": "pass", "metrics": {"faithfulness": 1.0}}
+                for case_id in case_ids
+            ],
+        }
+
+
+def run_request(**overrides: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "mode": "selected",
+        "dataset": DATASET,
+        "case_ids": ["gq-001"],
+        "release": RELEASE,
+        "scoring_contract": SCORING,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def make_app(
+    *,
+    start_state: str = "enabled",
+    runner: Any | None = None,
+    contract_status: str = "available",
+) -> FastAPI:
     app = FastAPI()
 
     @app.get("/v1/answers/health")
@@ -220,116 +232,149 @@ def make_app(*, start_state: str = "disabled", use_provider: bool = True) -> Fas
         audit_sink=InMemoryAuditSink(),
         idempotency_store=InMemoryIdempotencyStore(),
     )
-    install_golden_questions_admin(
-        app,
-        provider=provider() if use_provider else UnavailableGoldenEvaluationProvider(),
-    )
+    install_golden_questions_admin(app, provider=provider(contract_status=contract_status), runner=runner)
     return app
 
 
-def test_golden_read_preserves_versioned_dataset_and_expectation_identity() -> None:
-    response = TestClient(make_app()).get("/v1/admin/evaluations/golden", headers=admin_headers())
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["availability"]["status"] == "available"
-    dataset = payload["data"]["sets"][0]
-    assert dataset["dataset_id"] == "representative-ask"
-    assert dataset["version"] == "2026.09.05"
-    assert dataset["dataset_hash"] == "sha256:dataset-v7"
-    assert dataset["cases"][0]["expectation_hash"] == "sha256:exp-1"
-    assert dataset["scoring_contract"]["hash"] == "sha256:scoring-v3"
-    assert "min_score" not in str(payload).lower()
-    assert "85" not in str(payload)
+def test_openapi_requires_typed_immutable_run_body() -> None:
+    post = make_app().openapi()["paths"]["/v1/admin/evaluations/runs"]["post"]
+    assert post["operationId"] == "startEvaluationRun"
+    assert post["requestBody"]["required"] is True
+    schema = post["requestBody"]["content"]["application/json"]["schema"]
+    assert schema["$ref"].endswith("/StartEvaluationRunRequest")
 
 
-def test_run_history_keeps_exact_identity_and_infra_error_distinct_from_quality_fail() -> None:
-    response = TestClient(make_app()).get("/v1/admin/evaluations/runs", headers=admin_headers())
-    assert response.status_code == 200
-    runs = response.json()["data"]["runs"]
-    old, new = runs
-    assert old["release"]["index_identity"] == "qdrant:collection-a@sha256:index-a"
-    assert new["release"]["config_identity"] == "sha256:config-b"
-    assert old["case_results"][1]["state"] == "error"
-    assert old["case_results"][1]["error"]["code"] == "PROVIDER_UNAVAILABLE"
-    assert old["summary"]["fail"] == 0
-    assert old["summary"]["error"] == 1
+def test_missing_or_malformed_immutable_identities_fail_closed() -> None:
+    client = TestClient(make_app())
+    assert client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json={}).status_code == 422
+    malformed = run_request(release={"release_id": "release-b"})
+    response = client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json=malformed)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "ADMIN_REQUEST_VALIDATION_FAILED"
 
 
-def test_historical_scoring_contract_is_not_overwritten_by_newer_run() -> None:
-    runs = (
-        TestClient(make_app())
-        .get("/v1/admin/evaluations/runs", headers=admin_headers())
-        .json()["data"]["runs"]
+def test_selected_mode_requires_explicit_non_empty_case_ids() -> None:
+    response = TestClient(make_app()).post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request(case_ids=[])
     )
+    assert response.status_code == 422
+
+
+def test_capability_not_mutation_authorized_fails_before_runner() -> None:
+    runner = InertAcceptedRunner()
+    response = TestClient(make_app(start_state="read_only", runner=runner)).post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "TEST_QUALIFIED"
+    assert runner.calls == 0
+
+
+def test_blocked_run_contract_fails_closed_before_runner_and_audits() -> None:
+    runner = InertAcceptedRunner()
+    app = make_app(runner=runner, contract_status="blocked")
+    response = TestClient(app).post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "RUN_TARGET_NOT_QUALIFIED"
+    assert runner.calls == 0
+    assert app.state.admin_audit_sink.events[-1].reason_code == "RUN_TARGET_NOT_QUALIFIED"
+
+
+def test_unavailable_runner_never_creates_fake_run() -> None:
+    app = make_app()
+    client = TestClient(app)
+    before = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"]["runs"]
+    response = client.post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
+    )
+    after = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"]["runs"]
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == RUNNER_UNAVAILABLE_REASON
+    assert [run["run_id"] for run in after] == [run["run_id"] for run in before]
+
+
+def test_inert_accepted_runner_preserves_identity_readback_replay_and_audit() -> None:
+    runner = InertAcceptedRunner()
+    app = make_app(runner=runner)
+    client = TestClient(app)
+    first = client.post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
+    )
+    assert first.status_code == 202
+    operation_id = first.json()["operation_id"]
+    assert first.json()["replayed"] is False
+    replay = client.post(
+        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
+    )
+    assert replay.status_code == 202
+    assert replay.json()["operation_id"] == operation_id
+    assert replay.json()["replayed"] is True
+    assert runner.calls == 1
+    runs = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"]["runs"]
+    accepted = next(run for run in runs if run["run_id"] == operation_id)
+    assert accepted["dataset"] == DATASET
+    assert accepted["release"] == RELEASE
+    assert accepted["scoring_contract"]["version"] == SCORING["version"]
+    assert accepted["scoring_contract"]["hash"] == SCORING["hash"]
+    events = app.state.admin_audit_sink.events
+    accepted_event = next(event for event in events if event.action == "evaluation.run.start.accepted")
+    assert accepted_event.actor_id == OWNER.actor_id
+    assert accepted_event.request_id.startswith("admreq_")
+    assert accepted_event.operation_id == operation_id
+    assert "valid-assertion" not in str(accepted_event.to_payload())
+
+
+def test_same_idempotency_key_with_changed_normalized_request_conflicts() -> None:
+    runner = InertAcceptedRunner()
+    app = make_app(runner=runner)
+    client = TestClient(app)
+    key_headers = admin_headers("p10-test-idempotency-0009")
+    assert client.post("/v1/admin/evaluations/runs", headers=key_headers, json=run_request()).status_code == 202
+    changed = run_request(case_ids=["gq-002"])
+    response = client.post("/v1/admin/evaluations/runs", headers=key_headers, json=changed)
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "ADMIN_IDEMPOTENCY_CONFLICT"
+    assert runner.calls == 1
+
+
+def test_authority_mismatch_rejects_unknown_case_release_and_scoring() -> None:
+    client = TestClient(make_app(runner=InertAcceptedRunner()))
+    unknown_case = client.post(
+        "/v1/admin/evaluations/runs",
+        headers=admin_headers("p10-authority-case-001"),
+        json=run_request(case_ids=["missing-case"]),
+    )
+    assert unknown_case.status_code == 409
+    assert unknown_case.json()["error"]["code"] == "GOLDEN_CASE_SELECTION_MISMATCH"
+    bad_release = {**RELEASE, "manifest_sha256": "sha256:wrong"}
+    release = client.post(
+        "/v1/admin/evaluations/runs",
+        headers=admin_headers("p10-authority-release-01"),
+        json=run_request(release=bad_release),
+    )
+    assert release.status_code == 409
+    assert release.json()["error"]["code"] == "GOLDEN_RELEASE_IDENTITY_MISMATCH"
+    scoring = client.post(
+        "/v1/admin/evaluations/runs",
+        headers=admin_headers("p10-authority-score-001"),
+        json=run_request(scoring_contract={"version": "semantic-v2", "hash": "sha256:scoring-v2"}),
+    )
+    assert scoring.status_code == 409
+    assert scoring.json()["error"]["code"] == "GOLDEN_SCORING_CONTRACT_MISMATCH"
+
+
+def test_historical_scoring_identity_and_public_health_remain_unchanged() -> None:
+    app = make_app(runner=InertAcceptedRunner())
+    client = TestClient(app)
+    runs = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"]["runs"]
     assert runs[0]["scoring_contract"] == {
         "version": "semantic-v2",
         "hash": "sha256:scoring-v2",
         "metrics": ["faithfulness"],
     }
-    assert runs[1]["scoring_contract"]["version"] == "semantic-v3"
-
-
-def test_missing_provider_is_unavailable_not_fabricated_empty_observation() -> None:
-    response = TestClient(make_app(use_provider=False)).get(
-        "/v1/admin/evaluations/golden", headers=admin_headers()
-    )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["availability"]["status"] == "unavailable"
-    assert payload["observed_at"] is None
-    assert payload["freshness"] == "unknown"
-    assert payload["data"]["sets"] == []
-
-
-def test_run_start_fails_closed_when_capability_is_not_mutation_authorized() -> None:
-    response = TestClient(make_app(start_state="read_only")).post(
-        "/v1/admin/evaluations/runs",
-        headers=admin_headers(
-            **{
-                "content-type": "application/json",
-                "idempotency-key": "p10-test-idempotency-0001",
-            }
-        ),
-        json={},
-    )
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "TEST_QUALIFIED"
-
-
-def test_enabled_run_is_blocked_by_missing_request_schema_and_audited() -> None:
-    app = make_app(start_state="enabled")
-    client = TestClient(app)
-    response = client.post(
-        "/v1/admin/evaluations/runs",
-        headers=admin_headers(
-            **{
-                "content-type": "application/json",
-                "idempotency-key": "p10-test-idempotency-0002",
-            }
-        ),
-        json={},
-    )
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == RUN_REQUEST_SCHEMA_REASON
-    events = app.state.admin_audit_sink.events
-    assert len(events) == 1
-    assert events[0].action == "evaluation.run.start.blocked"
-    assert events[0].reason_code == RUN_REQUEST_SCHEMA_REASON
-
-
-def test_openapi_keeps_frozen_no_body_shape_instead_of_inventing_page_private_schema() -> None:
-    schema = make_app().openapi()
-    post = schema["paths"]["/v1/admin/evaluations/runs"]["post"]
-    assert post["operationId"] == "startEvaluationRun"
-    assert "requestBody" not in post
-    golden_get = schema["paths"]["/v1/admin/evaluations/golden"]["get"]
-    runs_get = schema["paths"]["/v1/admin/evaluations/runs"]["get"]
-    assert golden_get["operationId"] == "listGoldenSets"
-    assert runs_get["operationId"] == "listEvaluationRuns"
-
-
-def test_public_health_is_not_wrapped_or_gated_by_admin_changes() -> None:
-    response = TestClient(make_app()).get("/v1/answers/health")
+    response = client.get("/v1/answers/health")
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert "x-request-id" not in response.headers
