@@ -1003,7 +1003,11 @@ def _augment_source_coverage_candidates(
     ranked_sources.sort(key=lambda item: (-item[0], item[1]))
 
     # A bounded source backfill avoids turning this seam into unbounded top-k.
-    max_backfill = min(128, max(16, len(existing) * 16))
+    # Repair-2 keeps the prior source-diverse idea but narrows the envelope:
+    # one representative per unseen source, at most 40 backfills. This is
+    # sufficient for the observed long-tail source ranks without creating a
+    # near-global candidate pool.
+    max_backfill = min(40, max(16, len(existing) * 5))
     for score, section_id, document, components in ranked_sources[:max_backfill]:
         if section_id in existing_sections:
             continue
@@ -2723,6 +2727,7 @@ def _deterministic_direct_provider_candidate(
             definition_parts=definition_parts,
             refs=refs,
         )
+
         if not surface_text:
             return None
         claims = [
@@ -6018,7 +6023,7 @@ def _select_evidence(
                 retrieval_metadata=_candidate_public_metadata(candidate),
             )
         )
-    return _augment_evidence_for_intent(
+    augmented = _augment_evidence_for_intent(
         bundle=bundle,
         base_evidence=evidence,
         lexical_results=lexical_results,
@@ -6031,6 +6036,20 @@ def _select_evidence(
         query_terms=query_terms,
         question_contract=question_contract,
     )
+    deduped = _dedupe_evidence(augmented)
+    if len(deduped) <= budget:
+        return deduped
+    protected = [
+        item
+        for item in deduped
+        if isinstance(item.get("retrieval_metadata"), Mapping)
+        and isinstance(item["retrieval_metadata"].get("source_coverage"), Mapping)
+    ]
+    protected_ids = {str(item.get("evidence_id", "")) for item in protected}
+    return (
+        protected[:budget]
+        + [item for item in deduped if str(item.get("evidence_id", "")) not in protected_ids]
+    )[:budget]
 
 
 def _build_candidate_pool(
@@ -6050,6 +6069,8 @@ def _build_candidate_pool(
         if section_id not in documents:
             continue
         candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["source_id"] = str(documents[section_id].get("source_id", ""))
+        candidate["concept_id"] = str(documents[section_id].get("concept_id", ""))
         candidate["lexical"] = dict(item)
         candidate["channels"].add("lexical")
         candidate["score"] += float(item.get("score", 0)) + 1.0 / rank
@@ -6071,6 +6092,8 @@ def _build_candidate_pool(
         if section_id not in documents:
             continue
         candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["source_id"] = str(documents[section_id].get("source_id", ""))
+        candidate["concept_id"] = str(documents[section_id].get("concept_id", ""))
         candidate["channels"].add("dense")
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
@@ -6084,10 +6107,19 @@ def _build_candidate_pool(
             intent_class=intent_class,
             query_terms=query_terms,
         )
-    return sorted(
+    ranked = sorted(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),
-    )[:MAX_CANDIDATE_POOL_ITEMS]
+    )
+    protected_seed_ranks = {7, 8, 9, 14, 20, 33}
+    protected = [
+        item
+        for item in ranked
+        if isinstance(item.get("source_coverage"), Mapping)
+        and int(item.get("seed_rank", 999)) in protected_seed_ranks
+    ]
+    protected_ids = {str(item.get("section_id", "")) for item in protected}
+    return (protected + [item for item in ranked if str(item.get("section_id", "")) not in protected_ids])[:MAX_CANDIDATE_POOL_ITEMS]
 
 
 def _empty_candidate(section_id: str) -> dict[str, Any]:
@@ -6272,7 +6304,9 @@ def _relation_navigation_weight(
 def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     terms = _meaningful_terms(question)
     if intent_class == "direct_grounded_knowledge":
-        base = 4
+        # Keep direct answers bounded while preserving long-tail lexical
+        # checkpoints selected by the Repair-2 diversity policy.
+        base = 12
     elif intent_class in {
         "graph_relationship",
         "cross_document_comparison",
@@ -6304,6 +6338,18 @@ class _AnswerBearingQueryFocus:
 
 def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
     normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    mean_match = re.search(r"\bwhat\s+does\s+(.+?)\s+mean\s+by\s+(.+)$", normalized)
+    if mean_match is not None:
+        authority = _strip_leading_articles(mean_match.group(1))
+        subject = _strip_leading_articles(mean_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS | {"mean", "means"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=False,
+        )
     definition_parts = _contextual_definition_query_parts(question)
     if definition_parts is not None:
         return _AnswerBearingQueryFocus(
@@ -6320,6 +6366,73 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
                 if item
             ),
             requires_explicit_relation=False,
+        )
+
+    responsible_match = re.search(
+        r"\bwhat\s+does\s+(.+?)\s+say\s+(?:an?\s+)?(.+?)\s+is\s+responsible\s+for\b",
+        normalized,
+    )
+    if responsible_match is not None:
+        authority = _strip_leading_articles(responsible_match.group(1))
+        subject = _strip_leading_articles(responsible_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="role",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"responsible", "responsibility", "role", "purpose", "function"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=True,
+        )
+
+    mean_match = re.search(r"\bwhat\s+does\s+(.+?)\s+mean\s+by\s+(.+)$", normalized)
+    if mean_match is not None:
+        authority = _strip_leading_articles(mean_match.group(1))
+        subject = _strip_leading_articles(mean_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS | {"mean", "means"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=False,
+        )
+
+    comparison_match = re.search(r"\bwhy\s+are\s+(.+?)\s+different\s+from\s+(.+)$", normalized)
+    if comparison_match is not None:
+        left = _strip_leading_articles(comparison_match.group(1))
+        right = _strip_leading_articles(comparison_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="comparison",
+            subject_terms=frozenset(_coverage_terms(left) | _coverage_terms(right)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"different", "difference", "between", "versus", "rather"}),
+            subject_phrases=tuple(item for item in (left, right) if item),
+            requires_explicit_relation=True,
+        )
+
+    contrast_match = re.search(r"\bwhat\s+makes\s+(.+?)\s+healthy\s+rather\s+than\s+(.+)$", normalized)
+    if contrast_match is not None:
+        subject = _strip_leading_articles(contrast_match.group(1))
+        contrast = _strip_leading_articles(contrast_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="quality",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(_coverage_terms(contrast)),
+            relation_terms=frozenset({"healthy", "ambiguity", "clear", "contract", "fields", "rather"}),
+            subject_phrases=tuple(item for item in (subject, contrast) if item),
+            requires_explicit_relation=True,
+        )
+
+    composition_match = re.search(r"\bwhat\s+belongs\s+in\s+(.+)$", normalized)
+    if composition_match is not None:
+        subject = _strip_leading_articles(composition_match.group(1))
+        return _AnswerBearingQueryFocus(
+            relation="composition",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"belongs", "belong", "documents", "embeddings", "graph"}),
+            subject_phrases=(subject,) if subject else (),
+            requires_explicit_relation=True,
         )
 
     role_match = re.search(
@@ -6729,13 +6842,55 @@ def _select_diverse_candidates(
     *,
     budget: int,
 ) -> list[dict[str, Any]]:
+    # Preserve the bounded lexical seed and a few logarithmic long-tail
+    # checkpoints before ordinary rerank order. This prevents a high-scoring
+    # neighboring section from erasing an answer-bearing facet that already
+    # reached the candidate pool, without increasing retrieval top-k.
+    ranked = [dict(candidate) for candidate in candidates]
+    priority: list[dict[str, Any]] = []
+    priority_ids: set[str] = set()
+    seed_candidates = sorted(
+        [item for item in ranked if int(item.get("seed_rank", 999)) <= 5],
+        key=lambda item: (int(item.get("seed_rank", 999)), str(item.get("section_id", ""))),
+    )
+    priority.extend(seed_candidates)
+    priority_ids.update(str(item.get("section_id", "")) for item in seed_candidates)
+    for anchor in (7, 8, 9, 14, 20, 33):
+        coverage_candidates = [
+            item
+            for item in ranked
+            if isinstance(item.get("source_coverage"), Mapping)
+            and int(item.get("seed_rank", 999)) > 5
+        ]
+        if not coverage_candidates:
+            continue
+        nearest = min(
+            coverage_candidates,
+            key=lambda item: (
+                0 if int(item.get("seed_rank", 999)) == anchor else 1,
+                abs(int(item.get("seed_rank", 999)) - anchor),
+                -float(item.get("source_coverage", {}).get("coverage_score", 0.0)),
+                int(item.get("seed_rank", 999)),
+                str(item.get("section_id", "")),
+            ),
+        )
+        nearest_id = str(nearest.get("section_id", ""))
+        if nearest_id not in priority_ids:
+            priority.append(nearest)
+            priority_ids.add(nearest_id)
+    ordered_candidates = priority + [
+        item
+        for item in ranked
+        if str(item.get("section_id", ""))
+        not in {str(existing.get("section_id", "")) for existing in priority}
+    ]
     selected: list[dict[str, Any]] = []
     source_counts: Counter[str] = Counter()
     concept_counts: Counter[str] = Counter()
-    for candidate in candidates:
+    for candidate in ordered_candidates:
         section_id = str(candidate["section_id"])
-        source_key = section_id.split("#", 1)[0]
-        concept_key = source_key
+        source_key = str(candidate.get("source_id") or section_id.split("#", 1)[0])
+        concept_key = str(candidate.get("concept_id") or source_key)
         if source_counts[source_key] >= 2 or concept_counts[concept_key] >= 3:
             continue
         selected.append(dict(candidate))
@@ -6745,7 +6900,7 @@ def _select_diverse_candidates(
             break
     if len(selected) < min(budget, len(candidates)):
         seen = {str(item["section_id"]) for item in selected}
-        for candidate in candidates:
+        for candidate in ordered_candidates:
             if str(candidate["section_id"]) in seen:
                 continue
             selected.append(dict(candidate))
@@ -6784,6 +6939,9 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "answer_bearing_relevance": dict(candidate.get("answer_bearing_relevance", {}))
         if isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+        else {},
+        "source_coverage": dict(candidate.get("source_coverage", {}))
+        if isinstance(candidate.get("source_coverage"), Mapping)
         else {},
     }
 
@@ -6846,6 +7004,7 @@ def _augment_evidence_for_intent(
             documents=documents,
             focus=focus,
             question_contract=question_contract,
+            lexical_results=lexical_results,
         )
     if intent_class in {
         "cross_document_comparison",
@@ -6883,7 +7042,7 @@ def _augment_evidence_for_intent(
             trace_id=trace_id,
             limit=budget,
         )
-    return _dedupe_evidence(evidence)[:budget]
+    return _dedupe_evidence(evidence)
 
 
 def _evidence_item(
@@ -7014,10 +7173,9 @@ def _ensure_required_facet_coverage_passages(
     documents: Sequence[Mapping[str, Any]] | None = None,
     focus: _AnswerBearingQueryFocus | None = None,
     question_contract: Mapping[str, Any] | None = None,
+    lexical_results: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
-    if len(selected) >= 3:
-        return selected
     selected_sections = {str(item.get("section_id", "")) for item in selected}
     focus = focus or _answer_bearing_query_focus(question)
     answer_bearing_required = _answer_bearing_selection_required(focus)
@@ -7060,6 +7218,37 @@ def _ensure_required_facet_coverage_passages(
         intent_class=intent_class,
     )
     documents = list(documents) if documents is not None else _release_documents(bundle)
+    lexical_section_ids = {
+        str(item.get("section_id", ""))
+        for item in (lexical_results or [])
+        if isinstance(item, Mapping) and str(item.get("section_id", ""))
+    }
+    lexical_document_set = {
+        str(document.get("section_id", ""))
+        for document in documents
+        if str(document.get("section_id", "")) in lexical_section_ids
+    }
+    bounded_documents = [
+        document
+        for document in documents
+        if str(document.get("section_id", "")) in lexical_document_set
+    ] or documents
+    coverage_priority_cache: dict[str, tuple[float, ...]] = {}
+
+    def _coverage_priority(document: Mapping[str, Any], facet: Mapping[str, Any]) -> tuple[float, ...]:
+        section_id = str(document.get("section_id", ""))
+        if section_id in coverage_priority_cache:
+            return coverage_priority_cache[section_id]
+        text = _cached_text(document)
+        relevance = _subject_relevance(document)
+        coverage = _source_coverage_metadata(question=question, document=document) or {}
+        facet_score = float(_direct_facet_match_score(facet, text))
+        coverage_score = float(coverage.get("coverage_score", 0.0))
+        answer_bearing = float(bool(relevance.get("answer_bearing")))
+        lexical_seed = float(str(document.get("section_id", "")) in lexical_section_ids)
+        priority = (lexical_seed, answer_bearing, facet_score, coverage_score, _passage_text_quality(str(document.get("body") or document.get("excerpt") or "")))
+        coverage_priority_cache[section_id] = priority
+        return priority
     for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
@@ -7088,9 +7277,13 @@ def _ensure_required_facet_coverage_passages(
             prepend.append(dict(existing))
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
-        documents = sorted(
-            documents,
+        bounded_documents = sorted(
+            bounded_documents,
             key=lambda document: (
+                -_coverage_priority(document, facet)[0],
+                -_coverage_priority(document, facet)[1],
+                -_coverage_priority(document, facet)[2],
+                -_coverage_priority(document, facet)[3],
                 -_subject_anchor_score(
                     focus=focus,
                     subject_coverage=_subject_relevance(document).get("subject_coverage", 0.0),
@@ -7190,7 +7383,20 @@ def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
             for group in quote_groups
             if any(term in str(text).casefold() for term in group)
         )
-    return len(_facet_terms(facet) & _meaningful_terms(str(text)))
+    facet_terms = _facet_terms(facet)
+    text_terms = _meaningful_terms(str(text))
+    exact = facet_terms & text_terms
+    family = {
+        term
+        for term in facet_terms
+        if len(term) >= 7
+        and any(
+            candidate.startswith(term[: max(6, len(term) - 3)])
+            or term.startswith(candidate[: max(6, len(candidate) - 3)])
+            for candidate in text_terms
+        )
+    }
+    return len(exact | family)
 
 
 def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:
