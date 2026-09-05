@@ -29,21 +29,39 @@ jobs:
       - name: Install package and dev dependencies
         run: python -m pip install -e '.[dev]'
 
-      - name: Ruff auto-fix and format touched files
+      - name: Apply final bounded Ruff readability fixes
+        shell: python
         run: |
-          python -m ruff check --fix \
-            src/knowledge_engine/m26_golden_questions_admin.py \
-            tests/test_m26_golden_questions_admin.py || true
-          python -m ruff format \
-            src/knowledge_engine/m26_golden_questions_admin.py \
-            tests/test_m26_golden_questions_admin.py
+          from pathlib import Path
 
-      - name: Commit formatted backend repair delta
+          path = Path('src/knowledge_engine/m26_golden_questions_admin.py')
+          text = path.read_text()
+          text = text.replace(
+              '''        if self.mode != "retrieval_only":\n            if not (\n                self.release.provider_id\n                and self.release.model_id\n                and self.release.provider_config_hash\n            ):\n                raise ValueError(\n                    "provider_id, model_id, and provider_config_hash are required for model-bearing runs"\n                )\n''',
+              '''        if self.mode != "retrieval_only" and not (\n            self.release.provider_id\n            and self.release.model_id\n            and self.release.provider_config_hash\n        ):\n            raise ValueError(\n                "provider_id, model_id, and provider_config_hash are required "\n                "for model-bearing runs"\n            )\n''',
+          )
+          text = text.replace(
+              '            message="Requested release/index/config identity is not the qualified execution target.",\n',
+              '            message=(\n                "Requested release/index/config identity is not the qualified "\n                "execution target."\n            ),\n',
+          )
+          text = text.replace(
+              '                    message="The idempotent operation exists but no accepted immutable run can be read back.",\n',
+              '                    message=(\n                        "The idempotent operation exists but no accepted immutable "\n                        "run can be read back."\n                    ),\n',
+          )
+          path.write_text(text)
+
+      - name: Format touched files
+        run: >-
+          python -m ruff format
+          src/knowledge_engine/m26_golden_questions_admin.py
+          tests/test_m26_golden_questions_admin.py
+
+      - name: Commit final backend repair delta
         run: |
           if git diff --quiet -- \
             src/knowledge_engine/m26_golden_questions_admin.py \
             tests/test_m26_golden_questions_admin.py; then
-            echo 'No backend format delta to commit.'
+            echo 'No backend delta to commit.'
             exit 0
           fi
           git config user.name 'gb05-repair-bot'
@@ -51,7 +69,7 @@ jobs:
           git add \
             src/knowledge_engine/m26_golden_questions_admin.py \
             tests/test_m26_golden_questions_admin.py
-          git commit -m 'GB05 repair: format backend execution contract [gb05-backend-format]'
+          git commit -m 'GB05 repair: finalize backend contract formatting [gb05-backend-format]'
           git push origin HEAD:${GITHUB_REF_NAME}
 
       - name: Focused GB05 execution-contract tests
