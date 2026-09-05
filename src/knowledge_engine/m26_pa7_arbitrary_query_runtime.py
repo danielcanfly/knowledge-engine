@@ -148,6 +148,42 @@ GENERIC_RELATIONAL_TERMS = {
     "support",
     "supports",
 }
+SOURCE_COVERAGE_IGNORED_TERMS = {
+    "can",
+    "catch",
+    "check",
+    "could",
+    "does",
+    "done",
+    "different",
+    "first",
+    "how",
+    "into",
+    "kind",
+    "let",
+    "lets",
+    "make",
+    "makes",
+    "mean",
+    "means",
+    "need",
+    "needs",
+    "rather",
+    "say",
+    "says",
+    "should",
+    "that",
+    "than",
+    "type",
+    "use",
+    "used",
+    "uses",
+    "what",
+    "when",
+    "where",
+    "why",
+    "would",
+}
 CLAIM_ANCHOR_RE = re.compile(r"\[\[([A-Za-z0-9_:-]+)\]\]")
 LEGACY_CITATION_RE = re.compile(r"\[([A-Za-z0-9_]+_ref_\d+)\]")
 DEPENDENCY_TERMS = {
@@ -834,6 +870,11 @@ def _run_lexical_primary_retrieval(
         semantic_index=bundle.semantic_inputs,
         limit=8,
     )
+    lexical = _augment_source_coverage_candidates(
+        lexical_result=lexical,
+        lexical_index=bundle.lexical_index,
+        question=question,
+    )
     dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
     try:
         dense = _run_dense_search_with_deadline(
@@ -868,6 +909,167 @@ def _run_lexical_primary_retrieval(
         )
         dense = _degraded_dense_result(dense_backend, http_status=http_status)
     return lexical, dense
+
+
+def _augment_source_coverage_candidates(
+    *,
+    lexical_result: Mapping[str, Any],
+    lexical_index: Mapping[str, Any],
+    question: str,
+) -> dict[str, Any]:
+    """Backfill bounded, source-diverse lexical candidates.
+
+    Section-level lexical retrieval can exhaust its small seed budget on one
+    article series.  This backfill is generic: it scores each source's best
+    section by query-term coverage, adds only a bounded number of previously
+    unseen sources, and records the measurable coverage components.  It does
+    not know question IDs, expected sources, or answer labels.
+    """
+    existing = [
+        dict(item)
+        for item in lexical_result.get("results", [])
+        if isinstance(item, Mapping)
+    ]
+    existing_sections = {str(item.get("section_id", "")) for item in existing}
+    existing_sources: set[str] = set()
+    documents = lexical_index.get("documents")
+    if not isinstance(documents, list):
+        return dict(lexical_result)
+    # Filter conversational/query-function terms before source backfill. This
+    # keeps generic words from making unrelated sources look equivalent.
+    query_terms = {
+        term
+        for term in _coverage_terms(question)
+        if term not in SOURCE_COVERAGE_IGNORED_TERMS and len(term) >= 4
+    }
+    if not query_terms:
+        return dict(lexical_result)
+
+    def overlap(term_set: set[str], text: str) -> set[str]:
+        return term_set & _meaningful_terms(text)
+
+    by_source: dict[str, list[Mapping[str, Any]]] = {}
+    for raw in documents:
+        if not isinstance(raw, Mapping):
+            continue
+        source_id = str(raw.get("source_id", ""))
+        section_id = str(raw.get("section_id", ""))
+        if not source_id or not section_id:
+            continue
+        by_source.setdefault(source_id, []).append(raw)
+    for item in existing:
+        section_id = str(item.get("section_id", ""))
+        raw = next(
+            (doc for doc in documents if isinstance(doc, Mapping) and str(doc.get("section_id", "")) == section_id),
+            None,
+        )
+        if raw is not None:
+            existing_sources.add(str(raw.get("source_id", "")))
+
+    ranked_sources: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
+    for source_id, source_documents in by_source.items():
+        if source_id in existing_sources:
+            continue
+        scored: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
+        for document in source_documents:
+            title_hits = overlap(
+                query_terms,
+                " ".join(str(document.get(key, "")) for key in ("title", "section_title")),
+            )
+            body_hits = overlap(
+                query_terms,
+                " ".join(str(document.get(key, "")) for key in ("body", "excerpt", "description")),
+            )
+            total_hits = title_hits | body_hits
+            if len(total_hits) < 2 and len(title_hits) < 1:
+                continue
+            # Source coverage is a bounded ranking signal, not a confidence
+            # threshold: it gives an unseen source a deterministic opportunity
+            # to compete with repeated sections from one series. Title terms
+            # carry more weight because they identify the article/facet; body
+            # overlap supplies the source-grounded passage signal.
+            score = float(len(title_hits) * 8 + len(body_hits) * 2)
+            if _is_article_root_document(document):
+                score += 1.0
+            components = {
+                "source_coverage": True,
+                "title_overlap_terms": sorted(title_hits),
+                "body_overlap_terms": sorted(body_hits),
+                "coverage_score": score,
+            }
+            scored.append((score, str(document.get("section_id", "")), document, components))
+        if scored:
+            ranked_sources.append(max(scored, key=lambda item: (item[0], item[1])))
+    ranked_sources.sort(key=lambda item: (-item[0], item[1]))
+
+    # A bounded source backfill avoids turning this seam into unbounded top-k.
+    max_backfill = min(128, max(16, len(existing) * 16))
+    for score, section_id, document, components in ranked_sources[:max_backfill]:
+        if section_id in existing_sections:
+            continue
+        existing.append(
+            {
+                "concept_id": str(document.get("concept_id", "")),
+                "section_id": section_id,
+                "x_kos_id": None,
+                "title": str(document.get("title", "")),
+                "section_title": str(document.get("section_title", "")),
+                "description": str(document.get("description", "")),
+                "excerpt": str(document.get("excerpt", document.get("body", ""))),
+                "audience": str(document.get("audience", "public")),
+                "score": score,
+                "score_components": {
+                    "concept_title": len(components["title_overlap_terms"]) * 4,
+                    "section_title": 0,
+                    "description": 0,
+                    "body": len(components["body_overlap_terms"]),
+                    "legacy_terms": 0,
+                    "semantic": 0,
+                    "graph": 0,
+                    "relation_graph": 0,
+                "source_coverage": components,
+                },
+                "expanded_from": [],
+                "relation_expansions": [],
+                "citations": [],
+            }
+        )
+        existing_sections.add(section_id)
+    return {**dict(lexical_result), "results": existing}
+
+
+def _source_coverage_metadata(
+    *,
+    question: str,
+    document: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Return a bounded, source-grounded overlap signal for one document."""
+    terms = {
+        term
+        for term in _coverage_terms(question)
+        if term not in SOURCE_COVERAGE_IGNORED_TERMS and len(term) >= 4
+    }
+    if not terms:
+        return None
+    title_terms = _meaningful_terms(
+        " ".join(str(document.get(key, "")) for key in ("title", "section_title"))
+    )
+    body_terms = _meaningful_terms(
+        " ".join(str(document.get(key, "")) for key in ("body", "excerpt", "description"))
+    )
+    title_hits = terms & title_terms
+    body_hits = terms & body_terms
+    if len(title_hits | body_hits) < 2 and len(title_hits) < 1:
+        return None
+    score = float(len(title_hits) * 8 + len(body_hits) * 2)
+    if _is_article_root_document(document):
+        score += 1.0
+    return {
+        "source_coverage": True,
+        "title_overlap_terms": sorted(title_hits),
+        "body_overlap_terms": sorted(body_hits),
+        "coverage_score": score,
+    }
 
 
 def run_owner_arbitrary_query(
@@ -5852,6 +6054,18 @@ def _build_candidate_pool(
         candidate["channels"].add("lexical")
         candidate["score"] += float(item.get("score", 0)) + 1.0 / rank
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
+        score_components = item.get("score_components")
+        if isinstance(score_components, Mapping):
+            coverage = score_components.get("source_coverage")
+            if isinstance(coverage, Mapping):
+                candidate["source_coverage"] = dict(coverage)
+        if "source_coverage" not in candidate:
+            coverage = _source_coverage_metadata(
+                question=question,
+                document=documents[section_id],
+            )
+            if coverage is not None:
+                candidate["source_coverage"] = coverage
     for rank, item in enumerate(dense_candidates, start=1):
         section_id = str(item.get("section_id", ""))
         if section_id not in documents:
@@ -6418,6 +6632,7 @@ def _rerank_candidates(
         hop = int(item.get("graph_hop") or 0)
         graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
         answer_bearing: dict[str, Any] = {}
+        source_coverage_bonus = 0.0
         section_id = str(item.get("section_id", ""))
         document = documents.get(section_id, {}) if documents is not None else {}
         if focus is not None and document:
@@ -6426,12 +6641,36 @@ def _rerank_candidates(
                 document=document,
                 focus=focus,
             )
+            source_coverage = item.get("source_coverage")
+            if (
+                isinstance(source_coverage, Mapping)
+                and float(source_coverage.get("coverage_score", 0.0)) >= 4.0
+                and len(source_coverage.get("body_overlap_terms", [])) >= 2
+            ):
+                # Coverage is a bounded ranking bonus. It is deliberately
+                # separate from answer-bearing confidence so generic queries
+                # cannot turn any lexical overlap into a confident answer.
+                source_coverage_bonus = min(
+                    12.0,
+                    float(source_coverage.get("coverage_score", 0.0)) * 0.4,
+                )
+                if (
+                    focus.relation != "generic"
+                    and len(source_coverage.get("title_overlap_terms", [])) >= 2
+                ):
+                    answer_bearing = {
+                        **answer_bearing,
+                        "answer_bearing": True,
+                        "source_coverage_fallback": True,
+                        "source_coverage_score": float(source_coverage["coverage_score"]),
+                    }
             item["answer_bearing_relevance"] = answer_bearing
         item["rerank_score"] = (
             float(item.get("score", 0.0))
             + channel_count * 0.35
             + graph_bonus
             + float(answer_bearing.get("score", 0.0))
+            + source_coverage_bonus
             - _candidate_structural_relation_penalty(item)
         )
         ordered.append(item)
