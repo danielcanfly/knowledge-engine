@@ -79,15 +79,13 @@ class StartEvaluationRunRequest(BaseModel):
             raise ValueError("all mode must not carry case_ids")
         if self.mode == "retrieval_only" and not normalized:
             raise ValueError("retrieval_only mode requires explicit case_ids")
-        if self.mode != "retrieval_only":
-            if not (
-                self.release.provider_id
-                and self.release.model_id
-                and self.release.provider_config_hash
-            ):
-                raise ValueError(
-                    "provider_id, model_id, and provider_config_hash are required for model-bearing runs"
-                )
+        if self.mode != "retrieval_only" and not (
+            self.release.provider_id and self.release.model_id and self.release.provider_config_hash
+        ):
+            raise ValueError(
+                "provider_id, model_id, and provider_config_hash are required "
+                "for model-bearing runs"
+            )
         return self
 
 
@@ -546,7 +544,9 @@ def _request_contract_and_dataset(
         raise AdminAPIError(
             status_code=409,
             code="GOLDEN_RELEASE_IDENTITY_MISMATCH",
-            message="Requested release/index/config identity is not the qualified execution target.",
+            message=(
+                "Requested release/index/config identity is not the qualified execution target."
+            ),
         )
     known_case_ids = {item["case_id"] for item in candidate["cases"]}
     requested_case_ids = set(payload.get("case_ids", []))
@@ -714,7 +714,10 @@ def golden_router() -> APIRouter:
                 raise AdminAPIError(
                     status_code=409,
                     code="GOLDEN_RUN_REPLAY_RESULT_UNAVAILABLE",
-                    message="The idempotent operation exists but no accepted immutable run can be read back.",
+                    message=(
+                        "The idempotent operation exists but no accepted immutable "
+                        "run can be read back."
+                    ),
                 )
             _audit_start(
                 request,
