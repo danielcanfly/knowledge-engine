@@ -1027,7 +1027,7 @@ def _augment_source_coverage_candidates(
                     "semantic": 0,
                     "graph": 0,
                     "relation_graph": 0,
-                "source_coverage": components,
+                    "source_coverage": components,
                 },
                 "expanded_from": [],
                 "relation_expansions": [],
