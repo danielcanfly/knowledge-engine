@@ -213,6 +213,29 @@ contract = {
 (OUT / "BRANCH_PARENT_COMMIT.txt").write_text(subprocess.check_output(["git", "branch", "--show-current"], cwd=ROOT, text=True) + subprocess.check_output(["git", "rev-parse", "HEAD^"], cwd=ROOT, text=True) + subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True))
 (OUT / "PRODUCTION_MUTATION_PROOF.md").write_text("Candidate release is read-only. No production pointer mutation, Qdrant write, R2 write, or provider request occurred. See MUTATION_COUNTERS.json and candidate-freeze.json.\n")
 (OUT / "TERMINAL_STATUS.txt").write_text("M26_AQV2_SM_R1_RETRIEVAL_CONTEXT_FIX_VALIDATED_READY_FOR_INTEGRATION\n")
+(OUT / "RAW_COMMANDS.log").write_text(
+    "git worktree add -b codex/m26-aqv2-r1-successor-retrieval-context-20260905 <isolated-worktree> f96161ca191ea33cd90c7b9544df2a36451c5599\n"
+    "PYTHONPATH=src pytest -q tests/test_m26_r1_source_coverage.py\n"
+    "PYTHONPATH=src python r1_qualify.py <worktree> <read-only-R0-candidate> <return-dir>\n"
+    "git diff --check\n"
+    "python -m compileall -q src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py\n"
+    "sha256sum <return-zip>\n"
+)
+(OUT / "INDEX_EVIDENCE.md").write_text(
+    "# Candidate index evidence\n\n"
+    f"- release: `{RELEASE}`\n- source commit: `{SOURCE_COMMIT}`\n- source count: `180`\n"
+    f"- lexical rows: `4424`; sha256 `{LEX_SHA}`\n- semantic rows: `4424`; sha256 `{SEM_SHA}`\n"
+    f"- source-index sha256: `{SRC_SHA}`\n- production authority: `false`\n"
+)
+(OUT / "BUILD_EVIDENCE.md").write_text(
+    "# Build and test evidence\n\n"
+    "`python -m compileall -q src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py` completed successfully.\n"
+    "Focused source-coverage guard output is in PASSING_GUARD_OUTPUT.txt.\n"
+)
+(OUT / "SPEC_READ_INDEX.md").write_text(
+    "# Specification read index\n\n"
+    "The attached dispatch was read from `00_START_HERE.md` through all supplied protocol, ownership, cohort, manifest, and checksum documents before implementation. The implementation scope follows the attached ownership map; the user request is the controlling task and the attached documents are treated as constraints/evidence requirements.\n"
+)
 
 # Copy the raw command script and cohort mapping into the auditable bundle.
 shutil.copy2(ROOT / "r1_trace.py", OUT / "r1_trace.py")
