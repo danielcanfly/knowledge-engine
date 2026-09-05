@@ -423,6 +423,38 @@ def derive_semantic_requirements(
         if base_requirements is not None
         else runtime._semantic_requirements(question, intent_class)
     )
+    base_ids = {
+        str(getattr(item, "requirement_id", ""))
+        for item in base
+        if str(getattr(item, "requirement_id", ""))
+    }
+
+    def add_question_shape(
+        requirement_id: str,
+        instruction: str,
+        evidence_terms: Sequence[str],
+        visible_patterns: Sequence[str],
+        *,
+        exact_phrase: str = "",
+    ) -> None:
+        if requirement_id in base_ids:
+            return
+        base_ids.add(requirement_id)
+        base.append(
+            SemanticRequirement(
+                requirement_id=requirement_id,
+                instruction=instruction,
+                evidence_terms=tuple(evidence_terms),
+                visible_patterns=tuple(visible_patterns),
+                exact_phrase=exact_phrase,
+            )
+        )
+
+    runtime._add_generic_answer_dimension_requirements(
+        add=add_question_shape,
+        question=question,
+        intent_class=intent_class,
+    )
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
     lifecycle_requested = _requested_lifecycle_requirements(question)
@@ -433,16 +465,9 @@ def derive_semantic_requirements(
         "completion_verification",
         "observability",
     }
-    generic_dimension_ids = {
-        "explanatory_answer",
-        "comparison_or_distinction",
-        "multi_dimension_structure",
-    }
     for item in base:
         requirement_id = str(getattr(item, "requirement_id", ""))
         if not requirement_id or requirement_id in seen:
-            continue
-        if lifecycle_requested is not None and requirement_id in generic_dimension_ids:
             continue
         if requirement_id == "authority_boundary" and _state_machine_replanner_question(question):
             continue
