@@ -59,23 +59,21 @@ jobs:
           print('IMAGE_CMD_OK', cmd)
           print('IMAGE_HEALTHCHECK_OK', health)
           PY
-      - name: Start combined app and probe safe surfaces
+      - name: Image route census and missing-config fail-close
         run: |
           set -euo pipefail
-          cid=$(docker run -d -p 127.0.0.1:18080:8080 knowledge-engine:sm95-r1)
-          trap 'docker logs "$cid" || true; docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
-          for i in $(seq 1 45); do
-            if curl --fail --silent http://127.0.0.1:18080/v1/answers/health >/tmp/public-health.json; then break; fi
-            sleep 2
-          done
-          curl --fail --silent http://127.0.0.1:18080/v1/answers/health >/tmp/public-health.json
-          python - <<'PY'
-          import json
-          payload=json.load(open('/tmp/public-health.json'))
-          assert payload.get('ok') is True
-          assert payload.get('status') == 'ok'
-          print('PUBLIC_HEALTH_OK')
+          docker run --rm --entrypoint python knowledge-engine:sm95-r1 - <<'PY'
+          from knowledge_engine.m26_console_api import app
+          paths = set(app.openapi()['paths'])
+          for expected in ('/v1/answers', '/v1/answers/health', '/v1/admin/session', '/v1/admin/capabilities'):
+              assert expected in paths, expected
+          print('IMAGE_COMBINED_ROUTE_CENSUS=PASS')
           PY
-          code=$(curl --silent --output /tmp/admin-session.json --write-out '%{http_code}' http://127.0.0.1:18080/v1/admin/session)
-          test "$code" = "503" || test "$code" = "401" || test "$code" = "403"
-          echo "ADMIN_MISSING_ASSERTION_FAIL_CLOSED_HTTP=$code"
+          set +e
+          output=$(timeout 20s docker run --rm knowledge-engine:sm95-r1 2>&1)
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+          printf '%s\n' "$output" | grep -F 'R2_ENDPOINT_URL is required for R2' >/dev/null
+          echo "IMAGE_MISSING_PRODUCTION_CONFIG_FAIL_CLOSED=PASS"
+          echo "NOTE=credential-bound configured startup remains A002 account proof"
