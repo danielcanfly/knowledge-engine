@@ -534,7 +534,7 @@ def test_oracle_backend_image_includes_m26_readonly_pilot_artifacts() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert "COPY pilot ./pilot" in dockerfile
-    assert "knowledge_engine.api:app" in dockerfile
+    assert "knowledge_engine.m26_console_api:app" in dockerfile
 
 
 def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
