@@ -382,6 +382,25 @@ def test_transient_cloudflare_generation_failure_uses_minimax_exactly_once(
     assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT
 
 
+def test_cloudflare_http_408_generation_failure_uses_minimax_exactly_once() -> None:
+    cloudflare = FakeProvider(failure="CLOUDFLARE_HTTP_408")
+    fallback = FakeProvider(text='{"status":"answer"}')
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    result = router.call(_payload(), "aq_fast_answer_synthesis")
+
+    assert result["text"] == '{"status":"answer"}'
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 1
+    assert router.calls == 2
+    assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT
+
+
 @pytest.mark.parametrize("failure", ["CLOUDFLARE_AUTH_OR_CONFIG", "CLOUDFLARE_PAID_PLAN_ONLY_5035"])
 def test_cloudflare_authentication_and_configuration_fail_closed(failure: str) -> None:
     cloudflare = FakeProvider(failure=failure)

@@ -58,6 +58,8 @@ def _cloudflare_fallback_eligible(reason: str) -> bool:
         "CLOUDFLARE_CONFIGURATION_MISSING",
     }:
         return False
+    if normalized == "CLOUDFLARE_HTTP_408":
+        return True
     if normalized.startswith("CLOUDFLARE_HTTP_4"):
         return False
     return normalized in {
