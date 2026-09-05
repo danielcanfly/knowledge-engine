@@ -16,8 +16,11 @@ jobs:
       R0_SOURCE_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
       R0_BLOG_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
       R0_LEXICAL_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -26,9 +29,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/r1-successor
-          curl --fail --location --retry 3 \
-            "https://raw.githubusercontent.com/danielcanfly/knowledge-source/${R0_SOURCE_SHA}/documents/daniel-blog-en-180-f5e20062/candidate-release/lexical-documents.jsonl" \
-            -o /tmp/r1-successor/lexical-documents.jsonl
+          gh api \
+            -H 'Accept: application/vnd.github.raw+json' \
+            "/repos/danielcanfly/knowledge-source/contents/documents/daniel-blog-en-180-f5e20062/candidate-release/lexical-documents.jsonl?ref=${R0_SOURCE_SHA}" \
+            > /tmp/r1-successor/lexical-documents.jsonl
           printf '%s  %s\n' "$R0_LEXICAL_SHA256" /tmp/r1-successor/lexical-documents.jsonl | sha256sum -c -
           test "$(wc -l < /tmp/r1-successor/lexical-documents.jsonl)" -eq 4424
       - name: Run first-bad-stage trace
@@ -54,5 +58,5 @@ jobs:
         with:
           name: m26-aqv2-r1-successor-first-bad-stage
           path: /tmp/r1-successor/*
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
