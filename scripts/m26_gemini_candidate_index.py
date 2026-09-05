@@ -18,7 +18,6 @@ from knowledge_engine.m26_gemini_dense_fallback import (
     GEMINI_VECTOR_NAME,
     M26_BGE_PRIMARY_COLLECTION,
     M26_GEMINI_CANDIDATE_POINT_COUNT,
-    M26_GEMINI_CANDIDATE_RELEASE_ID,
     M26_GEMINI_CANDIDATE_SOURCE_COUNT,
     M26_GEMINI_COLLECTION,
     M26_GEMINI_LEXICAL_DOCUMENTS_SHA256,
@@ -71,7 +70,9 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
                         f"invalid JSONL row {path}:{line_number}: {exc}"
                     ) from exc
                 if not isinstance(row, dict):
-                    raise SystemExit(f"JSONL row must be an object: {path}:{line_number}")
+                    raise SystemExit(
+                        f"JSONL row must be an object: {path}:{line_number}"
+                    )
                 rows.append(row)
     except OSError as exc:
         raise SystemExit(f"cannot read JSONL artifact {path}: {exc}") from exc
@@ -101,7 +102,11 @@ def _count_url(base: str, collection: str) -> str:
 
 
 def _collection_info(base: str, collection: str, api_key: str) -> dict[str, Any]:
-    response = httpx.get(_collection_url(base, collection), headers=_headers(api_key), timeout=30)
+    response = httpx.get(
+        _collection_url(base, collection),
+        headers=_headers(api_key),
+        timeout=30,
+    )
     response.raise_for_status()
     payload = response.json()
     if not isinstance(payload, dict):
@@ -134,13 +139,21 @@ def _validate_gemini_collection_shape(payload: dict[str, Any]) -> None:
     vectors = params.get("vectors") if isinstance(params, dict) else None
     vector = vectors.get(GEMINI_VECTOR_NAME) if isinstance(vectors, dict) else None
     if not isinstance(vector, dict):
-        raise SystemExit("existing Gemini collection is missing the frozen named vector")
+        raise SystemExit(
+            "existing Gemini collection is missing the frozen named vector"
+        )
     if vector.get("size") != GEMINI_DIMENSION or vector.get("distance") != "Cosine":
-        raise SystemExit("existing Gemini collection vector shape does not match 768/Cosine")
+        raise SystemExit(
+            "existing Gemini collection vector shape does not match 768/Cosine"
+        )
 
 
 def _ensure_isolated_collection(base: str, collection: str, api_key: str) -> None:
-    response = httpx.get(_collection_url(base, collection), headers=_headers(api_key), timeout=30)
+    response = httpx.get(
+        _collection_url(base, collection),
+        headers=_headers(api_key),
+        timeout=30,
+    )
     if response.status_code == 404:
         created = httpx.put(
             _collection_url(base, collection),
@@ -184,7 +197,11 @@ def _scroll_section_ids(base: str, collection: str, api_key: str) -> set[str]:
             raise SystemExit("invalid Qdrant scroll response")
         for point in points:
             point_payload = point.get("payload") if isinstance(point, dict) else None
-            section_id = point_payload.get("section_id") if isinstance(point_payload, dict) else None
+            section_id = (
+                point_payload.get("section_id")
+                if isinstance(point_payload, dict)
+                else None
+            )
             if isinstance(section_id, str) and section_id.strip():
                 section_ids.add(section_id.strip())
             else:
@@ -204,7 +221,12 @@ def _canonical_id_digest(ids: set[str]) -> str:
 
 def _validate_exact_inputs(
     semantic_path: Path, lexical_path: Path, source_path: Path
-) -> tuple[list[SectionInput], list[dict[str, Any]], list[dict[str, Any]], dict[str, str]]:
+) -> tuple[
+    list[SectionInput],
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, str],
+]:
     digests = {
         "semantic_inputs_sha256": _assert_sha256(
             semantic_path, M26_GEMINI_SEMANTIC_INPUTS_SHA256, "semantic-inputs"
@@ -223,28 +245,37 @@ def _validate_exact_inputs(
     if not isinstance(source_rows, list):
         raise SystemExit("source-index sources missing")
     article_source_count = source_artifact.get("article_source_count")
-    if article_source_count is not None and article_source_count != M26_GEMINI_CANDIDATE_SOURCE_COUNT:
+    if (
+        article_source_count is not None
+        and article_source_count != M26_GEMINI_CANDIDATE_SOURCE_COUNT
+    ):
         raise SystemExit("source-index article_source_count mismatch")
 
     sections = validate_sections(semantic_rows)
     if len(sections) != M26_GEMINI_CANDIDATE_POINT_COUNT:
         raise SystemExit(
-            f"expected {M26_GEMINI_CANDIDATE_POINT_COUNT} semantic rows, got {len(sections)}"
+            "expected "
+            f"{M26_GEMINI_CANDIDATE_POINT_COUNT} semantic rows, got {len(sections)}"
         )
     if len(lexical_rows) != M26_GEMINI_CANDIDATE_POINT_COUNT:
         raise SystemExit(
-            f"expected {M26_GEMINI_CANDIDATE_POINT_COUNT} lexical rows, got {len(lexical_rows)}"
+            "expected "
+            f"{M26_GEMINI_CANDIDATE_POINT_COUNT} lexical rows, got {len(lexical_rows)}"
         )
     if len(source_rows) != M26_GEMINI_CANDIDATE_SOURCE_COUNT:
         raise SystemExit(
-            f"expected {M26_GEMINI_CANDIDATE_SOURCE_COUNT} source rows, got {len(source_rows)}"
+            "expected "
+            f"{M26_GEMINI_CANDIDATE_SOURCE_COUNT} source rows, got {len(source_rows)}"
         )
 
     semantic_ids = {section.section_id for section in sections}
     lexical_ids = {
         str(item.get("section_id", "")).strip()
         for item in lexical_rows
-        if isinstance(item.get("section_id"), str) and str(item.get("section_id")).strip()
+        if (
+            isinstance(item.get("section_id"), str)
+            and str(item.get("section_id")).strip()
+        )
     }
     if len(semantic_ids) != M26_GEMINI_CANDIDATE_POINT_COUNT:
         raise SystemExit("semantic section IDs are not unique")
@@ -256,7 +287,9 @@ def _validate_exact_inputs(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Materialize isolated SM-GF Gemini candidate index")
+    parser = argparse.ArgumentParser(
+        description="Materialize isolated SM-GF Gemini candidate index"
+    )
     parser.add_argument("--semantic-inputs", required=True, type=Path)
     parser.add_argument("--lexical-documents", required=True, type=Path)
     parser.add_argument("--source-index", required=True, type=Path)
@@ -269,9 +302,13 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.collection != M26_GEMINI_COLLECTION:
-        raise SystemExit("collection must remain the frozen separate Gemini candidate collection")
+        raise SystemExit(
+            "collection must remain the frozen separate Gemini candidate collection"
+        )
     if args.primary_bge_collection != M26_BGE_PRIMARY_COLLECTION:
-        raise SystemExit("primary BGE collection must remain the frozen R0 candidate collection")
+        raise SystemExit(
+            "primary BGE collection must remain the frozen R0 candidate collection"
+        )
     if args.collection == args.primary_bge_collection:
         raise SystemExit("Gemini and BGE collections must never be identical")
     if not 1 <= args.batch_size <= 100:
@@ -315,7 +352,9 @@ def main() -> int:
         return 0
 
     if not args.allow_isolated_candidate_write:
-        raise SystemExit("live materialization requires --allow-isolated-candidate-write")
+        raise SystemExit(
+            "live materialization requires --allow-isolated-candidate-write"
+        )
 
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     qdrant_url = os.environ.get("QDRANT_URL", "").strip()
@@ -325,7 +364,9 @@ def main() -> int:
         or ""
     ).strip()
     if not gemini_key:
-        raise SystemExit("GEMINI_API_KEY is required locally; do not place it in artifacts")
+        raise SystemExit(
+            "GEMINI_API_KEY is required locally; do not place it in artifacts"
+        )
     if not qdrant_url or not qdrant_key:
         raise SystemExit("isolated Qdrant URL/write key is required locally")
 
@@ -333,7 +374,8 @@ def main() -> int:
     bge_count = _count_points(qdrant_url, args.primary_bge_collection, qdrant_key)
     if bge_count != M26_GEMINI_CANDIDATE_POINT_COUNT:
         raise SystemExit(
-            f"BGE point parity failed: expected {M26_GEMINI_CANDIDATE_POINT_COUNT}, got {bge_count}"
+            "BGE point parity failed: expected "
+            f"{M26_GEMINI_CANDIDATE_POINT_COUNT}, got {bge_count}"
         )
     bge_ids = _scroll_section_ids(qdrant_url, args.primary_bge_collection, qdrant_key)
     if bge_ids != semantic_ids:
@@ -343,11 +385,15 @@ def main() -> int:
     _collection_info(qdrant_url, args.collection, qdrant_key)
     existing_count = _count_points(qdrant_url, args.collection, qdrant_key)
     if existing_count not in {0, M26_GEMINI_CANDIDATE_POINT_COUNT}:
-        raise SystemExit(f"unexpected pre-existing Gemini point count: {existing_count}")
+        raise SystemExit(
+            f"unexpected pre-existing Gemini point count: {existing_count}"
+        )
     if existing_count == M26_GEMINI_CANDIDATE_POINT_COUNT:
         existing_ids = _scroll_section_ids(qdrant_url, args.collection, qdrant_key)
         if existing_ids != semantic_ids:
-            raise SystemExit("pre-existing Gemini collection has non-canonical section IDs")
+            raise SystemExit(
+                "pre-existing Gemini collection has non-canonical section IDs"
+            )
 
     client = GeminiEmbeddingClient(
         GeminiEmbeddingConfig(api_key=gemini_key, timeout_seconds=60.0)
