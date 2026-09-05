@@ -18,8 +18,9 @@ USER knowledge
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=3)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/answers/health', timeout=3)"
 
-# Canonical application remains knowledge_engine.api:app; the production wrapper patches
-# only the owner-only M26 answer path before importing that same app.
-CMD ["uvicorn", "knowledge_engine.m26_production_api:app", "--host", "0.0.0.0", "--port", "8080"]
+# Production serves the accepted combined public + owner-only Admin application.
+# Public health remains unauthenticated; /v1/admin/* is protected by the Admin
+# control-plane middleware and its fail-closed Cloudflare Access validation.
+CMD ["uvicorn", "knowledge_engine.m26_console_api:app", "--host", "0.0.0.0", "--port", "8080"]
