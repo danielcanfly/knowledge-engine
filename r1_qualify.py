@@ -240,6 +240,21 @@ contract = {
 # Copy the raw command script and cohort mapping into the auditable bundle.
 shutil.copy2(ROOT / "r1_trace.py", OUT / "r1_trace.py")
 shutil.copy2(ROOT / "R1_COHORT_TO_TRACE.csv", OUT / "R1_COHORT_TO_TRACE.csv")
+metadata_dir = OUT / "CANDIDATE_AUTHORITY"
+metadata_dir.mkdir(exist_ok=True)
+for relative in (
+    "candidate-freeze.json",
+    "source-export-manifest.json",
+    "candidate-release/release-manifest.json",
+    "candidate-release/graph-manifest.json",
+    "candidate-release/embedding-input-manifest.json",
+    "candidate-release/release-receipt.json",
+):
+    source_path = SOURCE_ROOT / relative
+    if source_path.exists():
+        target = metadata_dir / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, target)
 
 manifest = {"artifact_count": 0, "release_id": RELEASE, "files": {}}
 for path in sorted(OUT.rglob("*")):
