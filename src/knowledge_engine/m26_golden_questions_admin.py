@@ -296,9 +296,7 @@ def _normalize_run_request_contract(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, Mapping) or raw.get("status") != "available":
         return {
             "status": "blocked",
-            "reason_code": (
-                _text(raw.get("reason_code")) if isinstance(raw, Mapping) else None
-            )
+            "reason_code": (_text(raw.get("reason_code")) if isinstance(raw, Mapping) else None)
             or RUN_REQUEST_SCHEMA_REASON,
             "canonical_openapi_version": CANONICAL_OPENAPI_VERSION,
         }
@@ -535,7 +533,10 @@ def _request_contract_and_dataset(
             message="Requested Golden dataset identity is not the qualified immutable dataset.",
         )
     scoring = candidate["scoring_contract"]
-    if scoring["version"] != requested_scoring["version"] or scoring["hash"] != requested_scoring["hash"]:
+    if (
+        scoring["version"] != requested_scoring["version"]
+        or scoring["hash"] != requested_scoring["hash"]
+    ):
         raise AdminAPIError(
             status_code=409,
             code="GOLDEN_SCORING_CONTRACT_MISMATCH",
@@ -558,7 +559,9 @@ def _request_contract_and_dataset(
     return contract, candidate
 
 
-def _find_existing_run(request: Request, provider: GoldenEvaluationProvider, operation_id: str) -> dict[str, Any] | None:
+def _find_existing_run(
+    request: Request, provider: GoldenEvaluationProvider, operation_id: str
+) -> dict[str, Any] | None:
     try:
         raw = provider.list_evaluation_runs(request)
     except Exception:
@@ -573,7 +576,9 @@ def _find_existing_run(request: Request, provider: GoldenEvaluationProvider, ope
     return None
 
 
-def _validate_runner_result(operation_id: str, payload: Mapping[str, Any], raw_run: Mapping[str, Any]) -> dict[str, Any]:
+def _validate_runner_result(
+    operation_id: str, payload: Mapping[str, Any], raw_run: Mapping[str, Any]
+) -> dict[str, Any]:
     run = _normalize_run(raw_run)
     if run is None:
         raise AdminAPIError(
@@ -608,7 +613,11 @@ def golden_router() -> APIRouter:
     @router.get("/evaluations/golden", operation_id="listGoldenSets")
     async def list_golden_sets(request: Request) -> dict[str, Any]:
         require_capability(request, GOLDEN_READ_CAPABILITY)
-        provider = getattr(request.app.state, "admin_golden_evaluation_provider", UnavailableGoldenEvaluationProvider())
+        provider = getattr(
+            request.app.state,
+            "admin_golden_evaluation_provider",
+            UnavailableGoldenEvaluationProvider(),
+        )
         try:
             raw = provider.list_golden_sets(request)
         except Exception:
@@ -625,7 +634,11 @@ def golden_router() -> APIRouter:
     @router.get("/evaluations/runs", operation_id="listEvaluationRuns")
     async def list_evaluation_runs(request: Request) -> dict[str, Any]:
         require_capability(request, RUNS_READ_CAPABILITY)
-        provider = getattr(request.app.state, "admin_golden_evaluation_provider", UnavailableGoldenEvaluationProvider())
+        provider = getattr(
+            request.app.state,
+            "admin_golden_evaluation_provider",
+            UnavailableGoldenEvaluationProvider(),
+        )
         try:
             raw = provider.list_evaluation_runs(request)
         except Exception:
@@ -640,11 +653,19 @@ def golden_router() -> APIRouter:
         )
 
     @router.post("/evaluations/runs", operation_id="startEvaluationRun", status_code=202)
-    async def start_evaluation_run(request: Request, body: StartEvaluationRunRequest) -> dict[str, Any]:
+    async def start_evaluation_run(
+        request: Request, body: StartEvaluationRunRequest
+    ) -> dict[str, Any]:
         require_capability(request, RUN_START_CAPABILITY, mutation=True)
         actor = actor_from(request)
-        provider = getattr(request.app.state, "admin_golden_evaluation_provider", UnavailableGoldenEvaluationProvider())
-        runner = getattr(request.app.state, "admin_golden_evaluation_runner", UnavailableGoldenEvaluationRunner())
+        provider = getattr(
+            request.app.state,
+            "admin_golden_evaluation_provider",
+            UnavailableGoldenEvaluationProvider(),
+        )
+        runner = getattr(
+            request.app.state, "admin_golden_evaluation_runner", UnavailableGoldenEvaluationRunner()
+        )
         payload = _canonical_request(body)
         try:
             _request_contract_and_dataset(request, provider, payload)

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -51,7 +52,9 @@ SCORING = {"version": "semantic-v3", "hash": "sha256:scoring-v3"}
 class FakeAuthenticator:
     def authenticate(self, assertion: str | None) -> AdminActor:
         if assertion != "valid-assertion":
-            raise AdminAPIError(status_code=403, code="ADMIN_ACCESS_ASSERTION_INVALID", message="invalid")
+            raise AdminAPIError(
+                status_code=403, code="ADMIN_ACCESS_ASSERTION_INVALID", message="invalid"
+            )
         return OWNER
 
 
@@ -232,7 +235,9 @@ def make_app(
         audit_sink=InMemoryAuditSink(),
         idempotency_store=InMemoryIdempotencyStore(),
     )
-    install_golden_questions_admin(app, provider=provider(contract_status=contract_status), runner=runner)
+    install_golden_questions_admin(
+        app, provider=provider(contract_status=contract_status), runner=runner
+    )
     return app
 
 
@@ -246,7 +251,10 @@ def test_openapi_requires_typed_immutable_run_body() -> None:
 
 def test_missing_or_malformed_immutable_identities_fail_closed() -> None:
     client = TestClient(make_app())
-    assert client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json={}).status_code == 422
+    assert (
+        client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json={}).status_code
+        == 422
+    )
     malformed = run_request(release={"release_id": "release-b"})
     response = client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json=malformed)
     assert response.status_code == 422
@@ -285,7 +293,9 @@ def test_blocked_run_contract_fails_closed_before_runner_and_audits() -> None:
 def test_unavailable_runner_never_creates_fake_run() -> None:
     app = make_app()
     client = TestClient(app)
-    before = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"]["runs"]
+    before = client.get("/v1/admin/evaluations/runs", headers=admin_headers()).json()["data"][
+        "runs"
+    ]
     response = client.post(
         "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
     )
@@ -299,15 +309,11 @@ def test_inert_accepted_runner_preserves_identity_readback_replay_and_audit() ->
     runner = InertAcceptedRunner()
     app = make_app(runner=runner)
     client = TestClient(app)
-    first = client.post(
-        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
-    )
+    first = client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request())
     assert first.status_code == 202
     operation_id = first.json()["operation_id"]
     assert first.json()["replayed"] is False
-    replay = client.post(
-        "/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request()
-    )
+    replay = client.post("/v1/admin/evaluations/runs", headers=admin_headers(), json=run_request())
     assert replay.status_code == 202
     assert replay.json()["operation_id"] == operation_id
     assert replay.json()["replayed"] is True
@@ -319,7 +325,9 @@ def test_inert_accepted_runner_preserves_identity_readback_replay_and_audit() ->
     assert accepted["scoring_contract"]["version"] == SCORING["version"]
     assert accepted["scoring_contract"]["hash"] == SCORING["hash"]
     events = app.state.admin_audit_sink.events
-    accepted_event = next(event for event in events if event.action == "evaluation.run.start.accepted")
+    accepted_event = next(
+        event for event in events if event.action == "evaluation.run.start.accepted"
+    )
     assert accepted_event.actor_id == OWNER.actor_id
     assert accepted_event.request_id.startswith("admreq_")
     assert accepted_event.operation_id == operation_id
@@ -331,7 +339,12 @@ def test_same_idempotency_key_with_changed_normalized_request_conflicts() -> Non
     app = make_app(runner=runner)
     client = TestClient(app)
     key_headers = admin_headers("p10-test-idempotency-0009")
-    assert client.post("/v1/admin/evaluations/runs", headers=key_headers, json=run_request()).status_code == 202
+    assert (
+        client.post(
+            "/v1/admin/evaluations/runs", headers=key_headers, json=run_request()
+        ).status_code
+        == 202
+    )
     changed = run_request(case_ids=["gq-002"])
     response = client.post("/v1/admin/evaluations/runs", headers=key_headers, json=changed)
     assert response.status_code == 409
