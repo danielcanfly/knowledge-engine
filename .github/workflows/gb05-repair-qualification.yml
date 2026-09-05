@@ -1,0 +1,41 @@
+name: GB05 repair backend qualification
+
+on:
+  push:
+    branches:
+      - m26-console/gb05-repair-golden-run-contract-20260905
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: src
+      REAL_GOOGLE_TRANSLATION_CALLS: '0'
+      M26_TRACK2_REQUIRE_REMOTE_DENSE: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install package and dev dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Focused GB05 execution-contract tests
+        run: python -m pytest -q tests/test_m26_golden_questions_admin.py
+
+      - name: Public API regression guardrail
+        run: python -m pytest -q tests/test_api.py
+
+      - name: Ruff touched files
+        run: >-
+          python -m ruff check
+          src/knowledge_engine/m26_golden_questions_admin.py
+          tests/test_m26_golden_questions_admin.py
