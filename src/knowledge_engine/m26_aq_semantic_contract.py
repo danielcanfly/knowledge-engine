@@ -9,9 +9,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
+from .m26_gemini_dense_fallback import M26_GEMINI_CANDIDATE_RELEASE_ID
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
@@ -940,7 +943,7 @@ def synthesize_and_verify(
         requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
         allow_deterministic_recovery=allow_deterministic_recovery,
-        max_attempts=1,
+        max_attempts=2,
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {
@@ -3048,6 +3051,127 @@ def _response_with_contract(response: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
+    if bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        runtime._assert_full_production_graph(bundle)
+        return
+    populations = {
+        "graph_nodes": len(legacy._list(bundle.graph_v2.get("nodes"), "graph_v2 nodes")),
+        "graph_edges": len(legacy._list(bundle.graph_v2.get("edges"), "graph_v2 edges")),
+        "lexical_documents": len(
+            legacy._list(bundle.lexical_index.get("documents"), "lexical documents")
+        ),
+        "semantic_documents": len(
+            legacy._list((bundle.semantic_inputs or {}).get("documents"), "semantic documents")
+        ),
+    }
+    expected = {
+        "graph_nodes": 4457,
+        "graph_edges": 8995,
+        "lexical_documents": 4424,
+        "semantic_documents": 4424,
+    }
+    if populations != expected:
+        raise legacy.PA7ArbitraryQueryError(
+            "PA7_CANDIDATE_BUNDLE_POPULATION_MISMATCH",
+            "canonical candidate runtime is not bound to the frozen qualification population",
+        )
+
+
+def _try_fast_supported_answer(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    gate: Mapping[str, Any],
+    bundle: ProductionAnswerBundle,
+    lexical_result: Mapping[str, Any],
+    dense_result: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    provider: ProviderClient,
+    question_sha: str,
+    started: float,
+) -> dict[str, Any] | None:
+    payload = legacy._fast_synthesis_payload(
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    try:
+        provider_result = provider.call(payload, legacy.FAST_SYNTHESIS_CALL_CLASS)
+        normalized = legacy._normalize_fast_provider_result(provider_result)
+    except LiveGateError as exc:
+        response = legacy._fast_abstention_response(
+            gate=gate,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
+            bundle=bundle,
+            lexical_result=lexical_result,
+            dense_result=dense_result,
+            selected_evidence=evidence,
+            intent_class=intent_class,
+            provider_invoked=True,
+            provider_identity=legacy._fast_provider_identity(provider),
+            provider_result={
+                "call_class": legacy.FAST_SYNTHESIS_CALL_CLASS,
+                "cost_usd": "0",
+            },
+        )
+        response["semantic_closure"] = {
+            "requirements": [runtime._requirement_public(item) for item in requirements],
+            "support_proof": [],
+            "failures": ["PROVIDER_CALL_FAILED"],
+            "canonical_fast_candidate": {
+                "attempted": True,
+                "accepted": False,
+                "semantic_repair_invoked": False,
+                "fail_closed": True,
+            },
+        }
+        return _response_with_contract(response)
+    except (httpx.HTTPError, KeyError, ValueError):
+        return None
+    if legacy._fast_public_abstention_publication(normalized) is not None:
+        return None
+    publication = legacy._validate_fast_provider_candidate(
+        question=question,
+        selected_evidence=evidence,
+        provider_output=normalized,
+    )
+    if publication is None:
+        return None
+    response = legacy._fast_answer_response(
+        gate=gate,
+        trace_id=trace_id,
+        question_sha=question_sha,
+        started=started,
+        bundle=bundle,
+        lexical_result=lexical_result,
+        dense_result=dense_result,
+        selected_evidence=evidence,
+        intent_class=intent_class,
+        provider_identity=legacy._fast_provider_identity(provider),
+        provider_result=normalized,
+        publication=publication,
+    )
+    response["semantic_closure"] = {
+        "requirements": [runtime._requirement_public(item) for item in requirements],
+        "support_proof": [],
+        "failures": [],
+        "canonical_fast_candidate": {
+            "attempted": True,
+            "accepted": True,
+            "semantic_repair_invoked": False,
+        },
+        "semantic_contract": _semantic_contract_public(),
+    }
+    return _response_with_contract(response)
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -3057,29 +3181,13 @@ def run_owner_arbitrary_query(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = 4,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: legacy.RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
-    return _response_with_contract(
-        legacy.run_owner_arbitrary_query(
-            root=root,
-            gate=gate,
-            question=question,
-            owner_subject_hash=owner_subject_hash,
-            public_request=public_request,
-            provider_client=provider_client,
-            dense_channel=dense_channel,
-            require_remote_dense=require_remote_dense,
-            max_provider_calls=max_provider_calls,
-            max_cost=max_cost,
-            answer_bundle=answer_bundle,
-            event_sink=event_sink,
-        )
-    )
-
     import time
 
     started = time.monotonic()
@@ -3192,11 +3300,12 @@ def run_owner_arbitrary_query(
     retrieval_started = time.monotonic()
     legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
     bundle = answer_bundle or load_production_answer_bundle()
-    runtime._assert_full_production_graph(bundle)
+    _assert_canonical_answer_bundle(bundle)
     lexical, dense = legacy._run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
@@ -3266,6 +3375,29 @@ def run_owner_arbitrary_query(
         )
         return response
 
+    fast_response = _try_fast_supported_answer(
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        gate=validated_gate,
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        evidence=evidence,
+        requirements=requirements,
+        provider=provider,
+        question_sha=question_sha,
+        started=started,
+    )
+    if fast_response is not None:
+        legacy._emit_runtime_event(
+            event_sink,
+            "stage.completed",
+            stage="publication",
+            status=fast_response.get("status", ""),
+        )
+        return fast_response
+
     legacy._emit_runtime_event(event_sink, "stage.started", stage="closure")
     legacy._emit_runtime_event(event_sink, "stage.started", stage="review")
     legacy._emit_runtime_event(event_sink, "stage.started", stage="verification")
@@ -3278,6 +3410,14 @@ def run_owner_arbitrary_query(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
     )
+    closure = {
+        **closure,
+        "canonical_fast_candidate": {
+            "attempted": True,
+            "accepted": False,
+            "semantic_repair_invoked": True,
+        },
+    }
     verification, closure = _publish_support_proof_recovered_answer(
         compatibility=_contract_compat_module(),
         question=normalized_question,
