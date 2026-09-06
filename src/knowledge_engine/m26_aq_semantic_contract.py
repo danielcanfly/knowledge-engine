@@ -11,7 +11,6 @@ from typing import Any
 
 import httpx
 
-from . import m26_aq_semantic_runtime_patch_v2 as compatibility_v2
 from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
 from .m26_gemini_dense_fallback import M26_GEMINI_CANDIDATE_RELEASE_ID
@@ -421,11 +420,30 @@ def derive_semantic_requirements(
     base_requirements: Sequence[Any] | None = None,
 ) -> list[SemanticRequirement]:
     """Return canonical semantic requirements without mutating runtime modules."""
+    lifecycle_requested = _requested_lifecycle_requirements(question)
+    definition_parts = legacy._contextual_definition_query_parts(question)
+    authority_requested = _state_machine_replanner_question(question)
     base = list(
         base_requirements
         if base_requirements is not None
         else runtime._semantic_requirements(question, intent_class)
     )
+    lifecycle_ids = {
+        "admission_policy",
+        "durable_state",
+        "completion_verification",
+        "observability",
+    }
+    if authority_requested:
+        base = []
+    elif lifecycle_requested is not None:
+        base = [
+            item
+            for item in base
+            if str(getattr(item, "requirement_id", "")) in lifecycle_requested
+        ]
+    elif definition_parts is not None:
+        base = []
     base_ids = {
         str(getattr(item, "requirement_id", ""))
         for item in base
@@ -453,21 +471,14 @@ def derive_semantic_requirements(
             )
         )
 
-    runtime._add_generic_answer_dimension_requirements(
-        add=add_question_shape,
-        question=question,
-        intent_class=intent_class,
-    )
+    if not authority_requested and lifecycle_requested is None and definition_parts is None:
+        runtime._add_generic_answer_dimension_requirements(
+            add=add_question_shape,
+            question=question,
+            intent_class=intent_class,
+        )
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
-    lifecycle_requested = _requested_lifecycle_requirements(question)
-    definition_parts = legacy._contextual_definition_query_parts(question)
-    lifecycle_ids = {
-        "admission_policy",
-        "durable_state",
-        "completion_verification",
-        "observability",
-    }
     for item in base:
         requirement_id = str(getattr(item, "requirement_id", ""))
         if not requirement_id or requirement_id in seen:
@@ -529,8 +540,8 @@ def derive_semantic_requirements(
                         ),
                     ),
                     visible_patterns=(
-                        rf"\b{re.escape(head)}\b.{{0,120}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b",
-                        rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task)\b.{{0,120}}\b{re.escape(head)}\b",
+                        rf"\b{re.escape(head)}\b.{{0,160}}\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task|capability|wrapper|tells|carry out|class of work)\b",
+                        rf"\b(?:method|means|follow|sop|tool|decision|rules|acceptance|criteria|task|capability|wrapper|tells|carry out|class of work)\b.{{0,160}}\b{re.escape(head)}\b",
                     ),
                     exact_phrase=head,
                 )
@@ -546,7 +557,8 @@ def derive_semantic_requirements(
                     exact_phrase=context,
                 )
             )
-    if _state_machine_replanner_question(question):
+    if authority_requested:
+        seen.add("authority_boundary")
         requirements.append(_authority_boundary_requirement())
     if _route_replan_question(question):
         for requirement in _route_replan_requirements():
@@ -915,8 +927,233 @@ def canonical_question_entities(question: str) -> list[str]:
     return entities
 
 
+def _use_verified_natural_surface(answer: dict[str, Any], surface: str) -> None:
+    text = " ".join(str(surface or "").split())
+    if not text:
+        return
+    answer["answer_text"] = text
+    summary = answer.get("relationship_summary", {})
+    if isinstance(summary, Mapping):
+        answer["relationship_summary"] = {
+            **dict(summary),
+            "served_answer_surface": "verified_natural_material_claim_surface",
+        }
+
+
+def _normalized_identity_phrase(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).casefold()).strip()
+
+
+def _identity_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(value).casefold()).strip("-")
+
+
+def _endpoint_concept_for_requirement(
+    exact: str,
+    requirement_id: str,
+    endpoint_proof: Mapping[str, Any],
+) -> str:
+    normalized_exact = _normalized_identity_phrase(exact)
+    normalized_id = _normalized_identity_phrase(
+        requirement_id.removeprefix("entity_").replace("_", " ")
+    )
+    entities = [
+        str(item)
+        for item in endpoint_proof.get("question_entities", [])
+        if isinstance(item, (str, int))
+    ]
+    for index, entity in enumerate(entities[:2]):
+        if _normalized_identity_phrase(entity) not in {normalized_exact, normalized_id}:
+            continue
+        return str(endpoint_proof.get("edge_source" if index == 0 else "edge_target", ""))
+    return ""
+
+
+def _article_number_distance(exact: str, item: Mapping[str, Any]) -> int:
+    expected = re.findall(r"\bpart\s+(\d+)\b", exact.casefold())
+    if not expected:
+        return 0
+    haystack = " ".join(
+        str(item.get(field, ""))
+        for field in ("source_identity", "source_id", "title", "section_title")
+    ).casefold()
+    found = re.findall(r"\bpart[-_ ]?(\d+)\b", haystack)
+    if not found:
+        return 999
+    return min(abs(int(expected[0]) - int(value)) for value in found)
+
+
+def _entity_identity_support_item(
+    *,
+    requirement: Any,
+    evidence: Sequence[Mapping[str, Any]],
+    endpoint_proof: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    requirement_id = str(requirement.requirement_id)
+    exact = str(getattr(requirement, "exact_phrase", "") or "")
+    if not exact:
+        exact = requirement_id.removeprefix("entity_").replace("_", " ")
+    entity_slug = _identity_slug(exact)
+    endpoint_concept = _endpoint_concept_for_requirement(
+        exact, requirement_id, endpoint_proof
+    )
+    candidates: list[tuple[int, Mapping[str, Any]]] = []
+    for item in evidence:
+        source_slug = _identity_slug(
+            str(item.get("source_identity") or item.get("source_id") or "")
+        )
+        title_slug = _identity_slug(
+            " ".join(
+                str(item.get(field, ""))
+                for field in ("title", "section_title")
+                if item.get(field)
+            )
+        )
+        score = 0
+        if endpoint_concept and str(item.get("concept_id", "")) == endpoint_concept:
+            score += 1000
+        if source_slug == entity_slug or source_slug.endswith(f"-{entity_slug}"):
+            score += 80
+        if title_slug == entity_slug or title_slug.endswith(f"-{entity_slug}"):
+            score += 40
+        if score:
+            candidates.append((score, item))
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda pair: (
+            pair[0],
+            -_article_number_distance(exact, pair[1]),
+            str(pair[1].get("evidence_id", "")),
+        ),
+    )[1]
+
+
+def _normalized_support_requirements(requirements: Sequence[Any]) -> tuple[Any, ...]:
+    normalized: list[Any] = []
+    seen: set[str] = set()
+    for item in requirements:
+        requirement_id = str(getattr(item, "requirement_id", ""))
+        exact = str(getattr(item, "exact_phrase", "") or "")
+        if requirement_id.startswith("entity_") and exact:
+            cleaned = _clean_graph_entity_phrase(exact)
+            if cleaned and cleaned != exact:
+                requirement_id = f"entity_{legacy._facet_id_for_term(cleaned)}"
+                item = SemanticRequirement(
+                    requirement_id=requirement_id,
+                    instruction=f"Name and address {cleaned} explicitly.",
+                    evidence_terms=(cleaned,),
+                    visible_patterns=(re.escape(cleaned),),
+                    exact_phrase=cleaned,
+                )
+        if requirement_id and requirement_id not in seen:
+            normalized.append(item)
+            seen.add(requirement_id)
+    return tuple(normalized)
+
+
+def _endpoint_aware_requirement_support_failures(
+    *,
+    runtime: Any,
+    requirements: Sequence[Any],
+    evidence: Sequence[Mapping[str, Any]],
+    endpoint_proof: Mapping[str, Any] | None,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    requirements = _normalized_support_requirements(requirements)
+    failures, proof = runtime._requirement_support_failures(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    proof_by_requirement = {
+        str(item.get("requirement_id", "")): dict(item)
+        for item in proof
+        if isinstance(item, Mapping)
+    }
+    endpoint = endpoint_proof or {}
+    endpoint_matched = endpoint.get("required") is True and endpoint.get("matched") is True
+    for requirement in requirements:
+        requirement_id = str(requirement.requirement_id)
+        exact = str(getattr(requirement, "exact_phrase", "") or "")
+        endpoint_concept = (
+            _endpoint_concept_for_requirement(exact, requirement_id, endpoint)
+            if requirement_id.startswith("entity_") and endpoint_matched
+            else ""
+        )
+        if endpoint_concept:
+            item = _entity_identity_support_item(
+                requirement=requirement,
+                evidence=evidence,
+                endpoint_proof=endpoint,
+            )
+            if item is None:
+                proof_by_requirement.pop(requirement_id, None)
+            else:
+                proof_by_requirement[requirement_id] = {
+                    "requirement_id": requirement_id,
+                    "supported": True,
+                    "evidence_id": str(item.get("evidence_id", "")),
+                    "source_identity": str(
+                        item.get("source_identity") or item.get("source_id") or ""
+                    ),
+                    "concept_id": str(item.get("concept_id", "")),
+                    "score": 100.0,
+                    "support_basis": "canonical_endpoint_identity_override",
+                }
+            continue
+        current = proof_by_requirement.get(requirement_id)
+        if current and current.get("supported") is True:
+            continue
+        if not requirement_id.startswith("entity_"):
+            continue
+        item = _entity_identity_support_item(
+            requirement=requirement,
+            evidence=evidence,
+            endpoint_proof=endpoint,
+        )
+        if item is not None:
+            proof_by_requirement[requirement_id] = {
+                "requirement_id": requirement_id,
+                "supported": True,
+                "evidence_id": str(item.get("evidence_id", "")),
+                "source_identity": str(
+                    item.get("source_identity") or item.get("source_id") or ""
+                ),
+                "concept_id": str(item.get("concept_id", "")),
+                "score": 4.0,
+                "support_basis": "canonical_or_source_identity",
+            }
+    normalized_proof: list[dict[str, Any]] = []
+    normalized_failures: list[str] = []
+    for requirement in requirements:
+        requirement_id = str(requirement.requirement_id)
+        item = proof_by_requirement.get(requirement_id)
+        if item and item.get("supported") is True:
+            normalized_proof.append(item)
+            continue
+        normalized_proof.append(
+            {
+                "requirement_id": requirement_id,
+                "supported": False,
+                "evidence_id": "",
+                "source_identity": "",
+                "concept_id": "",
+                "score": 0.0,
+            }
+        )
+        normalized_failures.append(f"SEMANTIC_SUPPORT_MISSING:{requirement_id}")
+    return normalized_failures, normalized_proof
+
+
+class _CanonicalSupportCompatibility:
+    _use_verified_natural_surface = staticmethod(_use_verified_natural_surface)
+    _endpoint_aware_requirement_support_failures = staticmethod(
+        _endpoint_aware_requirement_support_failures
+    )
+
+
 def _contract_compat_module() -> Any:
-    return compatibility_v2
+    return _CanonicalSupportCompatibility
 
 
 def synthesize_and_verify(
@@ -958,6 +1195,20 @@ def synthesize_and_verify(
         **dict(verification),
         "semantic_contract_fingerprint": fingerprint,
     }
+    if allow_deterministic_recovery and verification.get("status") == "owner_only_safe_abstention":
+        recovered = _recover_definition_fallback_answer(
+            compatibility=_CanonicalSupportCompatibility,
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            requirements=runtime_requirements,
+            endpoint_proof=endpoint_proof,
+            verification=verification,
+            closure=closure,
+        )
+        if recovered is not None:
+            return recovered
     return verification, closure
 
 
@@ -1040,32 +1291,33 @@ def _publish_support_proof_recovered_answer(
     verification: Mapping[str, Any],
     closure: Mapping[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    recovered = _recover_supported_semantic_answer(
-        compatibility=compatibility,
-        question=question,
-        trace_id=trace_id,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-        endpoint_proof=endpoint_proof,
-        verification=verification,
-        closure=closure,
-    )
-    if recovered is not None:
-        return recovered
+    runtime_requirements = _runtime_semantic_requirements(requirements)
     definition_recovered = _recover_definition_fallback_answer(
         compatibility=compatibility,
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
         evidence=evidence,
-        requirements=requirements,
+        requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
         verification=verification,
         closure=closure,
     )
     if definition_recovered is not None:
         return definition_recovered
+    recovered = _recover_supported_semantic_answer(
+        compatibility=compatibility,
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=runtime_requirements,
+        endpoint_proof=endpoint_proof,
+        verification=verification,
+        closure=closure,
+    )
+    if recovered is not None:
+        return recovered
     return dict(verification), dict(closure)
 
 
@@ -1128,7 +1380,7 @@ def _recover_supported_semantic_answer(
             intent_class=intent_class,
             evidence=recovery_evidence,
             provider_text=json.dumps(
-                candidate,
+                runtime._verification_candidate(candidate),
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -1260,7 +1512,7 @@ def _recover_definition_fallback_answer(
             intent_class=intent_class,
             evidence=evidence,
             provider_text=json.dumps(
-                candidate,
+                runtime._verification_candidate(candidate),
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -1308,7 +1560,7 @@ def _recover_definition_fallback_answer(
         verification.get("payg_equivalent_cost_usd", "0")
     )
     answer["repair_attempted"] = True
-    answer["answer_source"] = "provider_verified_runtime_bound_semantic_closure"
+    answer["answer_source"] = "deterministic_verified_evidence_synthesis"
     answer["multi_evidence_verification"] = {
         **dict(answer.get("multi_evidence_verification", {})),
         "provider_attempt_telemetry": list(
@@ -1332,7 +1584,7 @@ def _recover_definition_fallback_answer(
         "failures": [],
         "pre_recovery_failures": pre_recovery_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v3",
-        "broad_deterministic_fallback_used": False,
+        "broad_deterministic_fallback_used": True,
         "definition_fallback_used": True,
         "runtime_bound_semantic_repair_used": True,
         "semantic_synthesis_recovery": {
