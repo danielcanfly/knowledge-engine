@@ -1442,7 +1442,16 @@ def run_owner_arbitrary_query(
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
-    return _run_fast_public_query(
+    """Compatibility shim that cannot bypass the canonical semantic runtime.
+
+    The legacy module still owns retrieval and validation helpers, but this public
+    symbol is intentionally a delegate so old callers cannot create a competing
+    product runtime.  The local import avoids the module's existing one-way helper
+    dependency on this module during import initialisation.
+    """
+    from .m26_aq_semantic_contract import run_owner_arbitrary_query as canonical_run
+
+    return canonical_run(
         root=root,
         gate=gate,
         question=question,

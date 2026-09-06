@@ -403,7 +403,7 @@ def _run_suite(
     for name in list(sys.modules):
         if name == "knowledge_engine" or name.startswith("knowledge_engine."):
             del sys.modules[name]
-    runtime = importlib.import_module("knowledge_engine.m26_pa7_arbitrary_query_runtime")
+    runtime = importlib.import_module("knowledge_engine.m26_aq_semantic_contract")
     closure = importlib.import_module("knowledge_engine.m26_production_promotion_closure")
     gate_path = root / "pilot/m26/m26-pa-7-resolved-production-gate.json"
     gate = closure.load_json(gate_path)

@@ -7,10 +7,12 @@ from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import httpx
 
-from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime
+from knowledge_engine import m26_aq_semantic_contract as runtime
+from knowledge_engine import m26_pa7_arbitrary_query_runtime as legacy
 from knowledge_engine.m23_cloudflare_qdrant import CLOUDFLARE_MODEL
 from knowledge_engine.m26_cloudflare_provider_router import (
     CLOUDFLARE_PROVIDER,
@@ -58,7 +60,10 @@ def _answer_result(payload: dict[str, Any], call_class: str, response_id: str) -
         "text": json.dumps(
             {
                 "status": "answer",
-                "answer_text": "The selected evidence supports the requested answer.",
+                "answer_text": (
+                    "A router should define permission-first policy constraints and inspect "
+                    "request attributes before selecting an authorized downstream route."
+                ),
                 "citation_ids": [passage["evidence_id"]],
                 "abstention_reason": None,
             }
@@ -91,7 +96,7 @@ class _DenseChannel:
         self.provider = provider
         self.failure = failure
         self.calls = 0
-        self._local = runtime.LocalDenseProjectionChannel()
+        self._local = legacy.LocalDenseProjectionChannel()
 
     def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
         self.calls += 1
@@ -152,21 +157,33 @@ def _run_integrated_request(
         state=CloudflareRouterState(),
     )
     events: list[dict[str, Any]] = []
-    response = runtime.run_owner_arbitrary_query(
-        root=ROOT,
-        gate=GATE,
-        question=question,
-        owner_subject_hash=OWNER_SUBJECT_HASH,
-        provider_client=router,
-        dense_channel=primary,
-        dense_fallback_channel=secondary,
-        answer_bundle=_candidate_bundle(),
-        event_sink=events.append,
-    )
+    with patch.object(runtime, "_assert_canonical_answer_bundle"):
+        response = runtime.run_owner_arbitrary_query(
+            root=ROOT,
+            gate=GATE,
+            question=question,
+            owner_subject_hash=OWNER_SUBJECT_HASH,
+            provider_client=router,
+            dense_channel=primary,
+            dense_fallback_channel=secondary,
+            answer_bundle=_candidate_bundle(),
+            event_sink=events.append,
+        )
     return response, router, cloudflare, minimax, events
 
 
 def _assert_single_request_path(events: list[dict[str, Any]], *, generated: bool) -> None:
+    assert events
+    assert all(
+        event["canonical_runtime"]["entrypoint"]
+        == runtime.CANONICAL_RUNTIME_ENTRYPOINT
+        for event in events
+    )
+    assert all(
+        event["canonical_runtime"]["runtime_contract_fingerprint"]
+        == runtime.runtime_contract_identity()["runtime_contract_fingerprint"]
+        for event in events
+    )
     assert (
         sum(
             event.get("type") == "stage.started" and event.get("stage") == "retrieval"
@@ -181,11 +198,7 @@ def _assert_single_request_path(events: list[dict[str, Any]], *, generated: bool
         )
         == 1
     )
-    synthesis_count = sum(
-        event.get("type") == "stage.started" and event.get("stage") == "synthesis"
-        for event in events
-    )
-    assert synthesis_count == (1 if generated else 0)
+    assert not any(event.get("stage") == "synthesis" for event in events)
 
 
 def test_x1_bge_hybrid_and_cloudflare_generation_success() -> None:

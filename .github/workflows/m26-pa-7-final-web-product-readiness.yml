@@ -1265,7 +1265,7 @@ jobs:
           import json
           import os
           from pathlib import Path
-          from knowledge_engine.m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
+          from knowledge_engine.m26_aq_semantic_contract import run_owner_arbitrary_query
           from knowledge_engine.m26_pa7_final_web_readiness import (
               _runtime_row_from_response,
               final_formal_query_specs,

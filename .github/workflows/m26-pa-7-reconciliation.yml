@@ -298,7 +298,7 @@ jobs:
           assert_equal("formal row denominator", len(rows), 8)
           if any(
               row["runtime_path"]
-              != "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+              != "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
               for row in rows
           ):
               raise AssertionError("formal row bypassed public runtime path")

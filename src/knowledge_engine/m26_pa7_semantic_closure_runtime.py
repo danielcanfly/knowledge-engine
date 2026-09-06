@@ -64,7 +64,7 @@ class SemanticRequirement:
     exact_phrase: str = ""
 
 
-def run_owner_arbitrary_query(
+def _run_semantic_closure_internal(
     *,
     root: Path,
     gate: Mapping[str, Any],

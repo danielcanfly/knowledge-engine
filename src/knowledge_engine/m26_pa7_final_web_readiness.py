@@ -29,7 +29,7 @@ FINAL_WEB_READINESS_RECEIPT_SCHEMA = (
     "knowledge-engine-m26-pa-7-final-web-product-readiness-receipt/v1"
 )
 CANONICAL_RUNTIME_PATH = (
-    "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+    "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 )
 ASK_URL = "https://m24-internal.danielcanfly.com/ask"
 API_QUERY_PATH = "/api/m26/query"
@@ -359,7 +359,7 @@ def run_final_web_product_readiness(
     closure.reject_secret_or_raw_persistence(browser_evidence, label="browser_evidence")
 
     from .m26_pa5_v8_live import MiniMaxClient
-    from .m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
+    from .m26_aq_semantic_contract import run_owner_arbitrary_query
 
     budgets = _object(manifest["budgets"], "manifest.budgets")
     provider = provider_client
@@ -502,6 +502,14 @@ def _runtime_row_from_response(
     spec: Mapping[str, Any],
     response: Mapping[str, Any],
 ) -> dict[str, Any]:
+    runtime_identity = response.get("canonical_runtime")
+    if not isinstance(runtime_identity, Mapping) or runtime_identity.get(
+        "entrypoint"
+    ) != CANONICAL_RUNTIME_PATH:
+        raise _promotion_error(
+            "PA7_RUNTIME_AUTHORITY_MISMATCH",
+            "qualification response lacks canonical runtime identity",
+        )
     class_name = str(spec["class"])
     answerable = bool(spec["answerable"])
     status = str(response.get("status", ""))
@@ -539,7 +547,16 @@ def _runtime_row_from_response(
     )
     row: dict[str, Any] = {
         "answerable": answerable,
-        "canonical_runtime_entrypoint": CANONICAL_RUNTIME_PATH,
+        "canonical_runtime_entrypoint": str(runtime_identity["entrypoint"]),
+        "runtime_contract_fingerprint": str(
+            runtime_identity.get("runtime_contract_fingerprint", "")
+        ),
+        "downstream_contract_fingerprint": str(
+            runtime_identity.get("downstream_contract_fingerprint", "")
+        ),
+        "downstream_stage_identity": list(
+            runtime_identity.get("downstream_stage_identity", [])
+        ),
         "citation_count": len(citations),
         "citation_locator_valid": citation_valid,
         "class": class_name,
@@ -561,7 +578,7 @@ def _runtime_row_from_response(
         "question_sha256": str(response.get("question_sha256")),
         "reason_codes": [str(item) for item in response.get("reason_codes", [])],
         "relationship_summary": dict(relationship),
-        "runtime_path": CANONICAL_RUNTIME_PATH,
+        "runtime_path": str(runtime_identity["entrypoint"]),
         "safe_terminal": cited_answer or safe_abstention,
         "selected_evidence_count": int(response.get("selected_evidence_count", 0)),
         "selected_evidence_types": evidence_types,

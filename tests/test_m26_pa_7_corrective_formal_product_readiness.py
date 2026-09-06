@@ -34,7 +34,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "m26-pa-7-production-promotion-closu
 
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 FORMAL_MANIFEST_SELF_SHA256 = (
-    "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9"
+    "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396"
 )
 CORRECTED_GATE_SELF_SHA256 = (
     "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
@@ -309,7 +309,7 @@ def test_corrective_formal_fixture_receipt_satisfies_a01_to_a34_evidence(tmp_pat
 
     rows = receipt["formal"]["rows"]
     assert {row["runtime_path"] for row in rows} == {
-        "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+        "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
     }
     assert all(row["safe_terminal"] for row in rows)
     assert all(row["unsupported_accepted_claims"] == 0 for row in rows)

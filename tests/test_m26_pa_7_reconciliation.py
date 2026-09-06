@@ -42,7 +42,7 @@ PA7_UNLOCK_SELF_SHA256 = (
     "c1984a9d69518958cc6830d34762444263f990b118a8c6a914e480a15c491538"
 )
 FORMAL_MANIFEST_SELF_SHA256 = (
-    "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9"
+    "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396"
 )
 CORRECTED_GATE_SELF_SHA256 = (
     "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
@@ -211,7 +211,7 @@ def test_corrected_formal_metrics_bound_product_readiness() -> None:
     assert evidence["formal"]["answerable_count"] == 6
     assert evidence["formal"]["answerable_provider_invoked_count"] == 6
     assert evidence["formal"]["runtime_path"] == (
-        "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+        "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
     )
     assert evidence["formal"]["temporal_conflict_outcome"] == (
         "safe_abstention_allowed_by_acceptance_matrix_a24"

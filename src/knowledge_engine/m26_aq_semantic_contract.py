@@ -23,6 +23,17 @@ CONTRACT_MATCHER_VERSION = "authority-boundary-natural-equivalence/v2"
 CANONICAL_RUNTIME_ENTRYPOINT = (
     "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 )
+PROVIDER_NEUTRAL_DOWNSTREAM_STAGES = (
+    "lexical_dense_merge",
+    "evidence_selection",
+    "evidence_strengthening",
+    "semantic_requirement_derivation",
+    "fast_candidate",
+    "semantic_closure",
+    "semantic_repair",
+    "claim_entailment_validator",
+    "citation_or_justified_abstain",
+)
 
 DenseChannel = legacy.DenseChannel
 ProviderClient = legacy.ProviderClient
@@ -848,6 +859,26 @@ def semantic_contract_fingerprint() -> str:
     return canonical_sha256(payload)
 
 
+def provider_neutral_downstream_fingerprint() -> str:
+    return canonical_sha256(
+        {
+            "schema_version": "m26-aq-provider-neutral-downstream/v1",
+            "stages": list(PROVIDER_NEUTRAL_DOWNSTREAM_STAGES),
+        }
+    )
+
+
+def runtime_contract_identity() -> dict[str, Any]:
+    identity = {
+        "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+        "semantic_contract_fingerprint": semantic_contract_fingerprint(),
+        "downstream_stage_identity": list(PROVIDER_NEUTRAL_DOWNSTREAM_STAGES),
+        "downstream_contract_fingerprint": provider_neutral_downstream_fingerprint(),
+    }
+    identity["runtime_contract_fingerprint"] = canonical_sha256(identity)
+    return identity
+
+
 class _RuntimeFacade:
     SemanticRequirement = SemanticRequirement
 
@@ -882,6 +913,7 @@ _RECOVERABLE_SEMANTIC_CODES = {
     "PROVIDER_ABSTAINED",
     "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
     "SEMANTIC_CLOSURE_FAILED",
+    "COMPACT_PROVIDER_TRUNCATED",
     "ValueError",
 }
 _RECOVERY_EXTERNAL_STOPWORDS = {
@@ -903,6 +935,16 @@ _RECOVERY_EXTERNAL_STOPWORDS = {
     "Which",
     "Why",
 }
+_ALIGNMENT_STOPWORDS = {
+    "a", "an", "and", "are", "be", "been", "can", "could", "do", "does",
+    "for", "from", "how", "if", "in", "is", "it", "its", "just", "more",
+    "of", "on", "or", "should", "than", "that", "the", "their", "this",
+    "to", "what", "when", "which", "who", "why", "with", "would", "about",
+}
+_RECOVERY_INTERNAL_SURFACE_MARKERS = (
+    "direct answer:",
+    "need relation:",
+)
 _INTERNAL_REFERENCE_RE = re.compile(
     r"\b(?:article_[0-9a-f]{8,}|m26pa7(?:ev|loc|edge)_[0-9a-f]{8,}|"
     r"concept[-_/][A-Za-z0-9_.-]+|ev-[A-Za-z0-9_.-]+|e\d+)\b",
@@ -1409,6 +1451,12 @@ def _recover_supported_semantic_answer(
         return None
     if _internal_reference_leaks(str(answer.get("answer_text", "")), question):
         return None
+    if _question_answer_alignment_failures(
+        question=question,
+        answer_text=str(answer.get("answer_text", "")),
+        evidence=recovery_evidence,
+    ):
+        return None
 
     previous_mve = verification.get("multi_evidence_verification", {})
     previous_mve = previous_mve if isinstance(previous_mve, Mapping) else {}
@@ -1540,6 +1588,12 @@ def _recover_definition_fallback_answer(
     if visible_failures:
         return None
     if _internal_reference_leaks(str(answer.get("answer_text", "")), question):
+        return None
+    if _question_answer_alignment_failures(
+        question=question,
+        answer_text=str(answer.get("answer_text", "")),
+        evidence=evidence,
+    ):
         return None
 
     support_failures, support_proof = (
@@ -1732,14 +1786,14 @@ def _supported_semantic_recovery_candidate(
         intent_class=intent_class,
         evidence=evidence,
     )
-    if candidate is not None:
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
     candidate = _lifecycle_control_comparison_candidate(
         question=question,
         intent_class=intent_class,
         evidence=evidence,
     )
-    if candidate is not None:
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
     candidate = _positive_answerability_requirement_candidate(
         question=question,
@@ -1748,33 +1802,69 @@ def _supported_semantic_recovery_candidate(
         requirements=requirements,
         support_proof=support_proof,
     )
-    if candidate is not None:
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
     candidate = _comparison_surface_candidate(
         question=question,
         intent_class=intent_class,
         evidence=evidence,
     )
-    if candidate is not None:
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
     candidate = _authority_surface_candidate(
         question=question,
         intent_class=intent_class,
         evidence=evidence,
     )
-    if candidate is not None:
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
+    aligned_evidence = _aligned_recovery_evidence(question, evidence)
+    if not aligned_evidence:
+        return None
     try:
         candidate = legacy._deterministic_provider_candidate(
             question=question,
             intent_class=intent_class,
-            evidence=evidence,
+            evidence=aligned_evidence,
         )
     except Exception:
         return None
     if not isinstance(candidate, Mapping):
         return None
-    return dict(candidate)
+    result = dict(candidate)
+    return result if _recovery_candidate_aligned(question, result, aligned_evidence) else None
+
+
+def _aligned_recovery_evidence(
+    question: str, evidence: Sequence[Mapping[str, Any]]
+) -> list[Mapping[str, Any]]:
+    focus = _question_focus_terms(question)
+    if not focus:
+        return list(evidence)
+
+    def score(item: Mapping[str, Any]) -> tuple[int, int]:
+        text = " ".join(
+            str(item.get(key, ""))
+            for key in ("passage_text", "title", "section_title", "source_identity")
+        ).casefold()
+        terms = set(re.findall(r"[a-z0-9]+", text))
+        return (len(focus & terms), int(bool(item.get("passage_text"))))
+
+    ranked = sorted(enumerate(evidence), key=lambda pair: (*score(pair[1]), -pair[0]), reverse=True)
+    supported = [item for _, item in ranked if score(item)[0] > 0]
+    return supported[:6]
+
+
+def _recovery_candidate_aligned(
+    question: str,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    return not _question_answer_alignment_failures(
+        question=question,
+        answer_text=str(candidate.get("answer_text", "")),
+        evidence=evidence,
+    )
 
 
 def _positive_answerability_requirement_candidate(
@@ -3217,6 +3307,58 @@ def _internal_reference_leaks(text: str, question: str) -> list[str]:
     return list(dict.fromkeys(leaks))
 
 
+def _question_focus_terms(question: str) -> set[str]:
+    tokens = [
+        token.casefold()
+        for token in re.findall(r"[A-Za-z0-9]+", question)
+        if token.casefold() not in _ALIGNMENT_STOPWORDS and len(token) > 2
+    ]
+    if not tokens:
+        return set()
+    # The predicate after a question's first action cue is the most stable generic
+    # signal of what the answer must address. This is lexical only and has no case data.
+    cues = {"recommend", "need", "makes", "make", "run", "keep", "earn", "able", "change"}
+    cue_index = next((i for i, token in enumerate(tokens) if token in cues), None)
+    if cue_index is not None and cue_index + 1 < len(tokens):
+        focused = set(tokens[cue_index + 1 :])
+        if focused:
+            return focused
+    return set(tokens)
+
+
+def _question_answer_alignment_failures(
+    *, question: str, answer_text: str, evidence: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    normalized = " ".join(str(answer_text or "").split()).casefold()
+    if not normalized:
+        return ["QUESTION_ANSWER_ALIGNMENT_EMPTY"]
+    if any(marker in normalized for marker in _RECOVERY_INTERNAL_SURFACE_MARKERS):
+        return ["QUESTION_ANSWER_ALIGNMENT_INTERNAL_SURFACE"]
+    answer_terms = {
+        token
+        for token in re.findall(r"[a-z0-9]+", normalized)
+        if token not in _ALIGNMENT_STOPWORDS and len(token) > 2
+    }
+    focus_terms = _question_focus_terms(question)
+    if focus_terms and not (focus_terms & answer_terms):
+        return ["QUESTION_ANSWER_ALIGNMENT_MISSING_FOCUS"]
+    evidence_terms = {
+        token
+        for item in evidence
+        for token in re.findall(
+            r"[a-z0-9]+",
+            " ".join(
+                str(item.get(key, ""))
+                for key in ("passage_text", "title", "section_title", "source_identity")
+            ).casefold(),
+        )
+        if token not in _ALIGNMENT_STOPWORDS and len(token) > 2
+    }
+    if evidence_terms and not (answer_terms & evidence_terms):
+        return ["QUESTION_ANSWER_ALIGNMENT_UNSUPPORTED_SURFACE"]
+    return []
+
+
 def _unsupported_external_markers(
     question: str,
     evidence: Sequence[Mapping[str, Any]],
@@ -3286,21 +3428,38 @@ def _evidence_marker_space(evidence: Sequence[Mapping[str, Any]]) -> set[str]:
     return {token for token in re.findall(r"[a-z0-9]+", normalized) if token}
 
 
-def _semantic_contract_public() -> dict[str, str]:
+def _semantic_contract_public() -> dict[str, Any]:
     return {
         "schema_version": CONTRACT_SCHEMA_VERSION,
         "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
         "fingerprint": semantic_contract_fingerprint(),
+        "downstream_contract_fingerprint": provider_neutral_downstream_fingerprint(),
+        "downstream_stage_identity": list(PROVIDER_NEUTRAL_DOWNSTREAM_STAGES),
     }
 
 
 def _response_with_contract(response: dict[str, Any]) -> dict[str, Any]:
     contract = _semantic_contract_public()
     response["semantic_contract_fingerprint"] = contract["fingerprint"]
+    response["canonical_runtime"] = runtime_contract_identity()
     closure = response.get("semantic_closure")
     if isinstance(closure, dict):
         closure["semantic_contract"] = contract
+        closure["canonical_runtime"] = runtime_contract_identity()
     return response
+
+
+def _contract_event_sink(
+    event_sink: legacy.RuntimeEventSink | None,
+) -> legacy.RuntimeEventSink | None:
+    if event_sink is None:
+        return None
+    identity = runtime_contract_identity()
+
+    def emit(event: Mapping[str, Any]) -> None:
+        event_sink({**dict(event), "canonical_runtime": identity})
+
+    return emit
 
 
 def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
@@ -3396,6 +3555,12 @@ def _try_fast_supported_answer(
     )
     if publication is None:
         return None
+    if _question_answer_alignment_failures(
+        question=question,
+        answer_text=str(publication.get("answer_text", "")),
+        evidence=evidence,
+    ):
+        return None
     response = legacy._fast_answer_response(
         gate=gate,
         trace_id=trace_id,
@@ -3442,6 +3607,7 @@ def run_owner_arbitrary_query(
 ) -> dict[str, Any]:
     import time
 
+    event_sink = _contract_event_sink(event_sink)
     started = time.monotonic()
     normalized_question = legacy._normalize_request_question(question)
     question_sha = canonical_sha256(normalized_question)
@@ -3551,6 +3717,8 @@ def run_owner_arbitrary_query(
 
     retrieval_started = time.monotonic()
     legacy._emit_runtime_event(event_sink, "stage.started", stage="retrieval")
+    # Keep bundle injection on the canonical module so bounded qualification
+    # fixtures can replace the loader without reintroducing a legacy runtime edge.
     bundle = answer_bundle or load_production_answer_bundle()
     _assert_canonical_answer_bundle(bundle)
     lexical, dense = legacy._run_lexical_primary_retrieval(

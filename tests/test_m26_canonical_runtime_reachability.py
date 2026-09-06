@@ -46,7 +46,9 @@ def test_canonical_entrypoint_has_no_unconditional_fast_bypass() -> None:
     )
     assert not isinstance(canonical.body[0], ast.Return)
     assert "legacy.run_owner_arbitrary_query" not in ast.unparse(canonical)
-    assert "return _run_fast_public_query" in ast.unparse(legacy)
+    legacy_source = ast.unparse(legacy)
+    assert "canonical_run" in legacy_source
+    assert "_run_fast_public_query" not in legacy_source
     assert m26_ask_api.run_owner_arbitrary_query is contract.run_owner_arbitrary_query
 
 
