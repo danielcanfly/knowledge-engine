@@ -22,7 +22,8 @@ from .m26_admin_qa import (
     QaReadResult,
     install_admin_qa,
 )
-from .qa_answer_quality import QaRepository, submit_answer_capture
+from .qa_answer_quality import submit_answer_capture
+from .qa_answer_quality_sqlite import SqliteQaRepository
 from .storage import create_object_store
 
 QA_INBOX_PREFIX = "/v1/admin/qa/inbox"
@@ -41,14 +42,14 @@ class QaExportRequest(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def qa_repository_from_env() -> QaRepository:
-    return QaRepository(create_object_store(Settings.from_env()))
+def qa_repository_from_env() -> SqliteQaRepository:
+    return SqliteQaRepository(create_object_store(Settings.from_env()))
 
 
 class RepositoryQaEventSource:
     """Compatibility adapter for the pre-P0 QA list/detail endpoints."""
 
-    def __init__(self, repository_provider: Callable[[], QaRepository]) -> None:
+    def __init__(self, repository_provider: Callable[[], SqliteQaRepository]) -> None:
         self._repository_provider = repository_provider
 
     def list_events(self, *, event_class: str | None, release_id: str | None) -> QaReadResult:
@@ -110,7 +111,7 @@ class QaAnswerCaptureMiddleware:
         self,
         app: ASGIApp,
         *,
-        repository_provider: Callable[[], QaRepository],
+        repository_provider: Callable[[], SqliteQaRepository],
     ) -> None:
         self.app = app
         self.repository_provider = repository_provider
@@ -157,14 +158,17 @@ class QaAnswerCaptureMiddleware:
                     remaining = QA_MAX_CAPTURE_BYTES - len(response_body)
                     response_body.extend(chunk[:remaining])
                 if not message.get("more_body", False):
+                    latency_ms = int((time.perf_counter() - started) * 1000)
+                    await send(message)
                     self._submit(
                         scope=scope,
                         request_body=bytes(body),
                         response_status=response_status,
                         response_content_type=response_content_type,
                         response_body=bytes(response_body),
-                        latency_ms=int((time.perf_counter() - started) * 1000),
+                        latency_ms=latency_ms,
                     )
+                    return
             await send(message)
 
         await self.app(scope, _body_replay_receive(bytes(body), receive), capture_send)
@@ -221,7 +225,6 @@ class QaAnswerCaptureMiddleware:
                 trace=trace,
             )
         except Exception:
-            # QA observation is deliberately fail-open for visitor answering.
             return
 
 
@@ -258,7 +261,6 @@ def _trusted_country(scope: Scope) -> str:
         key.decode("latin-1").casefold(): value.decode("latin-1")
         for key, value in scope.get("headers", [])
     }
-    # Enable only after deployment qualification proves the public origin is Cloudflare-only.
     if not headers.get("cf-ray"):
         return "ZZ"
     country = headers.get("cf-ipcountry", "").strip().upper()
@@ -309,7 +311,11 @@ def _error_reason_codes(error: Mapping[str, Any] | None) -> list[str]:
 
 
 def _legacy_event(event: Mapping[str, Any]) -> dict[str, Any]:
-    release = event.get("release_identity") if isinstance(event.get("release_identity"), Mapping) else {}
+    release = (
+        event.get("release_identity")
+        if isinstance(event.get("release_identity"), Mapping)
+        else {}
+    )
     failure_trace = (
         event.get("failure_trace") if isinstance(event.get("failure_trace"), Mapping) else {}
     )
@@ -318,6 +324,7 @@ def _legacy_event(event: Mapping[str, Any]) -> dict[str, Any]:
         if isinstance(failure_trace.get("synthesis_validation"), Mapping)
         else {}
     )
+    citations = synthesis.get("citations", [])
     return {
         "trace_id": event.get("trace_id"),
         "timestamp": event.get("timestamp"),
@@ -328,16 +335,14 @@ def _legacy_event(event: Mapping[str, Any]) -> dict[str, Any]:
         "provider": None,
         "fallback": None,
         "retrieval_status": event.get("failure_class"),
-        "citation_count": (
-            len(synthesis.get("citations", [])) if isinstance(synthesis.get("citations"), list) else 0
-        ),
+        "citation_count": len(citations) if isinstance(citations, list) else 0,
         "latency_ms": event.get("latency_ms"),
         "reason_code": event.get("failure_signature"),
         "qa": event,
     }
 
 
-def _inbox_router(repository_provider: Callable[[], QaRepository]) -> APIRouter:
+def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIRouter:
     router = APIRouter(prefix=QA_INBOX_PREFIX, tags=["QAInbox"])
 
     @router.get("/events", operation_id="listQaInboxEvents")
@@ -363,7 +368,11 @@ def _inbox_router(repository_provider: Callable[[], QaRepository]) -> APIRouter:
                 cursor=cursor,
             )
         except ValueError as exc:
-            raise AdminAPIError(status_code=422, code="QA_RANGE_INVALID", message=str(exc)) from exc
+            raise AdminAPIError(
+                status_code=422,
+                code="QA_RANGE_INVALID",
+                message=str(exc),
+            ) from exc
         return {"data": data}
 
     @router.get("/events/{event_id}", operation_id="getQaInboxEvent")
@@ -395,7 +404,11 @@ def _inbox_router(repository_provider: Callable[[], QaRepository]) -> APIRouter:
                 )
             }
         except ValueError as exc:
-            raise AdminAPIError(status_code=422, code="QA_RANGE_INVALID", message=str(exc)) from exc
+            raise AdminAPIError(
+                status_code=422,
+                code="QA_RANGE_INVALID",
+                message=str(exc),
+            ) from exc
 
     @router.get("/clusters", operation_id="listQaFailureClusters")
     async def list_clusters(request: Request, lifecycle: str | None = None) -> dict[str, Any]:
@@ -461,7 +474,7 @@ def _inbox_router(repository_provider: Callable[[], QaRepository]) -> APIRouter:
 def install_qa_inbox(
     app: FastAPI,
     *,
-    repository_provider: Callable[[], QaRepository] = qa_repository_from_env,
+    repository_provider: Callable[[], SqliteQaRepository] = qa_repository_from_env,
 ) -> FastAPI:
     if getattr(app.state, "qa_answer_quality_inbox_installed", False):
         return app
