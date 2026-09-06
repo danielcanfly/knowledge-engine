@@ -597,9 +597,16 @@ def _synthesize_and_verify(
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
+            material_coverage = _material_claim_requirement_coverage(
+                candidate,
+                requirements=supported_requirements,
+            )
             if _candidate_lacks_material_requirement_coverage(
                 candidate,
                 requirements=supported_requirements,
+            ) and not (
+                provider_status in {"partial", "partial_candidate"}
+                and material_coverage
             ):
                 failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
                 if can_retry(attempt):
@@ -1108,6 +1115,12 @@ def _selected_evidence_set_supports_requirement(
             re.findall(r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+", combined)
         )
         return bullet_count >= 2 or combined.count(",") >= 2
+    if requirement_id == "non_entailment":
+        return any(
+            item.get("evidence_type") == "graph_edge"
+            and str(item.get("relation_type", "")).casefold() == "precedes"
+            for item in evidence
+        )
     return any(
         _selected_evidence_supports_requirement(requirement, item)
         for item in evidence
@@ -3231,7 +3244,7 @@ def _add_generic_answer_dimension_requirements(
         )
 
     if re.search(
-        r"\b(?:list|each|all|several|members?|mechanisms?|parts?|cases?|"
+        r"\b(?:list|each|all|several|members?|mechanisms?|parts|cases?|"
         r"tradeoffs?|architecture|describe)\b",
         q,
     ):
