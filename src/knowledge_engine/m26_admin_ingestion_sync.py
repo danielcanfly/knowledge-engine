@@ -14,11 +14,12 @@ class SyncBlogRequest(BaseModel):
     """Operator intent for one-click blog synchronization.
 
     Add/change-only plans can execute without an extra product confirmation.
-    A plan containing removals/unpublishes is destructive and must carry an
-    explicit confirmation from the operator.
+    A plan containing removals/unpublishes is destructive and must carry both an
+    explicit confirmation and the exact plan digest shown to the operator.
     """
 
     confirmation: bool = False
+    expected_plan_digest: str | None = None
 
 
 def build_manifest_diff(
@@ -206,12 +207,16 @@ class DeterministicSyncIngestionAdapter:
         )
 
     def sync_blog(self, operation_id: str, request: SyncBlogRequest) -> dict[str, Any]:
+        # Rebuild from the currently observed source/index state on every call. A
+        # destructive confirmation is therefore pinned to exactly the plan the
+        # operator saw, rather than authorizing whatever plan happens to exist later.
         plan = build_sync_plan(
             source_revision=self.source_revision,
             documents=self.documents,
             active_document_digests=self.active_document_digests,
         )
-        if plan["plan"]["requires_confirmation"] and not request.confirmation:
+        requires_confirmation = bool(plan["plan"]["requires_confirmation"])
+        if requires_confirmation and not request.confirmation:
             raise AdminAPIError(
                 status_code=409,
                 code="ADMIN_INGESTION_DESTRUCTIVE_CONFIRMATION_REQUIRED",
@@ -219,6 +224,32 @@ class DeterministicSyncIngestionAdapter:
                 details={
                     "plan_id": plan["plan_id"],
                     "plan_digest": plan["plan_digest"],
+                    "manifest_diff": plan["plan"]["manifest_diff"],
+                },
+            )
+        if requires_confirmation and not request.expected_plan_digest:
+            raise AdminAPIError(
+                status_code=409,
+                code="ADMIN_INGESTION_PLAN_DIGEST_REQUIRED",
+                message="Destructive confirmation must reference the exact reviewed sync plan",
+                details={
+                    "plan_id": plan["plan_id"],
+                    "plan_digest": plan["plan_digest"],
+                    "manifest_diff": plan["plan"]["manifest_diff"],
+                },
+            )
+        if (
+            requires_confirmation
+            and request.expected_plan_digest != plan["plan_digest"]
+        ):
+            raise AdminAPIError(
+                status_code=409,
+                code="ADMIN_INGESTION_STALE_PLAN",
+                message="The blog or active index changed after confirmation was requested",
+                details={
+                    "expected_plan_digest": request.expected_plan_digest,
+                    "current_plan_id": plan["plan_id"],
+                    "current_plan_digest": plan["plan_digest"],
                     "manifest_diff": plan["plan"]["manifest_diff"],
                 },
             )
