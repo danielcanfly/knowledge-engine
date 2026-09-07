@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib.parse import quote
@@ -16,6 +17,7 @@ from .m23_cloudflare_qdrant import (
     build_qdrant_points,
     deterministic_point_id,
     embed_sections,
+    normalize_text,
     validate_qdrant_collection_response,
     validate_sections,
 )
@@ -26,6 +28,13 @@ from .m26_ingestion_candidate_writer import (
 
 UPSERT_BATCH_SIZE = 96
 READBACK_BATCH_SIZE = 128
+CANDIDATE_PAYLOAD_INDEX_SCHEMA = {
+    "release_id": "keyword",
+    "source_commit_sha": "keyword",
+    "admission_sha256": "keyword",
+    "candidate_release_eligible": "bool",
+    "production_authority": "bool",
+}
 
 
 class CandidateQdrantError(IntegrityError):
@@ -36,6 +45,15 @@ EmbeddingFunction = Callable[
     [Sequence[SectionInput]],
     Sequence[Sequence[float]],
 ]
+
+
+def candidate_text_identities(text: str, payload: Mapping[str, Any]) -> tuple[str, str]:
+    raw_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    declared = payload.get("text_sha256")
+    if declared != raw_sha256:
+        raise CandidateQdrantError("semantic payload text_sha256 does not match raw text bytes")
+    normalized = normalize_text(text)
+    return raw_sha256, hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 class CloudflareQdrantCandidateMaterializer:
@@ -92,7 +110,19 @@ class CloudflareQdrantCandidateMaterializer:
         payload = response.json()
         if not isinstance(payload, Mapping):
             raise CandidateQdrantError("Qdrant collection response must be an object")
-        return validate_qdrant_collection_response(payload)
+        snapshot = validate_qdrant_collection_response(payload)
+        result = payload.get("result")
+        raw_schema = result.get("payload_schema") if isinstance(result, Mapping) else None
+        if raw_schema is None:
+            raw_schema = {}
+        if not isinstance(raw_schema, Mapping):
+            raise CandidateQdrantError("Qdrant payload schema must be an object")
+        snapshot["payload_schema"] = {
+            str(field): value.get("data_type")
+            for field, value in raw_schema.items()
+            if isinstance(value, Mapping)
+        }
+        return snapshot
 
     def _ensure_collection(
         self,
@@ -121,6 +151,55 @@ class CloudflareQdrantCandidateMaterializer:
             raise CandidateQdrantError("Qdrant collection missing after create")
         return "created", after
 
+    def _ensure_payload_indexes(
+        self,
+        client: httpx.Client,
+        *,
+        collection_name: str,
+        snapshot: Mapping[str, Any],
+    ) -> tuple[tuple[str, ...], dict[str, Any]]:
+        observed = snapshot.get("payload_schema")
+        if not isinstance(observed, Mapping):
+            raise CandidateQdrantError("Qdrant candidate payload schema is missing")
+        wrong = {
+            field: {"expected": expected, "observed": observed.get(field)}
+            for field, expected in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items()
+            if field in observed and observed.get(field) != expected
+        }
+        if wrong:
+            raise CandidateQdrantError(f"Qdrant candidate payload index type mismatch: {wrong}")
+        created: list[str] = []
+        for field, schema in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items():
+            if field in observed:
+                continue
+            response = client.put(
+                self.qdrant_base_url + self._collection_path(collection_name) + "/index",
+                params={"wait": "true"},
+                headers=self._headers(),
+                json={"field_name": field, "field_schema": schema},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            result = payload.get("result") if isinstance(payload, Mapping) else None
+            if (
+                not isinstance(payload, Mapping)
+                or payload.get("status") != "ok"
+                or not isinstance(result, Mapping)
+                or result.get("status") not in {"completed", "acknowledged"}
+            ):
+                raise CandidateQdrantError(f"Qdrant payload index creation failed: {field}")
+            created.append(field)
+        after = self._snapshot(client, collection_name=collection_name)
+        if after is None:
+            raise CandidateQdrantError("Qdrant collection missing after payload index creation")
+        after_schema = after.get("payload_schema")
+        if not isinstance(after_schema, Mapping) or any(
+            after_schema.get(field) != schema
+            for field, schema in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items()
+        ):
+            raise CandidateQdrantError("Qdrant required payload indexes failed verification")
+        return tuple(created), after
+
     def _embed(
         self,
         sections: Sequence[SectionInput],
@@ -136,11 +215,7 @@ class CloudflareQdrantCandidateMaterializer:
         collection_name: str,
         points: Sequence[Mapping[str, Any]],
     ) -> int:
-        path = (
-            self.qdrant_base_url
-            + self._collection_path(collection_name)
-            + "/points"
-        )
+        path = self.qdrant_base_url + self._collection_path(collection_name) + "/points"
         batches = 0
         for start in range(0, len(points), UPSERT_BATCH_SIZE):
             batch = list(points[start : start + UPSERT_BATCH_SIZE])
@@ -153,17 +228,13 @@ class CloudflareQdrantCandidateMaterializer:
             response.raise_for_status()
             payload = response.json()
             if not isinstance(payload, Mapping) or payload.get("status") != "ok":
-                raise CandidateQdrantError(
-                    "Qdrant candidate upsert was not acknowledged"
-                )
+                raise CandidateQdrantError("Qdrant candidate upsert was not acknowledged")
             result = payload.get("result")
             if not isinstance(result, Mapping) or result.get("status") not in {
                 "completed",
                 "acknowledged",
             }:
-                raise CandidateQdrantError(
-                    "Qdrant candidate upsert did not complete"
-                )
+                raise CandidateQdrantError("Qdrant candidate upsert did not complete")
             batches += 1
         return batches
 
@@ -174,12 +245,9 @@ class CloudflareQdrantCandidateMaterializer:
         collection_name: str,
         release_id: str,
         section_ids: tuple[str, ...],
+        text_identities: Mapping[str, tuple[str, str]],
     ) -> tuple[str, ...]:
-        path = (
-            self.qdrant_base_url
-            + self._collection_path(collection_name)
-            + "/points"
-        )
+        path = self.qdrant_base_url + self._collection_path(collection_name) + "/points"
         point_ids = [deterministic_point_id(section_id) for section_id in section_ids]
         returned: list[Mapping[str, Any]] = []
         for start in range(0, len(point_ids), READBACK_BATCH_SIZE):
@@ -197,12 +265,8 @@ class CloudflareQdrantCandidateMaterializer:
             payload = response.json()
             result = payload.get("result") if isinstance(payload, Mapping) else None
             if not isinstance(result, list):
-                raise CandidateQdrantError(
-                    "Qdrant candidate readback did not return a point list"
-                )
-            returned.extend(
-                point for point in result if isinstance(point, Mapping)
-            )
+                raise CandidateQdrantError("Qdrant candidate readback did not return a point list")
+            returned.extend(point for point in result if isinstance(point, Mapping))
         if len(returned) != len(point_ids):
             raise CandidateQdrantError("Qdrant candidate readback count mismatch")
 
@@ -214,26 +278,21 @@ class CloudflareQdrantCandidateMaterializer:
         for point_id in point_ids:
             payload = by_id[point_id].get("payload")
             if not isinstance(payload, Mapping):
-                raise CandidateQdrantError(
-                    "Qdrant candidate readback payload is missing"
-                )
+                raise CandidateQdrantError("Qdrant candidate readback payload is missing")
             section_id = payload.get("section_id")
             if not isinstance(section_id, str) or not section_id:
-                raise CandidateQdrantError(
-                    "Qdrant candidate payload section_id is missing"
-                )
+                raise CandidateQdrantError("Qdrant candidate payload section_id is missing")
             if payload.get("release_id") != release_id:
-                raise CandidateQdrantError(
-                    "Qdrant candidate payload release_id mismatch"
-                )
+                raise CandidateQdrantError("Qdrant candidate payload release_id mismatch")
             if payload.get("candidate_release_eligible") is not True:
-                raise CandidateQdrantError(
-                    "Qdrant candidate eligibility marker is missing"
-                )
+                raise CandidateQdrantError("Qdrant candidate eligibility marker is missing")
             if payload.get("production_authority") is not False:
-                raise CandidateQdrantError(
-                    "Qdrant candidate payload gained production authority"
-                )
+                raise CandidateQdrantError("Qdrant candidate payload gained production authority")
+            raw_text_sha256, embedding_input_sha256 = text_identities[section_id]
+            if payload.get("text_sha256") != raw_text_sha256:
+                raise CandidateQdrantError("Qdrant candidate raw text identity mismatch")
+            if payload.get("embedding_input_sha256") != embedding_input_sha256:
+                raise CandidateQdrantError("Qdrant candidate embedding input identity mismatch")
             observed_sections.append(section_id)
         return tuple(sorted(observed_sections))
 
@@ -252,13 +311,19 @@ class CloudflareQdrantCandidateMaterializer:
         for document in semantic_documents:
             payload = document.get("payload")
             if not isinstance(payload, Mapping):
-                payload = {}
+                raise CandidateQdrantError("semantic payload is missing")
+            text = document.get("text")
+            if not isinstance(text, str):
+                raise CandidateQdrantError("semantic text is missing")
+            raw_text_sha256, embedding_input_sha256 = candidate_text_identities(text, payload)
             raw_sections.append(
                 {
                     "section_id": document.get("section_id"),
-                    "text": document.get("text"),
+                    "text": text,
                     "payload": {
                         **dict(payload),
+                        "text_sha256": raw_text_sha256,
+                        "embedding_input_sha256": embedding_input_sha256,
                         "release_id": release_id,
                         "candidate_release_eligible": True,
                         "production_authority": False,
@@ -274,19 +339,24 @@ class CloudflareQdrantCandidateMaterializer:
                 client,
                 collection_name=collection_name,
             )
+            index_writes, snapshot = self._ensure_payload_indexes(
+                client,
+                collection_name=collection_name,
+                snapshot=snapshot,
+            )
             points_before = snapshot.get("points_count")
             if points_before not in {0, len(sections)}:
-                raise CandidateQdrantError(
-                    "candidate collection has an unexpected point count"
-                )
+                raise CandidateQdrantError("candidate collection has an unexpected point count")
 
             upsert_batches = 0
             embedding_executed = False
             if points_before == 0:
                 vectors = self._embed(sections)
                 points = build_qdrant_points(sections, vectors)
-                for point in points:
+                for section, point in zip(sections, points, strict=True):
                     payload = point["payload"]
+                    payload["text_sha256"] = section.payload["text_sha256"]
+                    payload["embedding_input_sha256"] = section.payload["embedding_input_sha256"]
                     payload["release_id"] = release_id
                     payload["candidate_release_eligible"] = True
                     payload["production_authority"] = False
@@ -303,12 +373,17 @@ class CloudflareQdrantCandidateMaterializer:
                 collection_name=collection_name,
                 release_id=release_id,
                 section_ids=expected_ids,
+                text_identities={
+                    section.section_id: (
+                        str(section.payload["text_sha256"]),
+                        str(section.payload["embedding_input_sha256"]),
+                    )
+                    for section in sections
+                },
             )
             final = self._snapshot(client, collection_name=collection_name)
             if final is None or final.get("points_count") != len(sections):
-                raise CandidateQdrantError(
-                    "candidate collection final point count mismatch"
-                )
+                raise CandidateQdrantError("candidate collection final point count mismatch")
             return CandidateVectorVerification(
                 collection_name=collection_name,
                 release_id=release_id,
@@ -316,6 +391,8 @@ class CloudflareQdrantCandidateMaterializer:
                 section_ids=observed_ids,
                 detail={
                     "collection_action": collection_action,
+                    "payload_index_writes": len(index_writes),
+                    "payload_indexes": dict(CANDIDATE_PAYLOAD_INDEX_SCHEMA),
                     "embedding_executed": embedding_executed,
                     "upsert_batches": upsert_batches,
                     "vector_dimension": VECTOR_DIMENSION,
@@ -329,8 +406,10 @@ class CloudflareQdrantCandidateMaterializer:
 
 
 __all__ = [
+    "CANDIDATE_PAYLOAD_INDEX_SCHEMA",
     "CandidateQdrantError",
     "CloudflareQdrantCandidateMaterializer",
     "READBACK_BATCH_SIZE",
     "UPSERT_BATCH_SIZE",
+    "candidate_text_identities",
 ]

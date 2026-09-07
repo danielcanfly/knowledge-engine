@@ -35,6 +35,10 @@ from knowledge_engine.m26_active_production_release import (
     resolve_active_production_release,
 )
 from knowledge_engine.m26_admin_ingestion_sync import build_sync_plan
+from knowledge_engine.m26_ingestion_candidate_qdrant import (
+    CANDIDATE_PAYLOAD_INDEX_SCHEMA,
+    candidate_text_identities,
+)
 from knowledge_engine.storage import ObjectStore, create_object_store
 from m26_e4_build_runtime_bundle import (
     EXPECTED_ADMISSION_SHA256,
@@ -58,6 +62,16 @@ from m26_e4_build_runtime_bundle import (
 RECEIPT_SCHEMA = "m26-e4-isolated-runtime-materialization/v1"
 BATCH_SIZE = 96
 READBACK_BATCH_SIZE = 128
+FAILED_CANDIDATE_RELEASE_ID = (
+    "m26blog-ec79a3cad1d8-59012fe3818c-bp2-17a3f93b0b4ef72c525175743fe2efaf4618b726"
+)
+FAILED_CANDIDATE_MANIFEST_KEY = f"releases/{FAILED_CANDIDATE_RELEASE_ID}/manifest.json"
+FAILED_CANDIDATE_MANIFEST_SHA256 = (
+    "a6a7c9d7af23d4509f2dc4184692718480bbfa204ecec2da7d599e6c827319a3"
+)
+FAILED_CANDIDATE_COLLECTION = (
+    "m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_bp2_17a3f93b0b4ef72c525175743fe2efaf4618b726"
+)
 
 
 def utc_now() -> str:
@@ -168,6 +182,9 @@ class Qdrant:
         params = (result.get("config") or {}).get("params") or {}
         vectors = params.get("vectors") if isinstance(params, Mapping) else None
         default = vectors.get(QDRANT_VECTOR_NAME) if isinstance(vectors, Mapping) else None
+        raw_payload_schema = result.get("payload_schema") or {}
+        if not isinstance(raw_payload_schema, Mapping):
+            raise SystemExit("Qdrant payload schema response is malformed")
         return {
             "status": result.get("status"),
             "points_count": result.get("points_count"),
@@ -176,6 +193,11 @@ class Qdrant:
             "vector_dimension": default.get("size") if isinstance(default, Mapping) else None,
             "distance": default.get("distance") if isinstance(default, Mapping) else None,
             "sparse_vectors": params.get("sparse_vectors") if isinstance(params, Mapping) else None,
+            "payload_schema": {
+                str(field): value.get("data_type")
+                for field, value in raw_payload_schema.items()
+                if isinstance(value, Mapping)
+            },
         }
 
     def ensure_collection(self) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
@@ -196,6 +218,53 @@ class Qdrant:
             return "created", before, after
         self.validate_collection_shape(before)
         return "preexisting", before, before
+
+    def ensure_payload_indexes(
+        self, snapshot: Mapping[str, Any]
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        observed = snapshot.get("payload_schema")
+        if not isinstance(observed, Mapping):
+            raise SystemExit("Qdrant payload schema missing before index qualification")
+        wrong = {
+            field: {"expected": expected, "observed": observed.get(field)}
+            for field, expected in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items()
+            if field in observed and observed.get(field) != expected
+        }
+        if wrong:
+            raise SystemExit(f"Qdrant payload index type mismatch: {wrong}")
+        operations = []
+        for field, schema in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items():
+            if field in observed:
+                continue
+            response = self.request(
+                "PUT",
+                self.collection_path() + "/index?wait=true",
+                {"field_name": field, "field_schema": schema},
+            )
+            result = response.get("result")
+            if not isinstance(result, Mapping) or result.get("status") not in {
+                "completed",
+                "acknowledged",
+            }:
+                raise SystemExit(f"Qdrant payload index creation failed: {field}")
+            operations.append(
+                {
+                    "field": field,
+                    "schema": schema,
+                    "status": result.get("status"),
+                    "operation_id": result.get("operation_id"),
+                }
+            )
+        after = self.snapshot()
+        if after is None:
+            raise SystemExit("Qdrant collection missing after payload index creation")
+        after_schema = after.get("payload_schema")
+        if not isinstance(after_schema, Mapping) or any(
+            after_schema.get(field) != schema
+            for field, schema in CANDIDATE_PAYLOAD_INDEX_SCHEMA.items()
+        ):
+            raise SystemExit("Qdrant required payload indexes failed verification")
+        return operations, after
 
     def validate_collection_shape(self, snapshot: Mapping[str, Any]) -> None:
         expected = {
@@ -267,6 +336,7 @@ def load_materialization_sections(bundle_root: Path) -> list[SectionInput]:
         section_id = str(row.get("section_id") or "")
         text = str(row.get("text") or "")
         payload = dict(row.get("payload") if isinstance(row.get("payload"), Mapping) else {})
+        raw_text_sha256, embedding_input_sha256 = candidate_text_identities(text, payload)
         payload.update(
             {
                 "section_id": section_id,
@@ -276,6 +346,8 @@ def load_materialization_sections(bundle_root: Path) -> list[SectionInput]:
                 "admission_sha256": EXPECTED_ADMISSION_SHA256,
                 "candidate_release_eligible": True,
                 "production_authority": False,
+                "text_sha256": raw_text_sha256,
+                "embedding_input_sha256": embedding_input_sha256,
             }
         )
         raw.append({"section_id": section_id, "text": text, "payload": payload})
@@ -498,6 +570,49 @@ def read_json_bytes(data: bytes) -> dict[str, Any]:
     return value
 
 
+def immutable_failed_candidate_census(
+    store: ObjectStore,
+    qdrant: Qdrant,
+    sections: Sequence[SectionInput],
+) -> dict[str, Any]:
+    manifest_head = store.head(FAILED_CANDIDATE_MANIFEST_KEY)
+    if manifest_head is None:
+        raise SystemExit("failed immutable candidate manifest is missing")
+    manifest_data = store.get(FAILED_CANDIDATE_MANIFEST_KEY)
+    if sha256_bytes(manifest_data) != FAILED_CANDIDATE_MANIFEST_SHA256:
+        raise SystemExit("failed immutable candidate manifest drifted")
+    manifest = read_json_bytes(manifest_data)
+    if (
+        manifest.get("release_id") != FAILED_CANDIDATE_RELEASE_ID
+        or manifest.get("qdrant_collection") != FAILED_CANDIDATE_COLLECTION
+    ):
+        raise SystemExit("failed immutable candidate manifest identity drifted")
+    snapshot = qdrant.snapshot(FAILED_CANDIDATE_COLLECTION)
+    if snapshot is None or snapshot.get("points_count") != len(sections):
+        raise SystemExit("failed immutable candidate collection drifted")
+    point_ids = [deterministic_point_id(section.section_id) for section in sections]
+    points = qdrant.retrieve_points(point_ids, FAILED_CANDIDATE_COLLECTION)
+    if len(points) != len(point_ids) or {str(row.get("id")) for row in points} != set(point_ids):
+        raise SystemExit("failed immutable candidate point identity set drifted")
+    return {
+        "release_id": FAILED_CANDIDATE_RELEASE_ID,
+        "manifest_key": FAILED_CANDIDATE_MANIFEST_KEY,
+        "manifest_sha256": sha256_bytes(manifest_data),
+        "manifest_head": {
+            "key": manifest_head.key,
+            "bytes": manifest_head.bytes,
+            "etag": manifest_head.etag,
+            "metadata_sha256": manifest_head.sha256,
+            "content_type": manifest_head.content_type,
+        },
+        "qdrant_collection": FAILED_CANDIDATE_COLLECTION,
+        "qdrant_snapshot": snapshot,
+        "qdrant_aliases": qdrant.aliases_for(FAILED_CANDIDATE_COLLECTION),
+        "point_ids_sha256": canonical_sha256(point_ids),
+        "aggregate_point_fingerprint_sha256": aggregate_point_fingerprint(points),
+    }
+
+
 def build_points(
     sections: Sequence[SectionInput],
     qdrant: Qdrant,
@@ -520,12 +635,16 @@ def build_points(
                 raise SystemExit("vector reuse point shape mismatch")
             expected_payload = {
                 "section_id": section.section_id,
-                "text_sha256": hashlib.sha256(section.text.encode("utf-8")).hexdigest(),
+                "text_sha256": section.payload["embedding_input_sha256"],
                 "embedding_provider": CLOUDFLARE_PROVIDER,
                 "embedding_model": CLOUDFLARE_MODEL,
                 "vector_dimension": VECTOR_DIMENSION,
                 "vector_name": QDRANT_VECTOR_NAME,
                 "release_id": reuse_release_id,
+                "source_id": section.payload.get("source_id"),
+                "source_commit_sha": EXPECTED_BLOG_SOURCE_SHA,
+                "source_repository_head_sha": EXPECTED_SOURCE_HEAD_SHA,
+                "admission_sha256": EXPECTED_ADMISSION_SHA256,
                 "candidate_release_eligible": True,
                 "production_authority": False,
             }
@@ -540,6 +659,7 @@ def build_points(
             "source_release_id": reuse_release_id,
             "full_readback_count": len(returned),
             "text_identity_verified_count": len(returned),
+            "normalized_embedding_input_identity_verified_count": len(returned),
             "provider_requests": 0,
             "provider": CLOUDFLARE_PROVIDER,
             "model": CLOUDFLARE_MODEL,
@@ -563,8 +683,10 @@ def build_points(
             "vector_dimension": VECTOR_DIMENSION,
         }
     points = build_qdrant_points(sections, vectors)
-    for point in points:
+    for section, point in zip(sections, points, strict=True):
         payload = point["payload"]
+        payload["text_sha256"] = section.payload["text_sha256"]
+        payload["embedding_input_sha256"] = section.payload["embedding_input_sha256"]
         payload["candidate_release_eligible"] = True
         payload["production_authority"] = False
         payload["release_id"] = EXPECTED_RELEASE_ID
@@ -583,6 +705,7 @@ def verify_qdrant_exact(
     qdrant: Qdrant, points: Sequence[Mapping[str, Any]], expected_aggregate: str
 ) -> dict[str, Any]:
     ids = [str(point["id"]) for point in points]
+    point_by_id = {str(point["id"]): point for point in points}
     returned = qdrant.retrieve_points(ids)
     if len(returned) != len(points):
         raise SystemExit(f"Qdrant readback point count mismatch: {len(returned)} vs {len(points)}")
@@ -606,6 +729,19 @@ def verify_qdrant_exact(
         raise SystemExit("Qdrant readback contains duplicate section_id values")
     if actual_section_ids != expected_section_ids:
         raise SystemExit("Qdrant readback section_id set mismatch")
+    raw_text_identity_match_count = 0
+    embedding_input_identity_match_count = 0
+    for point_id in ids:
+        expected_payload = dict(point_by_id[point_id].get("payload") or {})
+        actual_payload = dict(by_id[point_id].get("payload") or {})
+        if actual_payload.get("text_sha256") != expected_payload.get("text_sha256"):
+            raise SystemExit(f"Qdrant raw text identity mismatch: {point_id}")
+        raw_text_identity_match_count += 1
+        if actual_payload.get("embedding_input_sha256") != expected_payload.get(
+            "embedding_input_sha256"
+        ):
+            raise SystemExit(f"Qdrant embedding input identity mismatch: {point_id}")
+        embedding_input_identity_match_count += 1
     payload_samples = []
     for point_id in ids[:5]:
         payload = dict(by_id[point_id].get("payload") or {})
@@ -628,6 +764,7 @@ def verify_qdrant_exact(
                     "vector_dimension",
                     "vector_name",
                     "text_sha256",
+                    "embedding_input_sha256",
                 }
             }
         )
@@ -638,6 +775,10 @@ def verify_qdrant_exact(
         "section_id_duplicate_count": duplicate_count,
         "section_id_missing_count": missing_count,
         "section_ids_sha256": canonical_sha256(actual_section_ids),
+        "raw_text_identity_match_count": raw_text_identity_match_count,
+        "raw_text_identity_mismatch_count": len(ids) - raw_text_identity_match_count,
+        "embedding_input_identity_match_count": embedding_input_identity_match_count,
+        "embedding_input_identity_mismatch_count": len(ids) - embedding_input_identity_match_count,
         "payload_samples": payload_samples,
     }
 
@@ -689,6 +830,7 @@ def main() -> int:
         bundle_info,
     )
     sections = load_materialization_sections(bundle_root)
+    failed_candidate_before = immutable_failed_candidate_census(store, qdrant, sections)
     points, point_ids_sha, expected_aggregate, vector_lineage = build_points(
         sections,
         qdrant,
@@ -707,6 +849,8 @@ def main() -> int:
 
     collection_action, before, after_create = qdrant.ensure_collection()
     qdrant.validate_collection_shape(after_create)
+    index_operations, after_indexes = qdrant.ensure_payload_indexes(after_create)
+    qdrant.validate_collection_shape(after_indexes)
     if after_create.get("points_count") not in (0, EXPECTED_SEMANTIC_COUNT):
         raise SystemExit(f"unexpected pre-materialization point count: {after_create}")
     operations: list[dict[str, Any]] = []
@@ -743,6 +887,9 @@ def main() -> int:
     )
     if production_after != production_before:
         raise SystemExit("production authority changed during candidate materialization")
+    failed_candidate_after = immutable_failed_candidate_census(store, qdrant, sections)
+    if failed_candidate_after != failed_candidate_before:
+        raise SystemExit("failed immutable candidate changed during successor materialization")
 
     receipt = {
         "schema_version": RECEIPT_SCHEMA,
@@ -802,6 +949,9 @@ def main() -> int:
             "collection_action": collection_action,
             "before": before,
             "after_create": after_create,
+            "payload_index_operations": index_operations,
+            "after_payload_indexes": after_indexes,
+            "required_payload_indexes": dict(CANDIDATE_PAYLOAD_INDEX_SCHEMA),
             "upsert_batches": operations,
             "final_snapshot": final_snapshot,
             "readback": readback,
@@ -819,7 +969,7 @@ def main() -> int:
             "semantic_requests": 0,
             "provider_answer_requests": 0,
             "embedding_provider_requests": vector_lineage["provider_requests"],
-            "qdrant_writes": len(operations),
+            "qdrant_writes": len(index_operations) + len(operations),
             "r2_writes": len(r2_artifacts["uploaded"]) + int(manifest["created"]),
             "production_pointer_writes": 0,
             "canonical_route_mutations": 0,
@@ -830,8 +980,17 @@ def main() -> int:
             "r2_artifact_creates": len(r2_artifacts["uploaded"]),
             "r2_manifest_creates": int(manifest["created"]),
             "qdrant_collection_creates": int(collection_action == "created"),
+            "qdrant_payload_index_creates": len(index_operations),
             "qdrant_upsert_batches": len(operations),
             "candidate_only": True,
+        },
+        "failed_immutable_candidate": {
+            "before": failed_candidate_before,
+            "after": failed_candidate_after,
+            "before_equals_after": True,
+            "r2_writes": 0,
+            "qdrant_writes": 0,
+            "payload_index_writes": 0,
         },
         "production_mutations": {
             "production_pointer_writes": 0,

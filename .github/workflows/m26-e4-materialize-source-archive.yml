@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: m26-bp2-candidate-materialization-a738f20
+  group: m26-bp3-repaired-candidate-materialization-a738f20
   cancel-in-progress: false
 
 jobs:
@@ -51,10 +51,10 @@ jobs:
       EXPECTED_BLOG_CONTENT_TREE_SHA: 86c43fd02642087d773afd2614c6d4fb1c7c7bf2
       EXPECTED_BLOG_SERIES_BLOB_SHA: f0d317928f2733f9ed72ca7a2411cc49062579b1
       EXPECTED_SOURCE_ARCHIVE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
-      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp2-${{ github.sha }}
+      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp3r-${{ github.sha }}
       CANDIDATE_ENGINE_COMMIT_SHA: ${{ github.sha }}
-      VECTOR_REUSE_COLLECTION: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_4260fcb53440
-      VECTOR_REUSE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      VECTOR_REUSE_COLLECTION: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_bp2_17a3f93b0b4ef72c525175743fe2efaf4618b726
+      VECTOR_REUSE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp2-17a3f93b0b4ef72c525175743fe2efaf4618b726
       EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
       EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
       EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
@@ -292,15 +292,39 @@ jobs:
           set -euo pipefail
           python scripts/m26_e4_materialize_runtime_successor.py \
             --source-extract /tmp/m26-e4-source \
-            --output-dir /tmp/m26-e4-materialization \
+            --output-dir /tmp/m26-e4-materialization-first \
             --repo-root .
+      - name: Exact replay requires zero candidate writes
+        run: |
+          set -euo pipefail
+          python scripts/m26_e4_materialize_runtime_successor.py \
+            --source-extract /tmp/m26-e4-source \
+            --output-dir /tmp/m26-e4-materialization-replay \
+            --repo-root .
+          python - <<'PY'
+          import json
+          receipt = json.load(open('/tmp/m26-e4-materialization-replay/m26-e4-isolated-materialization-receipt.json', encoding='utf-8'))
+          mutations = receipt['candidate_mutations']
+          expected = {
+              'r2_artifact_creates': 0,
+              'r2_manifest_creates': 0,
+              'qdrant_collection_creates': 0,
+              'qdrant_payload_index_creates': 0,
+              'qdrant_upsert_batches': 0,
+          }
+          observed = {key: mutations.get(key) for key in expected}
+          if observed != expected:
+              raise SystemExit(f'exact replay performed candidate writes: {observed}')
+          print('M26_BP3_REPAIRED_CANDIDATE_EXACT_REPLAY_ZERO_WRITES_PASS')
+          PY
       - name: Upload materialization receipt
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m26-e4-isolated-materialization
           path: |
-            /tmp/m26-e4-materialization/m26-e4-isolated-materialization-receipt.json
+            /tmp/m26-e4-materialization-first/m26-e4-isolated-materialization-receipt.json
+            /tmp/m26-e4-materialization-replay/m26-e4-isolated-materialization-receipt.json
             /tmp/m26-e4-source-census.json
           if-no-files-found: warn
           retention-days: 14

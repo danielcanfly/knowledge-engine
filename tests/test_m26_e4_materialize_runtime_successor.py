@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -156,3 +157,115 @@ def test_section_identity_evidence_requires_exact_unique_parity() -> None:
             [{"section_id": "a"}],
             [{"section_id": "b"}],
         )
+
+
+class FakeIndexedQdrant(subject.Qdrant):
+    def __init__(self, schema=None, fail_field=None):
+        self.schema = dict(schema or {})
+        self.fail_field = fail_field
+        self.index_requests = []
+
+    def snapshot(self, collection_name=subject.QDRANT_COLLECTION):
+        return {
+            "status": "green",
+            "points_count": 0,
+            "indexed_vectors_count": 0,
+            "vector_name": subject.QDRANT_VECTOR_NAME,
+            "vector_dimension": subject.VECTOR_DIMENSION,
+            "distance": subject.QDRANT_DISTANCE,
+            "sparse_vectors": None,
+            "payload_schema": dict(self.schema),
+        }
+
+    def request(self, method, path, body=None):
+        assert method == "PUT"
+        assert path.endswith("/index?wait=true")
+        field = body["field_name"]
+        if field == self.fail_field:
+            return {"status": "ok", "result": {"status": "failed"}}
+        self.index_requests.append(field)
+        self.schema[field] = body["field_schema"]
+        return {
+            "status": "ok",
+            "result": {"status": "completed", "operation_id": len(self.index_requests)},
+        }
+
+
+def test_payload_indexes_are_created_and_exact_replay_writes_zero() -> None:
+    qdrant = FakeIndexedQdrant()
+
+    operations, after = qdrant.ensure_payload_indexes(qdrant.snapshot())
+    replay_operations, replay_after = qdrant.ensure_payload_indexes(after)
+
+    assert [row["field"] for row in operations] == list(subject.CANDIDATE_PAYLOAD_INDEX_SCHEMA)
+    assert after["payload_schema"] == subject.CANDIDATE_PAYLOAD_INDEX_SCHEMA
+    assert replay_operations == []
+    assert replay_after["payload_schema"] == subject.CANDIDATE_PAYLOAD_INDEX_SCHEMA
+
+
+def test_wrong_payload_index_type_fails_before_any_index_write() -> None:
+    qdrant = FakeIndexedQdrant({"release_id": "integer"})
+
+    with pytest.raises(SystemExit, match="index type mismatch"):
+        qdrant.ensure_payload_indexes(qdrant.snapshot())
+
+    assert qdrant.index_requests == []
+
+
+def test_payload_index_failure_is_fail_closed() -> None:
+    qdrant = FakeIndexedQdrant(fail_field="source_commit_sha")
+
+    with pytest.raises(SystemExit, match="index creation failed"):
+        qdrant.ensure_payload_indexes(qdrant.snapshot())
+
+    assert qdrant.schema == {"release_id": "keyword"}
+
+
+def test_reused_vector_writes_raw_and_embedding_input_identities(monkeypatch) -> None:
+    raw_text = "raw fullwidth dash － preserved"
+    normalized_text = "raw fullwidth dash - preserved"
+    raw_sha = hashlib.sha256(raw_text.encode()).hexdigest()
+    normalized_sha = hashlib.sha256(normalized_text.encode()).hexdigest()
+    section = subject.SectionInput(
+        section_id="section-a",
+        text=normalized_text,
+        payload={
+            "source_id": "source-1",
+            "text_sha256": raw_sha,
+            "embedding_input_sha256": normalized_sha,
+        },
+    )
+    point_id = subject.deterministic_point_id(section.section_id)
+
+    class ReuseQdrant:
+        def retrieve_points(self, ids, collection_name):
+            assert ids == [point_id]
+            return [
+                {
+                    "id": point_id,
+                    "vector": {subject.QDRANT_VECTOR_NAME: [1.0] * subject.VECTOR_DIMENSION},
+                    "payload": {
+                        "section_id": "section-a",
+                        "source_id": "source-1",
+                        "text_sha256": normalized_sha,
+                        "embedding_provider": subject.CLOUDFLARE_PROVIDER,
+                        "embedding_model": subject.CLOUDFLARE_MODEL,
+                        "vector_dimension": subject.VECTOR_DIMENSION,
+                        "vector_name": subject.QDRANT_VECTOR_NAME,
+                        "release_id": subject.FAILED_CANDIDATE_RELEASE_ID,
+                        "source_commit_sha": subject.EXPECTED_BLOG_SOURCE_SHA,
+                        "source_repository_head_sha": subject.EXPECTED_SOURCE_HEAD_SHA,
+                        "admission_sha256": subject.EXPECTED_ADMISSION_SHA256,
+                        "candidate_release_eligible": True,
+                        "production_authority": False,
+                    },
+                }
+            ]
+
+    monkeypatch.setenv("VECTOR_REUSE_COLLECTION", subject.FAILED_CANDIDATE_COLLECTION)
+    monkeypatch.setenv("VECTOR_REUSE_RELEASE_ID", subject.FAILED_CANDIDATE_RELEASE_ID)
+    points, _, _, lineage = subject.build_points([section], ReuseQdrant())
+
+    assert points[0]["payload"]["text_sha256"] == raw_sha
+    assert points[0]["payload"]["embedding_input_sha256"] == normalized_sha
+    assert lineage["normalized_embedding_input_identity_verified_count"] == 1
