@@ -13,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
 from .config import Settings
+from .m26_active_production_dense import production_dense_channel_from_env
 from .m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     CONTRACT_SCHEMA_VERSION,
@@ -533,11 +534,15 @@ def register_m26_ask_routes(
             raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_ASK_INVALID_JSON") from exc
         _rate_limit(owner_subject_hash, question)
         try:
+            dense_channel = production_dense_channel_from_env(
+                require_remote=remote_dense_required
+            )
             return run_owner_query_for_web(
                 root=app_root,
                 gate_path=resolved_gate_path,
                 request_payload={"question": question},
                 owner_subject_hash=owner_subject_hash,
+                dense_channel=dense_channel,
                 require_remote_dense=remote_dense_required,
             )
         except PA7ArbitraryQueryError as exc:
