@@ -83,6 +83,40 @@ def test_true_abstain_remains_true_abstain_shape() -> None:
     assert diagnostic["validator"]["failure_code"] == ""
 
 
+def test_constrained_prefixless_complete_object_is_recovered() -> None:
+    raw = {
+        "text": (
+            '<|start|>assistant<|channel|>final <|constrain|>'
+            'answer_text":"Grounded\nanswer.","citation_ids":["ev1"],'
+            '"status":"answer","abstention_reason":null}<|return|>'
+        )
+    }
+    parsed = legacy._normalize_fast_provider_result(raw)["parsed"]
+    assert parsed["status"] == "answer"
+    assert parsed["answer_text"] == "Grounded\nanswer."
+    assert parsed["citation_ids"] == ["ev1"]
+
+
+def test_constrained_malformed_or_incomplete_objects_still_fail_closed() -> None:
+    cases = [
+        {
+            "text": (
+                '<|start|>assistant<|channel|>final <|constrain|>answer<|constrain|>'
+                'citation_ids=["ev1"]{"status":"answer","answer_text":"x",'
+                '"abstention_reason":null}<|return|>'
+            )
+        },
+        {
+            "text": (
+                '<|start|>assistant<|channel|>final <|constrain|>'
+                'answer_text":"x","citation_ids":["ev1"]}<|return|>'
+            )
+        },
+    ]
+    for raw in cases:
+        assert legacy._normalize_fast_provider_result(raw)["parsed"] == {}
+
+
 def test_trace_never_persists_provider_text_or_secret_named_fields() -> None:
     secret = "SUPERSECRET-PROVIDER-VALUE"
     raw = {

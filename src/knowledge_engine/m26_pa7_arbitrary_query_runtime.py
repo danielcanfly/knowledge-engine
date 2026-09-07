@@ -2365,13 +2365,9 @@ def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]
         and "<|constrain|>" in stripped
         and stripped.endswith("<|return|>")
     ):
-        constrained = stripped.split("<|constrain|>", 1)[1].rsplit("<|return|>", 1)[0].strip()
-        candidates.append(constrained)
-        if (
-            constrained.endswith("}")
-            and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', constrained)
-        ):
-            candidates.append('{"' + constrained)
+        constrained = stripped.split("<|channel|>final", 1)[1].rsplit("<|return|>", 1)[0]
+        fragments = [part.strip() for part in constrained.split("<|constrain|>") if part.strip()]
+        candidates.extend(_fast_constrained_json_candidates(fragments))
     for candidate in candidates:
         try:
             decoded = json.loads(candidate)
@@ -2392,6 +2388,36 @@ def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]
         "output_char_count": int(result.get("output_char_count", len(text)) or len(text)),
         "parsed": parsed if isinstance(parsed, Mapping) else {},
     }
+
+
+def _fast_constrained_json_candidates(fragments: Sequence[str]) -> list[str]:
+    """Return only complete, structurally unambiguous fast-contract JSON candidates."""
+    if not fragments:
+        return []
+    bodies = list(fragments)
+    if fragments[0] in {"answer", "abstain"}:
+        bodies = fragments[1:]
+    candidates: list[str] = []
+    for body in bodies:
+        values = [body]
+        if body.endswith("}") and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', body):
+            values.append('{"' + body)
+        # Some constrained providers escape one complete object as an unquoted payload.
+        if body.startswith('answer\\":') and body.endswith("}"):
+            values.append(body.removeprefix('answer\\":').replace('\\"', '"'))
+        for value in values:
+            try:
+                parsed = json.loads(value, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(parsed, Mapping):
+                continue
+            keys = set(parsed)
+            required = {"status", "answer_text", "citation_ids", "abstention_reason"}
+            if keys == required:
+                candidates.append(json.dumps(dict(parsed), ensure_ascii=False, sort_keys=True))
+    # More than one distinct complete object is ambiguous and must remain rejected.
+    return candidates if len(set(candidates)) == 1 else []
 
 
 def _fast_public_abstention_publication(

@@ -104,11 +104,7 @@ def _fast_source_text(raw: Mapping[str, Any]) -> tuple[str, str, str]:
 
 
 def _parse_fast_mapping_shadow(text: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Observe the frozen fast parser without changing its accepted shapes.
-
-    Candidate construction, constrained-wrapper recognition, json.loads behavior, and
-    first-mapping-wins semantics intentionally mirror the frozen baseline implementation.
-    """
+    """Observe the active fast parser without changing its accepted shapes."""
     candidates = [text]
     stripped = text.strip()
     constrained_wrapper = False
@@ -120,13 +116,11 @@ def _parse_fast_mapping_shadow(text: str) -> tuple[dict[str, Any], dict[str, Any
         and stripped.endswith("<|return|>")
     ):
         constrained_wrapper = True
-        constrained = stripped.split("<|constrain|>", 1)[1].rsplit("<|return|>", 1)[0].strip()
-        candidates.append(constrained)
-        if constrained.endswith("}") and re.match(
-            r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', constrained
-        ):
-            synthesized_opening_brace_candidate = True
-            candidates.append('{"' + constrained)
+        constrained = stripped.split("<|channel|>final", 1)[1].rsplit("<|return|>", 1)[0]
+        fragments = [part.strip() for part in constrained.split("<|constrain|>") if part.strip()]
+        recovered = _fast_constrained_json_candidates_shadow(fragments)
+        candidates.extend(recovered)
+        synthesized_opening_brace_candidate = bool(recovered)
     parsed: dict[str, Any] = {}
     decoded_mapping_index: int | None = None
     for index, candidate in enumerate(candidates):
@@ -153,6 +147,31 @@ def _parse_fast_mapping_shadow(text: str) -> tuple[dict[str, Any], dict[str, Any
             "FAST_PARSER_INPUT_EMPTY" if not text.strip() else "FAST_PARSER_JSON_MAPPING_NOT_FOUND"
         )
     return parsed, summary
+
+
+def _fast_constrained_json_candidates_shadow(fragments: Sequence[str]) -> list[str]:
+    if not fragments:
+        return []
+    bodies = list(fragments)
+    if fragments[0] in {"answer", "abstain"}:
+        bodies = fragments[1:]
+    candidates: list[str] = []
+    for body in bodies:
+        values = [body]
+        if body.endswith("}") and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', body):
+            values.append('{"' + body)
+        if body.startswith('answer\\":') and body.endswith("}"):
+            values.append(body.removeprefix('answer\\":').replace('\\"', '"'))
+        for value in values:
+            try:
+                parsed = json.loads(value, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(parsed, Mapping) and set(parsed) == {
+                "status", "answer_text", "citation_ids", "abstention_reason"
+            }:
+                candidates.append(json.dumps(dict(parsed), ensure_ascii=False, sort_keys=True))
+    return candidates if len(set(candidates)) == 1 else []
 
 
 def _fast_citation_ids(parsed: Mapping[str, Any]) -> tuple[list[str], str]:
