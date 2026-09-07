@@ -333,12 +333,16 @@ def create_app(
     app.state.public_quota_ledger = ledger
 
     @app.get("/v1/health")
+    @app.get("/v1/answers/health")
     async def health(request: Request) -> JSONResponse:
         request_id = _request_id()
         problem = _readiness_problem(request_id, require_owner=False)
         if problem is not None:
             return _problem_response(
-                problem, request_id=request_id, origin=_request_origin(request)
+                problem,
+                request_id=request_id,
+                origin=_request_origin(request),
+                health=True,
             )
         try:
             internal = build_health_dto(root=app_root, gate_path=resolved_gate_path)
@@ -351,17 +355,25 @@ def create_app(
                 retryable=True,
             )
             return _problem_response(
-                problem, request_id=request_id, origin=_request_origin(request)
+                problem,
+                request_id=request_id,
+                origin=_request_origin(request),
+                health=True,
             )
         return JSONResponse(
             {
                 "schema_version": PUBLIC_HEALTH_SCHEMA,
+                "ok": True,
                 "status": "ok",
                 "request_id": request_id,
                 "answers_url": "/v1/answers",
                 "backend": {
-                    "build_sha": internal.get("canonical_runtime", {}).get("build_sha", ""),
-                    "entrypoint": internal.get("canonical_runtime", {}).get("entrypoint", ""),
+                    "build_sha": _public_metadata_value(
+                        internal.get("canonical_runtime", {}).get("build_sha", "")
+                    ),
+                    "entrypoint": _public_metadata_value(
+                        internal.get("canonical_runtime", {}).get("entrypoint", "")
+                    ),
                 },
                 "limits": _limits_dto(),
             },
@@ -595,7 +607,12 @@ async def _answer_event_stream(
 
     task = asyncio.create_task(worker())
     next_heartbeat = time.monotonic() + HEARTBEAT_SECONDS
-    yield emit("request.accepted", accepted_at=admission.accepted_at, limits=_limits_dto())
+    yield emit(
+        "request.accepted",
+        accepted_at=admission.accepted_at,
+        limits=_limits_dto(),
+        runtime={"build_sha": _public_metadata_value(os.environ.get("M26_QUERY_BUILD_SHA", ""))},
+    )
     try:
         while True:
             if await request.is_disconnected():
@@ -895,7 +912,13 @@ def _uses_fallback(dto: Mapping[str, Any]) -> bool:
     return bool(_mapping(dto.get("provider_routing")).get("fallback_used"))
 
 
-def _problem_response(problem: Problem, *, request_id: str, origin: str | None) -> JSONResponse:
+def _problem_response(
+    problem: Problem,
+    *,
+    request_id: str,
+    origin: str | None,
+    health: bool = False,
+) -> JSONResponse:
     body = {
         "type": PROBLEM_TYPE_BASE + problem.code,
         "title": problem.title,
@@ -905,6 +928,8 @@ def _problem_response(problem: Problem, *, request_id: str, origin: str | None) 
         "request_id": request_id,
         "retryable": problem.retryable,
     }
+    if health:
+        body["ok"] = False
     if problem.retry_after_seconds is not None:
         body["retry_after_seconds"] = problem.retry_after_seconds
     if problem.reset_at is not None:
@@ -918,6 +943,11 @@ def _problem_response(problem: Problem, *, request_id: str, origin: str | None) 
         media_type="application/problem+json",
         headers=headers,
     )
+
+
+def _public_metadata_value(value: Any) -> str:
+    text = str(value or "")
+    return "" if "m24-internal" in text.casefold() else text
 
 
 def _request_origin(request: Request) -> str | None:

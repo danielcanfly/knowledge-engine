@@ -188,6 +188,52 @@ def _sse_events(response: Any) -> list[dict[str, Any]]:
     return events
 
 
+def test_health_contract_is_browser_compatible_boolean(client: TestClient) -> None:
+    for path in ("/v1/health", "/v1/answers/health"):
+        response = client.get(path)
+        assert response.status_code == 200
+        payload = json.loads(response.content)
+        assert payload["ok"] is True
+        assert payload["status"] == "ok"
+        assert payload["schema_version"] == m26_public_api.PUBLIC_HEALTH_SCHEMA
+        assert isinstance(payload["ok"], bool)
+
+
+def test_health_failure_is_not_masked_as_healthy(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_health(**kwargs: Any) -> dict[str, Any]:
+        del kwargs
+        raise RuntimeError("fixture failure")
+
+    monkeypatch.setattr(m26_public_api, "build_health_dto", fail_health)
+    response = client.get("/v1/answers/health")
+    payload = _problem(response)
+    assert response.status_code == 503
+    assert payload["ok"] is False
+    assert payload["status"] == 503
+
+
+def test_public_health_metadata_redacts_forbidden_legacy_hostname(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        m26_public_api,
+        "build_health_dto",
+        lambda **kwargs: {
+            "canonical_runtime": {
+                "build_sha": "successor",
+                "entrypoint": "https://m24-internal.danielcanfly.com",
+            }
+        },
+    )
+    response = client.get("/v1/answers/health")
+    assert "m24-internal" not in response.text.casefold()
+    assert response.json()["backend"]["entrypoint"] == ""
+
+
 def test_validation_errors_are_problem_details(client: TestClient) -> None:
     cases = [
         (b"{", "INVALID_JSON"),
@@ -236,6 +282,7 @@ def test_sse_contract_has_monotonic_seq_single_terminal_and_no_early_answer_text
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("M26_QUERY_BUILD_SHA", "successor-sha")
     _patch_answer(monkeypatch)
     response = client.post(
         "/v1/answers",
@@ -254,6 +301,8 @@ def test_sse_contract_has_monotonic_seq_single_terminal_and_no_early_answer_text
     )
     assert any(event["type"] == "model.completed" for event in events)
     assert all(event["request_id"] == events[0]["request_id"] for event in events)
+    assert events[0]["runtime"]["build_sha"] == "successor-sha"
+    assert "m24-internal" not in response.text.casefold()
 
 
 def test_safe_abstention_terminal(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
