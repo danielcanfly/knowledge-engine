@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 import pytest
+
 import knowledge_engine.m26_active_production_dense as dense
 from knowledge_engine.m26_active_production_release import ActiveProductionRelease
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import PA7ArbitraryQueryError
