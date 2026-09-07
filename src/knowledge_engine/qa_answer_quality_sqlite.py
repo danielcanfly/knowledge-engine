@@ -30,6 +30,7 @@ from .qa_answer_quality import (
     _json_bytes,
     _latency_series,
     _normalize_country,
+    _normalize_country_filter,
     _parse_ts,
     _percentile,
     _release_identity,
@@ -652,9 +653,9 @@ class SqliteQaRepository:
                 raise ValueError("invalid evaluation_status")
             clauses.append("evaluation_status=?")
             params.append(normalized)
-        if country:
+        if country is not None:
             clauses.append("country=?")
-            params.append(_normalize_country(country))
+            params.append(_normalize_country_filter(country))
         if lifecycle:
             from .qa_answer_quality import LIFECYCLE_STATES
 
@@ -1024,9 +1025,9 @@ class SqliteQaRepository:
                 raise ValueError("invalid evaluation_status")
             clauses.append("e.evaluation_status=?")
             params.append(normalized_status)
-        if country:
+        if country is not None:
             clauses.append("e.country=?")
-            params.append(_normalize_country(country))
+            params.append(_normalize_country_filter(country))
         if lifecycle:
             from .qa_answer_quality import LIFECYCLE_STATES
 

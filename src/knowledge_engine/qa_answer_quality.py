@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 from .errors import ReleaseConflictError
@@ -299,8 +299,8 @@ class QaRepository:
         ]
         if result:
             items = [item for item in items if item.get("result") == result]
-        if country:
-            normalized_country = _normalize_country(country)
+        if country is not None:
+            normalized_country = _normalize_country_filter(country)
             items = [item for item in items if item.get("country") == normalized_country]
         items.sort(key=lambda item: str(item.get("timestamp", "")), reverse=True)
         offset = _decode_cursor(cursor)
@@ -576,12 +576,6 @@ def evaluate_answer_quality(*, question: str, response: Mapping[str, Any]) -> di
         "failure_class": failure_class,
         "failure_signature": failure_signature,
     }
-
-
-def trusted_country_from_request(request: Request) -> str:
-    if str(request.headers.get("x-qa-trusted-edge", "")).casefold() != "cloudflare":
-        return QA_UNKNOWN_COUNTRY
-    return _normalize_country(request.headers.get("cf-ipcountry", QA_UNKNOWN_COUNTRY))
 
 
 def submit_answer_capture(
@@ -1017,6 +1011,13 @@ def _percentile(values: list[int], quantile: float) -> int:
 def _normalize_country(value: str | None) -> str:
     country = str(value or QA_UNKNOWN_COUNTRY).strip().upper()
     return country if re.fullmatch(r"[A-Z]{2}", country) else QA_UNKNOWN_COUNTRY
+
+
+def _normalize_country_filter(value: str) -> str:
+    country = str(value).strip().upper()
+    if not re.fullmatch(r"[A-Z]{2}", country):
+        raise ValueError("country must be a two-letter code or ZZ for unknown")
+    return country
 
 
 def _encode_cursor(offset: int) -> str:

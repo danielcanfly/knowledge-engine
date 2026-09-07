@@ -23,7 +23,11 @@ from .m26_admin_qa import (
     QaReadResult,
     install_admin_qa,
 )
-from .qa_answer_quality import submit_answer_capture
+from .qa_answer_quality import (
+    _normalize_country,
+    _normalize_country_filter,
+    submit_answer_capture,
+)
 from .qa_answer_quality_evaluator import (
     AnswerQualitySemanticEvaluator,
     ProviderAnswerQualityEvaluator,
@@ -302,8 +306,7 @@ def _trusted_country(scope: Scope) -> str:
     }
     if not headers.get("cf-ray"):
         return "ZZ"
-    country = headers.get("cf-ipcountry", "").strip().upper()
-    return country if len(country) == 2 and country.isalpha() else "ZZ"
+    return _normalize_country(headers.get("cf-ipcountry"))
 
 
 def _parse_sse(value: str) -> list[tuple[str, dict[str, Any]]]:
@@ -398,6 +401,16 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
     ) -> dict[str, Any]:
         require_capability(request, QA_CAPABILITY_EVENTS)
         try:
+            normalized_country = (
+                _normalize_country_filter(country) if country is not None else None
+            )
+        except ValueError as exc:
+            raise AdminAPIError(
+                status_code=422,
+                code="QA_COUNTRY_INVALID",
+                message=str(exc),
+            ) from exc
+        try:
             data = repository_provider().list_events(
                 range_name=range_name,
                 from_ts=from_ts,
@@ -405,7 +418,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 search=search,
                 result=result,
                 evaluation_status=evaluation_status,
-                country=country,
+                country=normalized_country,
                 lifecycle=lifecycle,
                 limit=max(1, min(limit, 500)),
                 cursor=cursor,
