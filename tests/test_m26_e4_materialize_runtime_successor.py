@@ -5,7 +5,11 @@ import sys
 from pathlib import Path
 
 import pytest
-from scripts.m26_e4_build_runtime_bundle import section_identity_evidence
+from scripts.m26_e4_build_runtime_bundle import (
+    canonical_json_bytes,
+    section_identity_evidence,
+    sha256_bytes,
+)
 
 from knowledge_engine.storage import FileObjectStore
 
@@ -27,8 +31,24 @@ def _bundle(tmp_path: Path) -> tuple[Path, str]:
     artifact = bundle / "releases" / release / "artifacts" / "lexical.json"
     manifest = bundle / "releases" / release / "manifest.json"
     artifact.parent.mkdir(parents=True)
-    artifact.write_bytes(b'{"documents":[]}\n')
-    manifest.write_bytes(b'{"status":"candidate"}\n')
+    artifact_data = b'{"documents":[]}\n'
+    artifact.write_bytes(artifact_data)
+    manifest.write_bytes(
+        canonical_json_bytes(
+            {
+                "release_id": release,
+                "status": "candidate",
+                "artifacts": [
+                    {
+                        "kind": "lexical_index",
+                        "key": artifact.relative_to(bundle).as_posix(),
+                        "sha256": sha256_bytes(artifact_data),
+                        "bytes": len(artifact_data),
+                    }
+                ],
+            }
+        )
+    )
     return bundle, manifest.relative_to(bundle).as_posix()
 
 

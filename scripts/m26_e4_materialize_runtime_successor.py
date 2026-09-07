@@ -292,16 +292,48 @@ def stage_bundle_artifacts_to_r2(
     manifest_data = manifest_path.read_bytes()
     if store.head(manifest_key) is not None:
         _put_or_verify_exact(store, key=manifest_key, data=manifest_data)
-    files = sorted(
-        path for path in bundle_root.rglob("*.json") if path.is_file() and path != manifest_path
-    )
+    manifest = read_json_bytes(manifest_data)
+    release_id = manifest.get("release_id")
+    if not isinstance(release_id, str) or not release_id:
+        raise SystemExit("candidate manifest release identity is missing")
+    if manifest_key != f"releases/{release_id}/manifest.json":
+        raise SystemExit("candidate manifest key is not canonical")
+    raw_artifacts = manifest.get("artifacts")
+    if not isinstance(raw_artifacts, list) or not raw_artifacts:
+        raise SystemExit("candidate manifest artifact inventory is missing")
+    inventory: list[tuple[str, Path, str, int]] = []
+    seen_keys: set[str] = set()
+    for entry in raw_artifacts:
+        if not isinstance(entry, Mapping):
+            raise SystemExit("candidate manifest artifact entry is malformed")
+        key = entry.get("key")
+        digest = entry.get("sha256")
+        expected_bytes = entry.get("bytes")
+        if not isinstance(key, str) or not key.startswith(f"releases/{release_id}/artifacts/"):
+            raise SystemExit("candidate artifact key escapes release namespace")
+        if key in seen_keys:
+            raise SystemExit(f"candidate artifact key is duplicated: {key}")
+        if not isinstance(digest, str) or len(digest) != 64:
+            raise SystemExit(f"candidate artifact digest is malformed: {key}")
+        if not isinstance(expected_bytes, int) or isinstance(expected_bytes, bool):
+            raise SystemExit(f"candidate artifact byte count is malformed: {key}")
+        path = (bundle_root / key).resolve()
+        try:
+            path.relative_to(bundle_root.resolve())
+        except ValueError as exc:
+            raise SystemExit("candidate artifact path escapes bundle root") from exc
+        if not path.is_file():
+            raise SystemExit(f"candidate artifact is missing: {key}")
+        data = path.read_bytes()
+        if len(data) != expected_bytes or sha256_bytes(data) != digest:
+            raise SystemExit(f"candidate artifact inventory mismatch: {key}")
+        seen_keys.add(key)
+        inventory.append((key, path, digest, expected_bytes))
     uploaded = []
     skipped_exact = []
-    for path in files:
-        key = str(path.relative_to(bundle_root)).replace(os.sep, "/")
+    for key, path, digest, expected_bytes in sorted(inventory):
         data = path.read_bytes()
-        digest = sha256_bytes(data)
-        row = {"key": key, "sha256": digest, "bytes": len(data)}
+        row = {"key": key, "sha256": digest, "bytes": expected_bytes}
         if _put_or_verify_exact(store, key=key, data=data):
             uploaded.append(row)
         else:
@@ -309,7 +341,7 @@ def stage_bundle_artifacts_to_r2(
     return {
         "uploaded": uploaded,
         "skipped_exact": skipped_exact,
-        "total_artifact_files": len(files),
+        "total_artifact_files": len(inventory),
         "manifest_key": manifest_key,
         "manifest_deferred": True,
     }

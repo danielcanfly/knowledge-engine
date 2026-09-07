@@ -603,15 +603,50 @@ def validate_with_runtime_code(bundle_info: Mapping[str, Any], repo_root: Path) 
     from knowledge_engine import m26_production_answer_bundle as pab
     from knowledge_engine.m14_retrieval import retrieve_wiki_first
 
-    pab.FULL_PRODUCTION_RELEASE_ID = EXPECTED_RELEASE_ID
-    pab.FULL_PRODUCTION_MANIFEST_KEY = f"releases/{EXPECTED_RELEASE_ID}/manifest.json"
-    pab.FULL_PRODUCTION_PROMOTION_MANIFEST_KEY = (
-        f"releases/{EXPECTED_RELEASE_ID}/promotion/m25-10-production-manifest.json"
+    bundle_root = Path(str(bundle_info["bundle_root"]))
+    candidate_manifest_key = f"releases/{EXPECTED_RELEASE_ID}/manifest.json"
+    candidate_manifest = read_json(bundle_root / candidate_manifest_key)
+    candidate_manifest_sha256 = sha256_file(bundle_root / candidate_manifest_key)
+    promotion_manifest_key = (
+        f"releases/{EXPECTED_RELEASE_ID}/promotion/bp2-validation-manifest.json"
     )
-    pab.FULL_PRODUCTION_PROMOTION_MANIFEST_SHA256 = ""
+    promotion_manifest = json.loads(json.dumps(candidate_manifest))
+    promotion_manifest["status"] = "production"
+    promotion_manifest["authority"]["production_pointer_authorized"] = True
+    promotion_manifest["production_promotion"] = {
+        "production_pointer_authorized": True,
+        "public_production_traffic_authorized": False,
+        "source_candidate_manifest_key": candidate_manifest_key,
+        "source_candidate_manifest_sha256": candidate_manifest_sha256,
+        "qdrant_candidate_collection": QDRANT_COLLECTION,
+        "validation_fixture_only": True,
+    }
+    promotion_data = canonical_json_bytes(promotion_manifest)
+    promotion_path = bundle_root / promotion_manifest_key
+    promotion_path.parent.mkdir(parents=True, exist_ok=True)
+    promotion_path.write_bytes(promotion_data)
+    promotion_sha256 = sha256_bytes(promotion_data)
+    pointer = {
+        "schema_version": "1.0",
+        "channel": "production",
+        "production_authority": True,
+        "release_id": EXPECTED_RELEASE_ID,
+        "manifest_key": promotion_manifest_key,
+        "manifest_sha256": promotion_sha256,
+        "validation_fixture_only": True,
+    }
+    pointer_data = canonical_json_bytes(pointer)
+    pointer_path = bundle_root / "channels/production.json"
+    pointer_path.parent.mkdir(parents=True, exist_ok=True)
+    pointer_path.write_bytes(pointer_data)
+
+    pab.FULL_PRODUCTION_RELEASE_ID = EXPECTED_RELEASE_ID
+    pab.FULL_PRODUCTION_MANIFEST_KEY = candidate_manifest_key
+    pab.FULL_PRODUCTION_PROMOTION_MANIFEST_KEY = promotion_manifest_key
+    pab.FULL_PRODUCTION_PROMOTION_MANIFEST_SHA256 = promotion_sha256
     pab.FULL_PRODUCTION_GRAPH_V2_SHA256 = bundle_info["artifact_sha256"]["graph_v2"]
     pab.FULL_PRODUCTION_POINTER_KEY = "channels/production.json"
-    pab.FULL_PRODUCTION_POINTER_SHA256 = ""
+    pab.FULL_PRODUCTION_POINTER_SHA256 = sha256_bytes(pointer_data)
     pab.FULL_PRODUCTION_QDRANT_COLLECTION = QDRANT_COLLECTION
     pab.FULL_PRODUCTION_NODE_COUNT = EXPECTED_NODE_COUNT
     pab.FULL_PRODUCTION_EDGE_COUNT = EXPECTED_EDGE_COUNT
@@ -619,7 +654,7 @@ def validate_with_runtime_code(bundle_info: Mapping[str, Any], repo_root: Path) 
     pab.FULL_PRODUCTION_SOURCE_SHA = EXPECTED_BLOG_SOURCE_SHA
     pab.FULL_PRODUCTION_ADMISSION_SHA256 = EXPECTED_ADMISSION_SHA256
 
-    store = LocalBundleStore(Path(str(bundle_info["bundle_root"])))
+    store = LocalBundleStore(bundle_root)
     bundle = pab.load_production_answer_bundle(store=store)
     report = pab.build_production_answer_compatibility_report(
         bundle, qdrant_point_count=EXPECTED_SEMANTIC_COUNT
