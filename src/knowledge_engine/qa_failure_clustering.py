@@ -4,8 +4,9 @@ import hashlib
 import json
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 FAILURE_CLUSTER_IDENTITY_VERSION = "qa-failure-cluster-semantic-intent/v1"
 FAILURE_CLUSTER_LEXICAL_FALLBACK_VERSION = "qa-failure-cluster-lexical-fallback/v1"
@@ -44,6 +45,7 @@ _FAILURE_INTENT_TASK_ALIASES = {
 MAX_FAILURE_INTENT_SUBJECTS = 8
 MAX_FAILURE_INTENT_QUALIFIERS = 8
 MAX_FAILURE_INTENT_ATOM_CHARS = 120
+MAX_FAILURE_INTENT_INPUT_ITEMS = 64
 
 _STOPWORDS = {
     "a",
@@ -124,10 +126,10 @@ def normalize_failure_intent(value: Any) -> FailureIntentFamily | None:
             return ()
         normalized = {
             atom
-            for item in list(raw)[:limit]
+            for item in list(raw)[:MAX_FAILURE_INTENT_INPUT_ITEMS]
             if (atom := _normalize_atom(item))
         }
-        return tuple(sorted(normalized))
+        return tuple(sorted(normalized)[:limit])
 
     subjects = atoms(value.get("subjects"), MAX_FAILURE_INTENT_SUBJECTS)
     if not subjects:

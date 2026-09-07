@@ -15,7 +15,6 @@ from knowledge_engine.qa_failure_clustering import (
     FAILURE_CLUSTER_IDENTITY_VERSION,
     FAILURE_CLUSTER_LEXICAL_FALLBACK_VERSION,
     FailureIntentFamily,
-    build_failure_cluster_identity,
     normalize_failure_intent,
 )
 from knowledge_engine.storage import FileObjectStore
@@ -101,6 +100,17 @@ def test_intent_family_normalizes_case_order_and_punctuation() -> None:
         subjects=("replanning", "routing"),
         qualifiers=("during execution",),
     )
+
+
+def test_intent_family_truncation_is_independent_of_provider_order() -> None:
+    subjects = [f"subject-{index}" for index in range(12)]
+    first = normalize_failure_intent({"task": "compare", "subjects": subjects})
+    second = normalize_failure_intent(
+        {"task": "compare", "subjects": list(reversed(subjects))}
+    )
+    assert first == second
+    assert first is not None
+    assert len(first.subjects) == 8
 
 
 def test_same_semantic_intent_and_failure_signature_share_cluster(tmp_path) -> None:
@@ -230,6 +240,23 @@ def test_missing_semantic_intent_uses_explicit_lexical_fallback_without_dropping
     assert cluster["intent_family"]["task"] == "lexical_fallback"
 
 
+def test_malformed_semantic_intent_uses_explicit_lexical_fallback(tmp_path) -> None:
+    repo = repository(tmp_path)
+    malformed = normalize_failure_intent(
+        {"task": "invented_task", "subjects": ["routing", "replanning"]}
+    )
+    assert malformed is None
+    event = record_fail(
+        repo,
+        request_id="malformed",
+        question="Compare routing and replanning",
+        evaluator=failing_evaluator(intent=malformed),
+    )
+    assert event["result"] == "fail"
+    cluster = repo.list_clusters()[0]
+    assert cluster["cluster_match_method"] == "lexical_fallback"
+
+
 def test_export_carries_semantic_cluster_identity_metadata(tmp_path) -> None:
     repo = repository(tmp_path)
     intent = FailureIntentFamily(task="compare", subjects=("replanning", "routing"))
@@ -244,6 +271,10 @@ def test_export_carries_semantic_cluster_identity_metadata(tmp_path) -> None:
     assert row["intent_family"] == intent.to_payload()
     assert row["cluster_match_method"] == "semantic_evaluator"
     assert row["cluster_identity_version"] == FAILURE_CLUSTER_IDENTITY_VERSION
+    assert repo.export_new_failures() == {
+        "created": False,
+        "reason": "NO_NEW_FAILURES",
+    }
 
 
 def test_provider_semantic_judge_returns_non_scoring_question_intent_metadata() -> None:
