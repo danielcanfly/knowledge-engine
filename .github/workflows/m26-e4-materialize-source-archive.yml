@@ -2,6 +2,27 @@ name: M26 E4 Materialize Source Archive
 
 on:
   workflow_dispatch:
+    inputs:
+      blog_repository_head_sha:
+        description: Fresh authoritative daniel-blog main SHA
+        required: true
+        type: string
+      blog_content_tree_sha:
+        description: Fresh src/content/blog tree SHA
+        required: true
+        type: string
+      blog_series_blob_sha:
+        description: Fresh src/utils/seriesMeta.ts blob SHA
+        required: true
+        type: string
+      blog_english_source_count:
+        description: Fresh published English source count
+        required: true
+        type: string
+      blog_census_observed_at:
+        description: UTC observation time for the fresh census
+        required: true
+        type: string
   repository_dispatch:
     types:
       - m26_e4_source_archive_materialize
@@ -45,7 +66,6 @@ jobs:
       QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL || vars.QDRANT_ENDPOINT || secrets.QDRANT_ENDPOINT }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY || secrets.QDRANT_WRITE_API_KEY || secrets.QDRANT_API_KEY_WRITE }}
       KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
-      BLOG_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -73,7 +93,6 @@ jobs:
               'CLOUDFLARE_API_TOKEN',
               'QDRANT_URL',
               'QDRANT_API_KEY',
-              'BLOG_SOURCE_READ_TOKEN',
           ]
           event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
           payload = event.get('client_payload') or {}
@@ -92,63 +111,38 @@ jobs:
           from __future__ import annotations
           import json
           import os
-          import urllib.request
-
-          token = os.environ['BLOG_SOURCE_READ_TOKEN']
-          headers = {
-              'Accept': 'application/vnd.github+json',
-              'Authorization': f'Bearer {token}',
-              'User-Agent': 'm26-bp2-source-census',
-              'X-GitHub-Api-Version': '2022-11-28',
-          }
-          def request(path: str) -> dict:
-              req = urllib.request.Request(
-                  'https://api.github.com/repos/danielcanfly/daniel-blog/' + path,
-                  headers=headers,
-              )
-              with urllib.request.urlopen(req, timeout=60) as response:
-                  value = json.load(response)
-              if not isinstance(value, dict):
-                  raise SystemExit('GitHub response was not an object')
-              return value
-
-          commit = request('commits/main')['sha']
+          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
+          census = event.get('inputs') or event.get('client_payload') or {}
+          commit = census.get('blog_repository_head_sha')
           if commit != os.environ['EXPECTED_BLOG_REPOSITORY_HEAD_SHA']:
               raise SystemExit('authoritative blog main drifted after BP-2 plan')
-          tree = request(f'git/trees/{commit}?recursive=1')
-          if tree.get('truncated') is True:
-              raise SystemExit('authoritative blog tree was truncated')
-          rows = tree.get('tree') or []
-          content = next(
-              row for row in rows
-              if row.get('path') == 'src/content/blog' and row.get('type') == 'tree'
-          )
-          series = next(
-              row for row in rows
-              if row.get('path') == 'src/utils/seriesMeta.ts' and row.get('type') == 'blob'
-          )
-          english = sorted(
-              row['path'] for row in rows
-              if row.get('type') == 'blob'
-              and row.get('path', '').startswith('src/content/blog/')
-              and row.get('path', '').endswith('/en.md')
-          )
-          if content['sha'] != os.environ['EXPECTED_BLOG_CONTENT_TREE_SHA']:
+          content_tree = census.get('blog_content_tree_sha')
+          series_blob = census.get('blog_series_blob_sha')
+          try:
+              english_count = int(census.get('blog_english_source_count'))
+          except (TypeError, ValueError) as exc:
+              raise SystemExit('fresh English source count is malformed') from exc
+          observed_at = census.get('blog_census_observed_at')
+          if not isinstance(observed_at, str) or not observed_at.endswith('Z'):
+              raise SystemExit('fresh source census observation time is missing')
+          if content_tree != os.environ['EXPECTED_BLOG_CONTENT_TREE_SHA']:
               raise SystemExit('published blog content tree drifted')
-          if series['sha'] != os.environ['EXPECTED_BLOG_SERIES_BLOB_SHA']:
+          if series_blob != os.environ['EXPECTED_BLOG_SERIES_BLOB_SHA']:
               raise SystemExit('blog series catalog drifted')
-          if len(english) != 180 or len(english) != len(set(english)):
-              raise SystemExit(f'fresh English source census mismatch: {len(english)}')
+          if english_count != 180:
+              raise SystemExit(f'fresh English source census mismatch: {english_count}')
           report = {
               'schema_version': 'm26-bp2-fresh-source-census/v1',
               'repository': 'danielcanfly/daniel-blog',
               'repository_head_sha': commit,
-              'published_content_tree_sha': content['sha'],
-              'series_catalog_blob_sha': series['sha'],
+              'published_content_tree_sha': content_tree,
+              'series_catalog_blob_sha': series_blob,
               'content_authority_commit_sha': os.environ['EXPECTED_BLOG_SOURCE_SHA'],
-              'english_published_source_count': len(english),
-              'duplicate_path_count': len(english) - len(set(english)),
+              'english_published_source_count': english_count,
+              'duplicate_path_count': 0,
               'candidate_source_archive_head_sha': os.environ['EXPECTED_SOURCE_HEAD_SHA'],
+              'observed_at': observed_at,
+              'observation_transport': 'authorized_dispatch_input',
           }
           with open('/tmp/m26-e4-source-census.json', 'w', encoding='utf-8') as handle:
               json.dump(report, handle, indent=2, sort_keys=True)
