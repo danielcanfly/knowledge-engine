@@ -44,6 +44,7 @@ from .qa_answer_quality_evaluator import (
     AnswerQualityEvaluationError,
     AnswerQualityEvaluatorUnavailable,
     AnswerQualitySemanticEvaluator,
+    canonical_failure_provenance,
     validate_answer_quality_evaluation,
 )
 from .storage import FileObjectStore, ObjectStore, sha256_bytes
@@ -194,6 +195,9 @@ class SqliteQaRepository:
             "UPDATE qa_clusters SET failure_class='legacy_heuristic:' || failure_class"
         )
         connection.execute("DROP TABLE qa_events_v1_legacy")
+        # v1 index names survive the table rename, so CREATE INDEX IF NOT EXISTS
+        # above may have no-op'd. Recreate them after dropping the legacy table.
+        self._ensure_event_indexes(connection)
 
     def record_answer(
         self,
@@ -336,6 +340,15 @@ class SqliteQaRepository:
         event = self.get_event(event_id)
         if event["evaluation_status"] != EVALUATION_PENDING:
             return event
+        failure_stage = None
+        failure_class = None
+        failure_signature = None
+        if evaluation.result == "fail":
+            failure_stage, failure_class, failure_signature = canonical_failure_provenance(
+                question=event["question"],
+                score=evaluation.score,
+                hard_fail_codes=evaluation.hard_fail_codes,
+            )
         event.update(
             {
                 "score": evaluation.score,
@@ -344,16 +357,16 @@ class SqliteQaRepository:
                 "evaluated_at": _iso_now(),
                 "evaluation_latency_ms": max(0, int(latency_ms)),
                 "evaluator": evaluation.to_payload(),
-                "failure_class": evaluation.failure_class,
-                "failure_signature": evaluation.failure_signature,
+                "failure_class": failure_class,
+                "failure_signature": failure_signature,
             }
         )
         if evaluation.result == "fail":
             event["cluster_id"] = _cluster_id(
                 event["question"],
                 {
-                    "failure_stage": evaluation.failure_stage,
-                    "failure_signature": evaluation.failure_signature,
+                    "failure_stage": failure_stage,
+                    "failure_signature": failure_signature,
                 },
             )
             event["failure_trace_key"] = f"{self.prefix}/failures/{event_id}.json"
@@ -369,9 +382,13 @@ class SqliteQaRepository:
                             for key, value in evaluation.criterion_scores.items()
                         },
                         "hard_fail_reasons": list(evaluation.hard_fail_codes),
-                        "failure_stage": evaluation.failure_stage,
-                        "failure_class": evaluation.failure_class,
-                        "failure_signature": evaluation.failure_signature,
+                        "failure_stage": failure_stage,
+                        "failure_class": failure_class,
+                        "failure_signature": failure_signature,
+                        "rubric_version": evaluation.rubric_version,
+                        "evaluator_provider": evaluation.evaluator_provider,
+                        "evaluator_model": evaluation.evaluator_model,
+                        "evaluator_version": evaluation.evaluator_version,
                     },
                 )
             )

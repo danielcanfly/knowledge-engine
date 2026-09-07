@@ -68,6 +68,10 @@ FALLBACK_DAILY_LIMIT = 10
 PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS = 2
 PUBLIC_REQUEST_SCHEMA = "danielcanfly-answers-request/v1"
 PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"
+_QA_INTERNAL_CONTEXT_TTL_SECONDS = 300
+_QA_INTERNAL_CONTEXT_LIMIT = 256
+_qa_internal_context_lock = threading.Lock()
+_qa_internal_contexts: dict[str, tuple[float, dict[str, Any]]] = {}
 
 ALLOWED_FIELDS = {"question"}
 FORBIDDEN_SELECTION_FIELDS = {"provider", "model"}
@@ -632,6 +636,7 @@ async def _answer_event_stream(
                 continue
             if item.get("type") == "_dto":
                 dto = dict(item.get("dto") if isinstance(item.get("dto"), Mapping) else {})
+                _publish_qa_internal_context(admission.request_id, dto)
                 for event in _model_events_from_dto(dto):
                     yield emit(str(event.pop("type")), **event)
                 terminal = _terminal_event_from_dto(dto)
@@ -782,16 +787,6 @@ def _terminal_event_from_dto(dto: Mapping[str, Any]) -> dict[str, Any]:
             "citations": _public_citations(dto.get("citations")),
             "sources": _public_sources(dto.get("sources")),
             "claims": _public_claims(dto.get("answer_claims")),
-            # Preserve the evidence-aware material for the post-response QA
-            # evaluator; these fields remain ephemeral and are not persisted
-            # for PASS events.
-            "selected_evidence": dto.get("selected_evidence", []),
-            "evidence_utilization_trace": dto.get("evidence_utilization_trace", {}),
-            "semantic_closure": dto.get("semantic_closure", {}),
-            "retrieval": dto.get("retrieval", {}),
-            "integrity": dto.get("integrity", {}),
-            "identities": dto.get("identities", {}),
-            "canonical_runtime": dto.get("canonical_runtime", {}),
             "provider_routing": _public_provider_routing(dto),
         }
     return {
@@ -801,6 +796,45 @@ def _terminal_event_from_dto(dto: Mapping[str, Any]) -> dict[str, Any]:
         "retryable": True,
         "provider_routing": _public_provider_routing(dto),
     }
+
+
+def _publish_qa_internal_context(request_id: str, dto: Mapping[str, Any]) -> None:
+    """Publish evidence to the in-process QA observer without changing public SSE."""
+    allowed = {
+        "selected_evidence",
+        "evidence_utilization_trace",
+        "semantic_closure",
+        "retrieval",
+        "integrity",
+        "identities",
+        "canonical_runtime",
+        "reason_codes",
+        "safe_abstention",
+        "status",
+    }
+    context = {key: dto[key] for key in allowed if key in dto}
+    now = time.monotonic()
+    with _qa_internal_context_lock:
+        expired = [
+            key
+            for key, (created, _) in _qa_internal_contexts.items()
+            if now - created > _QA_INTERNAL_CONTEXT_TTL_SECONDS
+        ]
+        for key in expired:
+            _qa_internal_contexts.pop(key, None)
+        while len(_qa_internal_contexts) >= _QA_INTERNAL_CONTEXT_LIMIT:
+            oldest = min(_qa_internal_contexts, key=lambda key: _qa_internal_contexts[key][0])
+            _qa_internal_contexts.pop(oldest, None)
+        _qa_internal_contexts[request_id] = (now, context)
+
+
+def consume_qa_internal_context(request_id: str) -> dict[str, Any]:
+    """Consume a one-shot backend-only QA context for the completed request."""
+    with _qa_internal_context_lock:
+        item = _qa_internal_contexts.pop(request_id, None)
+    if item is None or time.monotonic() - item[0] > _QA_INTERNAL_CONTEXT_TTL_SECONDS:
+        return {}
+    return item[1]
 
 
 def _public_citations(value: Any) -> list[dict[str, Any]]:

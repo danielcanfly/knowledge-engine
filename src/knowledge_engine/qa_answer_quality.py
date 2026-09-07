@@ -784,7 +784,12 @@ def _build_failure_trace(
                 "failure_stage": evaluation["failure_stage"],
                 "failure_class": evaluation["failure_class"],
                 "failure_signature": evaluation["failure_signature"],
-                "rubric_version": ANSWER_QUALITY_RUBRIC_VERSION,
+                "rubric_version": evaluation.get(
+                    "rubric_version", ANSWER_QUALITY_RUBRIC_VERSION
+                ),
+                "evaluator_provider": evaluation.get("evaluator_provider"),
+                "evaluator_model": evaluation.get("evaluator_model"),
+                "evaluator_version": evaluation.get("evaluator_version"),
             },
             "timing": raw_trace.get("timing") or {"total_ms": event["latency_ms"]},
             "raw_runtime_trace": raw_trace,

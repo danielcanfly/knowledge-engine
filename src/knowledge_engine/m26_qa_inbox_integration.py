@@ -227,6 +227,9 @@ class QaAnswerCaptureMiddleware:
                 }
             normalized_answer = dict(answer)
             normalized_answer.setdefault("request_id", correlation_id)
+            from .m26_public_api import consume_qa_internal_context
+
+            normalized_answer.update(consume_qa_internal_context(correlation_id))
             if error and "reason_codes" not in normalized_answer:
                 normalized_answer["reason_codes"] = _error_reason_codes(error)
             trace = {
