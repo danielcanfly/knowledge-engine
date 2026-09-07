@@ -9,8 +9,8 @@ from fastapi import APIRouter, FastAPI, Request
 from .m26_admin_contract import ADMIN_PREFIX, DEFAULT_CONSOLE_ORIGIN, redact, utc_now
 from .m26_admin_control_plane import request_id_from
 
-CANONICAL_ADMIN_API_VERSION = "1.1.0-gate-a-repair-a"
-CANONICAL_ADMIN_OPENAPI_SHA256 = "2e28c734404d4428450e0b8232d44314365cfb775a44b45803e9bf11be90743f"
+CANONICAL_ADMIN_API_VERSION = "1.2.0-l3b-qa-inbox-sq"
+CANONICAL_ADMIN_OPENAPI_SHA256 = "75430530c91b704c4e1d8451bb2f1f528f5811210af8c72ce417babf6b118444"
 
 _QUALIFICATION_STATUSES = frozenset(
     {

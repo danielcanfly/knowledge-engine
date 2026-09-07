@@ -6,7 +6,7 @@ from .m26_admin_corpus import install_admin_corpus
 from .m26_admin_health import install_admin_health
 from .m26_admin_ingestion import install_admin_ingestion_routes
 from .m26_admin_overview import install_admin_overview
-from .m26_admin_settings import install_admin_settings
+from .m26_admin_settings import CANONICAL_ADMIN_API_VERSION, install_admin_settings
 from .m26_admin_usage import install_admin_usage
 from .m26_console_p05_ask_playground import router as playground_router
 from .m26_golden_questions_admin import install_golden_questions_admin
@@ -32,6 +32,7 @@ def create_app():
     install_admin_settings(app)
     install_admin_audit(app)
     app.title = "M26 LLM-Wiki Public + Admin API"
+    app.version = CANONICAL_ADMIN_API_VERSION
     return app
 
 

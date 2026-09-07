@@ -18,7 +18,7 @@ from urllib.request import Request as URLRequest
 from urllib.request import urlopen
 
 from fastapi import APIRouter, FastAPI, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from .config import Settings
 from .errors import ReleaseConflictError
@@ -338,7 +338,7 @@ class SuggestedQuestionsUpdate(BaseModel):
 
 
 class SuggestedQuestionsPromotionPreviewRequest(BaseModel):
-    event_ids: list[str]
+    event_ids: list[str] = Field(min_length=1, max_length=20)
 
     @field_validator("event_ids")
     @classmethod
@@ -355,7 +355,7 @@ class SuggestedQuestionsPromotionPreviewRequest(BaseModel):
 
 class SuggestedQuestionsPromotionPublishRequest(BaseModel):
     base_revision: str
-    selected_event_ids: list[str]
+    selected_event_ids: list[str] = Field(min_length=1, max_length=20)
 
     @field_validator("selected_event_ids")
     @classmethod

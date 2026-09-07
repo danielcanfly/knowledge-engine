@@ -489,7 +489,27 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
             ) from exc
         return {"data": cluster}
 
-    @router.post("/export-jsonl", operation_id="exportQaNewFailuresJsonl")
+    @router.post(
+        "/export-jsonl",
+        operation_id="exportQaNewFailuresJsonl",
+        responses={
+            200: {
+                "headers": {
+                    "X-QA-Export-Mode": {
+                        "description": "Applied export mode.",
+                        "schema": {
+                            "type": "string",
+                            "enum": ["new", "selected", "current_filter"],
+                        },
+                    },
+                    "X-QA-Export-Reused": {
+                        "description": "Whether an existing export batch was reused.",
+                        "schema": {"type": "string", "enum": ["true", "false"]},
+                    },
+                }
+            }
+        },
+    )
     async def export_jsonl(request: Request, payload: QaExportRequest) -> Response:
         require_capability(request, QA_CAPABILITY_EXPORT, mutation=True)
         repository = repository_provider()
