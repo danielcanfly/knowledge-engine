@@ -26,6 +26,7 @@ from knowledge_engine.m23_cloudflare_qdrant import (
     CloudflareConfig,
     SectionInput,
     build_qdrant_points,
+    deterministic_point_id,
     embed_sections,
     validate_sections,
 )
@@ -232,9 +233,13 @@ class Qdrant:
             )
         return operations
 
-    def retrieve_points(self, ids: Sequence[str]) -> list[dict[str, Any]]:
+    def retrieve_points(
+        self,
+        ids: Sequence[str],
+        collection_name: str = QDRANT_COLLECTION,
+    ) -> list[dict[str, Any]]:
         output: list[dict[str, Any]] = []
-        path = self.collection_path() + "/points?consistency=all"
+        path = self.collection_path(collection_name) + "/points?consistency=all"
         for start in range(0, len(ids), READBACK_BATCH_SIZE):
             batch = list(ids[start : start + READBACK_BATCH_SIZE])
             response = self.request(
@@ -493,12 +498,70 @@ def read_json_bytes(data: bytes) -> dict[str, Any]:
     return value
 
 
-def build_points(sections: Sequence[SectionInput]) -> tuple[list[dict[str, Any]], str, str]:
-    cf = CloudflareConfig(
-        account_id=require_env("CLOUDFLARE_ACCOUNT_ID"),
-        api_token=os.environ.get("CLOUDFLARE_AI_TOKEN") or require_env("CLOUDFLARE_API_TOKEN"),
-    )
-    vectors = embed_sections(sections, cf)
+def build_points(
+    sections: Sequence[SectionInput],
+    qdrant: Qdrant,
+) -> tuple[list[dict[str, Any]], str, str, dict[str, Any]]:
+    reuse_collection = os.environ.get("VECTOR_REUSE_COLLECTION", "").strip()
+    if reuse_collection:
+        reuse_release_id = require_env("VECTOR_REUSE_RELEASE_ID")
+        expected_ids = [deterministic_point_id(section.section_id) for section in sections]
+        returned = qdrant.retrieve_points(expected_ids, reuse_collection)
+        by_id = {str(point.get("id")): point for point in returned}
+        if len(returned) != len(sections) or set(by_id) != set(expected_ids):
+            raise SystemExit("vector reuse collection has incomplete point identity set")
+        vectors = []
+        for section, point_id in zip(sections, expected_ids, strict=True):
+            point = by_id[point_id]
+            payload = point.get("payload")
+            vector_map = point.get("vector")
+            vector = vector_map.get(QDRANT_VECTOR_NAME) if isinstance(vector_map, Mapping) else None
+            if not isinstance(payload, Mapping) or not isinstance(vector, list):
+                raise SystemExit("vector reuse point shape mismatch")
+            expected_payload = {
+                "section_id": section.section_id,
+                "text_sha256": hashlib.sha256(section.text.encode("utf-8")).hexdigest(),
+                "embedding_provider": CLOUDFLARE_PROVIDER,
+                "embedding_model": CLOUDFLARE_MODEL,
+                "vector_dimension": VECTOR_DIMENSION,
+                "vector_name": QDRANT_VECTOR_NAME,
+                "release_id": reuse_release_id,
+                "candidate_release_eligible": True,
+                "production_authority": False,
+            }
+            for key, value in expected_payload.items():
+                if payload.get(key) != value:
+                    raise SystemExit(f"vector reuse payload mismatch {key}: {point_id}")
+            vector_sha256(vector)
+            vectors.append(vector)
+        vector_lineage = {
+            "mode": "verified_candidate_vector_reuse",
+            "source_collection": reuse_collection,
+            "source_release_id": reuse_release_id,
+            "full_readback_count": len(returned),
+            "text_identity_verified_count": len(returned),
+            "provider_requests": 0,
+            "provider": CLOUDFLARE_PROVIDER,
+            "model": CLOUDFLARE_MODEL,
+            "vector_dimension": VECTOR_DIMENSION,
+        }
+    else:
+        cf = CloudflareConfig(
+            account_id=require_env("CLOUDFLARE_ACCOUNT_ID"),
+            api_token=os.environ.get("CLOUDFLARE_AI_TOKEN") or require_env("CLOUDFLARE_API_TOKEN"),
+        )
+        vectors = embed_sections(sections, cf)
+        vector_lineage = {
+            "mode": "fresh_cloudflare_workers_ai",
+            "source_collection": None,
+            "source_release_id": None,
+            "full_readback_count": 0,
+            "text_identity_verified_count": 0,
+            "provider_requests": "batched_remote_inference",
+            "provider": CLOUDFLARE_PROVIDER,
+            "model": CLOUDFLARE_MODEL,
+            "vector_dimension": VECTOR_DIMENSION,
+        }
     points = build_qdrant_points(sections, vectors)
     for point in points:
         payload = point["payload"]
@@ -512,6 +575,7 @@ def build_points(sections: Sequence[SectionInput]) -> tuple[list[dict[str, Any]]
         points,
         canonical_sha256([point["id"] for point in points]),
         aggregate_point_fingerprint(points),
+        vector_lineage,
     )
 
 
@@ -625,7 +689,10 @@ def main() -> int:
         bundle_info,
     )
     sections = load_materialization_sections(bundle_root)
-    points, point_ids_sha, expected_aggregate = build_points(sections)
+    points, point_ids_sha, expected_aggregate, vector_lineage = build_points(
+        sections,
+        qdrant,
+    )
 
     # Re-read authority immediately before the first candidate write. Any source
     # plan or active pointer drift invalidates the entire attempt.
@@ -728,6 +795,7 @@ def main() -> int:
             "vector_name": QDRANT_VECTOR_NAME,
             "point_ids_sha256": point_ids_sha,
             "aggregate_point_fingerprint_sha256": expected_aggregate,
+            "lineage": vector_lineage,
         },
         "qdrant": {
             "collection": QDRANT_COLLECTION,
@@ -750,7 +818,7 @@ def main() -> int:
         "authority": {
             "semantic_requests": 0,
             "provider_answer_requests": 0,
-            "embedding_provider_requests": "cloudflare_workers_ai_only_for_vector_materialization",
+            "embedding_provider_requests": vector_lineage["provider_requests"],
             "qdrant_writes": len(operations),
             "r2_writes": len(r2_artifacts["uploaded"]) + int(manifest["created"]),
             "production_pointer_writes": 0,
