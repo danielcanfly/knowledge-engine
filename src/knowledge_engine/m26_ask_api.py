@@ -13,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
 from .config import Settings
+from .m26_active_release_dense import active_release_dense_channel_from_env
 from .m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     CONTRACT_SCHEMA_VERSION,
@@ -136,6 +137,10 @@ def run_owner_query_for_web(
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    if dense_channel is None:
+        dense_channel = active_release_dense_channel_from_env(
+            require_remote=require_remote_dense
+        )
     if provider_client is None and not _should_use_default_provider_routing():
         runtime_response = run_owner_arbitrary_query(
             root=root,
