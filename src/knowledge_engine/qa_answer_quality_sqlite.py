@@ -23,7 +23,6 @@ from .qa_answer_quality import (
     QA_MAX_SAMPLE_TRACES,
     QA_RETENTION_DAYS,
     _build_failure_trace,
-    _cluster_id,
     _dedupe_identity,
     _event_id,
     _index_identity,
@@ -47,9 +46,10 @@ from .qa_answer_quality_evaluator import (
     canonical_failure_provenance,
     validate_answer_quality_evaluation,
 )
+from .qa_failure_clustering import FailureClusterIdentity, build_failure_cluster_identity
 from .storage import FileObjectStore, ObjectStore, sha256_bytes
 
-QA_SQLITE_SCHEMA = "knowledge-engine-answer-quality-sqlite/v2"
+QA_SQLITE_SCHEMA = "knowledge-engine-answer-quality-sqlite/v3"
 QA_DB_PATH_ENV = "M26_QA_DB_PATH"
 QA_DEFAULT_PRODUCTION_DB = Path("/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3")
 EVALUATION_PENDING = "PENDING"
@@ -90,7 +90,10 @@ class SqliteQaRepository:
                     failure_class TEXT NOT NULL, sample_trace_ids_json TEXT NOT NULL,
                     lifecycle TEXT NOT NULL, version INTEGER NOT NULL,
                     export_history_json TEXT NOT NULL, resolved_by_release TEXT,
-                    last_seen_release_json TEXT NOT NULL, ignored_reason TEXT
+                    last_seen_release_json TEXT NOT NULL, ignored_reason TEXT,
+                    intent_family_json TEXT NOT NULL DEFAULT '{}',
+                    cluster_match_method TEXT NOT NULL DEFAULT 'legacy',
+                    cluster_identity_version TEXT NOT NULL DEFAULT 'legacy/v1'
                 );
                 CREATE INDEX IF NOT EXISTS qa_clusters_lifecycle_last_seen_idx
                     ON qa_clusters(lifecycle, last_seen DESC);
@@ -114,6 +117,7 @@ class SqliteQaRepository:
                     self._migrate_v1_events(connection)
                 else:
                     self._ensure_event_indexes(connection)
+            self._ensure_cluster_columns(connection)
             connection.execute(
                 "INSERT OR REPLACE INTO qa_meta(key, value) VALUES('schema_version', ?)",
                 (QA_SQLITE_SCHEMA,),
@@ -150,6 +154,20 @@ class SqliteQaRepository:
             CREATE INDEX IF NOT EXISTS qa_events_cluster_idx ON qa_events(cluster_id);
             """
         )
+
+    @staticmethod
+    def _ensure_cluster_columns(connection: sqlite3.Connection) -> None:
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(qa_clusters)")
+        }
+        additions = {
+            "intent_family_json": "TEXT NOT NULL DEFAULT '{}'",
+            "cluster_match_method": "TEXT NOT NULL DEFAULT 'legacy'",
+            "cluster_identity_version": "TEXT NOT NULL DEFAULT 'legacy/v1'",
+        }
+        for name, declaration in additions.items():
+            if name not in columns:
+                connection.execute(f"ALTER TABLE qa_clusters ADD COLUMN {name} {declaration}")
 
     def _migrate_v1_events(self, connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE qa_events RENAME TO qa_events_v1_legacy")
@@ -343,11 +361,26 @@ class SqliteQaRepository:
         failure_stage = None
         failure_class = None
         failure_signature = None
+        cluster_identity = None
         if evaluation.result == "fail":
             failure_stage, failure_class, failure_signature = canonical_failure_provenance(
-                question=event["question"],
-                score=evaluation.score,
                 hard_fail_codes=evaluation.hard_fail_codes,
+                criterion_scores=evaluation.criterion_scores,
+            )
+            cluster_identity = build_failure_cluster_identity(
+                question=event["question"],
+                failure_stage=failure_stage,
+                failure_signature=failure_signature,
+                intent_family=evaluation.failure_intent,
+            )
+        evaluator_payload = evaluation.to_payload()
+        if evaluation.result == "fail":
+            evaluator_payload.update(
+                {
+                    "failure_stage": failure_stage,
+                    "failure_class": failure_class,
+                    "failure_signature": failure_signature,
+                }
             )
         event.update(
             {
@@ -356,19 +389,14 @@ class SqliteQaRepository:
                 "evaluation_status": EVALUATION_ANSWERED,
                 "evaluated_at": _iso_now(),
                 "evaluation_latency_ms": max(0, int(latency_ms)),
-                "evaluator": evaluation.to_payload(),
+                "evaluator": evaluator_payload,
                 "failure_class": failure_class,
                 "failure_signature": failure_signature,
             }
         )
         if evaluation.result == "fail":
-            event["cluster_id"] = _cluster_id(
-                event["question"],
-                {
-                    "failure_stage": failure_stage,
-                    "failure_signature": failure_signature,
-                },
-            )
+            assert cluster_identity is not None
+            event["cluster_id"] = cluster_identity.cluster_id
             event["failure_trace_key"] = f"{self.prefix}/failures/{event_id}.json"
             trace_body = _json_bytes(
                 _build_failure_trace(
@@ -389,6 +417,13 @@ class SqliteQaRepository:
                         "evaluator_provider": evaluation.evaluator_provider,
                         "evaluator_model": evaluation.evaluator_model,
                         "evaluator_version": evaluation.evaluator_version,
+                        "failure_intent": (
+                            evaluation.failure_intent.to_payload()
+                            if evaluation.failure_intent
+                            else None
+                        ),
+                        "cluster_match_method": cluster_identity.match_method,
+                        "cluster_identity_version": cluster_identity.identity_version,
                     },
                 )
             )
@@ -417,7 +452,15 @@ class SqliteQaRepository:
                 connection.rollback()
                 return self.get_event(event_id)
             if event["cluster_id"]:
-                self._upsert_cluster(connection, event, evaluation)
+                assert cluster_identity is not None
+                self._upsert_cluster(
+                    connection,
+                    event,
+                    failure_stage=failure_stage or "answer_quality",
+                    failure_signature=failure_signature or "unknown",
+                    failure_class=failure_class or "quality_below_threshold",
+                    cluster_identity=cluster_identity,
+                )
             self._update_event(connection, event)
             connection.commit()
         return self.get_event(event_id)
@@ -498,7 +541,11 @@ class SqliteQaRepository:
         self,
         connection: sqlite3.Connection,
         event: Mapping[str, Any],
-        evaluation: AnswerQualityEvaluation,
+        *,
+        failure_stage: str,
+        failure_signature: str,
+        failure_class: str,
+        cluster_identity: FailureClusterIdentity,
     ) -> None:
         cluster_id = str(event["cluster_id"])
         row = connection.execute(
@@ -506,7 +553,7 @@ class SqliteQaRepository:
         ).fetchone()
         if row is None:
             connection.execute(
-                "INSERT INTO qa_clusters(cluster_id,representative_question,variants_json,event_count,first_seen,last_seen,failure_stage,failure_signature,failure_class,sample_trace_ids_json,lifecycle,version,export_history_json,resolved_by_release,last_seen_release_json,ignored_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO qa_clusters(cluster_id,representative_question,variants_json,event_count,first_seen,last_seen,failure_stage,failure_signature,failure_class,sample_trace_ids_json,lifecycle,version,export_history_json,resolved_by_release,last_seen_release_json,ignored_reason,intent_family_json,cluster_match_method,cluster_identity_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     cluster_id,
                     event["question"],
@@ -514,9 +561,9 @@ class SqliteQaRepository:
                     1,
                     event["timestamp"],
                     event["timestamp"],
-                    evaluation.failure_stage or "answer_quality",
-                    evaluation.failure_signature or "unknown",
-                    evaluation.failure_class or "quality_below_threshold",
+                    failure_stage,
+                    failure_signature,
+                    failure_class,
                     _dump([event["trace_id"]]),
                     "NEW",
                     1,
@@ -524,6 +571,9 @@ class SqliteQaRepository:
                     None,
                     _dump(event["release_identity"]),
                     None,
+                    _dump(cluster_identity.intent_family),
+                    cluster_identity.match_method,
+                    cluster_identity.identity_version,
                 ),
             )
             return
@@ -763,6 +813,9 @@ class SqliteQaRepository:
                     "failure_stage": c["failure_stage"],
                     "failure_class": c["failure_class"],
                     "failure_signature": c["failure_signature"],
+                    "intent_family": c["intent_family"],
+                    "cluster_match_method": c["cluster_match_method"],
+                    "cluster_identity_version": c["cluster_identity_version"],
                     "sample_trace_ids": c["sample_trace_ids"][:QA_MAX_SAMPLE_TRACES],
                     "resolved_by_release": c.get("resolved_by_release"),
                 }
@@ -852,6 +905,9 @@ class SqliteQaRepository:
             "resolved_by_release": row["resolved_by_release"],
             "last_seen_release": _load(row["last_seen_release_json"], {}),
             "ignored_reason": row["ignored_reason"],
+            "intent_family": _load(row["intent_family_json"], {}),
+            "cluster_match_method": row["cluster_match_method"],
+            "cluster_identity_version": row["cluster_identity_version"],
         }
 
 

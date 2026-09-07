@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
+from .qa_failure_clustering import FailureIntentFamily, normalize_failure_intent
+
 ANSWER_QUALITY_RUBRIC_VERSION = "ANSWER_QUALITY_RUBRIC_v1"
 ANSWER_QUALITY_PASS_THRESHOLD = 85
 ANSWER_QUALITY_CRITERION_MAX: dict[str, int] = {
@@ -52,6 +54,7 @@ class AnswerQualityEvaluation:
     failure_signature: str | None
     evaluator_provider: str
     evaluator_model: str
+    failure_intent: FailureIntentFamily | None = None
     evaluator_version: str = "aq-semantic-evaluator/v1"
     rubric_version: str = ANSWER_QUALITY_RUBRIC_VERSION
 
@@ -64,6 +67,7 @@ class AnswerQualityEvaluation:
             "failure_class": self.failure_class,
             "failure_stage": self.failure_stage,
             "failure_signature": self.failure_signature,
+            "failure_intent": self.failure_intent.to_payload() if self.failure_intent else None,
             "evaluator_provider": self.evaluator_provider,
             "evaluator_model": self.evaluator_model,
             "evaluator_version": self.evaluator_version,
@@ -142,7 +146,9 @@ def deterministic_hard_fail_codes(answer_payload: Mapping[str, Any]) -> tuple[st
 
 
 def canonical_failure_provenance(
-    *, question: str, score: int, hard_fail_codes: tuple[str, ...]
+    *,
+    hard_fail_codes: tuple[str, ...],
+    criterion_scores: Mapping[str, int] | None = None,
 ) -> tuple[str, str, str]:
     """Derive server-owned failure taxonomy; provider labels are diagnostic only."""
     codes = tuple(sorted(set(hard_fail_codes)))
@@ -158,13 +164,22 @@ def canonical_failure_provenance(
         stage, failure_class = "synthesis", "empty_answer"
     else:
         stage, failure_class = "answer_quality", "quality_below_threshold"
-    signature_payload = {
-        "question": " ".join(question.casefold().split())[:4000],
+    signature_payload: dict[str, Any] = {
         "stage": stage,
         "class": failure_class,
         "hard_fail_codes": codes,
-        "score_band": "0-49" if score < 50 else "50-69" if score < 70 else "70-84" if score < 85 else "85-100-hard-fail",
     }
+    if not codes and criterion_scores:
+        deficits: list[tuple[float, str]] = []
+        for name, maximum in ANSWER_QUALITY_CRITERION_MAX.items():
+            value = criterion_scores.get(name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                continue
+            deficit_ratio = max(0.0, (maximum - value) / maximum)
+            if deficit_ratio > 0:
+                deficits.append((deficit_ratio, name))
+        deficits.sort(key=lambda item: (-item[0], item[1]))
+        signature_payload["weakest_criteria"] = [name for _, name in deficits[:2]]
     signature = hashlib.sha256(
         json.dumps(signature_payload, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()[:24]
@@ -287,9 +302,16 @@ class ProviderAnswerQualityEvaluator:
             "evidence cannot support an answer; an unexplained or answerable abstention is a hard fail. "
             "Do not score homepage, Suggested Questions, topic balance, corpus representativeness, or "
             "question-framing dimensions. Return JSON with criterion_scores containing exactly: "
-            f"{rubric}; also return hard_fail_codes as an array and optional diagnostic failure_class, "
-            "failure_stage, and failure_signature. The server computes the total, hard-fail union, "
-            "stable taxonomy/signature, and pass/fail verdict."
+            f"{rubric}; also return hard_fail_codes as an array. Separately return question_intent "
+            "for failure clustering as an object with task, subjects, and qualifiers. task must be one "
+            "of compare, explain, how_to, enumerate, diagnose, design, evaluate, locate, summarize, other. "
+            "subjects must contain the smallest canonical semantic concepts in base form, not wording "
+            "fragments; qualifiers must contain only meaning-changing constraints. Paraphrases with the "
+            "same intent must produce the same task/subjects/qualifiers. Do not put score dimensions, "
+            "failure reasons, homepage fit, or Suggested Questions properties in question_intent. "
+            "Optional diagnostic failure_class, failure_stage, and failure_signature may also be returned, "
+            "but the server computes the score, hard-fail union, stable failure taxonomy/signature, cluster "
+            "identity, and pass/fail verdict."
         )
         raw = self.provider.call(
             {
@@ -328,14 +350,14 @@ class ProviderAnswerQualityEvaluator:
             and not isinstance(value, bool)
         )
         result = "pass" if score >= ANSWER_QUALITY_PASS_THRESHOLD and not codes else "fail"
+        failure_intent = normalize_failure_intent(output.get("question_intent"))
         failure_class = None
         failure_stage = None
         failure_signature = None
         if result == "fail":
             failure_stage, failure_class, failure_signature = canonical_failure_provenance(
-                question=question,
-                score=score,
                 hard_fail_codes=codes,
+                criterion_scores=normalized_criteria,
             )
         evaluation = AnswerQualityEvaluation(
             score=score,
@@ -347,6 +369,7 @@ class ProviderAnswerQualityEvaluator:
             failure_signature=failure_signature,
             evaluator_provider=self.provider_name,
             evaluator_model=self.model,
+            failure_intent=failure_intent,
             evaluator_version=self.evaluator_version,
         )
         return validate_answer_quality_evaluation(evaluation)
@@ -451,6 +474,7 @@ def validate_answer_quality_evaluation(
         failure_signature=evaluation.failure_signature,
         evaluator_provider=provider,
         evaluator_model=model,
+        failure_intent=evaluation.failure_intent,
         evaluator_version=evaluation.evaluator_version,
         rubric_version=evaluation.rubric_version,
     )
