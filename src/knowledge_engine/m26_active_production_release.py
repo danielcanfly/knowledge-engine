@@ -10,6 +10,9 @@ from .errors import IntegrityError
 from .storage import sha256_bytes
 
 PRODUCTION_POINTER_KEY = "channels/production.json"
+RUNTIME_REQUIRED_ARTIFACT_KINDS = frozenset(
+    {"graph", "graph_v2", "lexical_index", "provenance"}
+)
 
 
 class ActiveProductionReleaseError(IntegrityError):
@@ -44,9 +47,10 @@ def resolve_active_production_release(
 ) -> ActiveProductionRelease:
     """Resolve active runtime identity from the immutable production pointer chain.
 
-    This function is intentionally read-only. The production pointer is the only
-    selector. Historical Python constants and environment variables are not
-    accepted as active-release authority.
+    The production pointer is the only selector. Historical Python constants,
+    environment variables, latest-object guesses, and candidate channels are not
+    accepted as active-release authority. Any broken authority or digest link
+    fails closed.
     """
 
     pointer_bytes = _get_required(store, pointer_key, "production pointer")
@@ -68,6 +72,10 @@ def resolve_active_production_release(
         pointer, "manifest_sha256", "production pointer"
     )
     _validate_release_key(production_manifest_key, release_id, "production manifest")
+    if not production_manifest_key.startswith(f"releases/{release_id}/promotion/"):
+        raise ActiveProductionReleaseError(
+            "production manifest key is outside promotion namespace"
+        )
 
     production_manifest_bytes = _get_required(
         store, production_manifest_key, "production manifest"
@@ -77,6 +85,8 @@ def resolve_active_production_release(
     production_manifest = _json_object(
         production_manifest_bytes, "production manifest"
     )
+    if production_manifest.get("schema_version") != "knowledge-engine-release/v1":
+        raise ActiveProductionReleaseError("production manifest schema mismatch")
     if production_manifest.get("release_id") != release_id:
         raise ActiveProductionReleaseError("production manifest release mismatch")
     if production_manifest.get("status") != "production":
@@ -101,6 +111,8 @@ def resolve_active_production_release(
         promotion, "source_candidate_manifest_sha256", "production promotion"
     )
     _validate_release_key(candidate_manifest_key, release_id, "candidate manifest")
+    if candidate_manifest_key != f"releases/{release_id}/manifest.json":
+        raise ActiveProductionReleaseError("candidate manifest path is not canonical")
 
     candidate_manifest_bytes = _get_required(
         store, candidate_manifest_key, "candidate manifest"
@@ -108,12 +120,15 @@ def resolve_active_production_release(
     if sha256_bytes(candidate_manifest_bytes) != candidate_manifest_sha256:
         raise ActiveProductionReleaseError("candidate manifest digest mismatch")
     candidate_manifest = _json_object(candidate_manifest_bytes, "candidate manifest")
+    if candidate_manifest.get("schema_version") != "knowledge-engine-release/v1":
+        raise ActiveProductionReleaseError("candidate manifest schema mismatch")
     if candidate_manifest.get("release_id") != release_id:
         raise ActiveProductionReleaseError("candidate manifest release mismatch")
     if candidate_manifest.get("status") != "candidate":
         raise ActiveProductionReleaseError("candidate manifest status mismatch")
 
-    _validate_artifact_family(candidate_manifest, release_id)
+    candidate_artifacts = _artifacts_by_kind(candidate_manifest, release_id)
+    _require_runtime_artifact_family(candidate_artifacts)
     _validate_production_artifact_family(
         production_manifest=production_manifest,
         candidate_manifest=candidate_manifest,
@@ -121,22 +136,16 @@ def resolve_active_production_release(
     )
 
     identities = _mapping(candidate_manifest.get("identities"), "candidate identities")
-    source_commit_sha = _required_string(
+    source_commit_sha = _required_git_sha(
         identities, "source_commit_sha", "candidate identities"
     )
     admission_sha256 = _required_sha256(
         identities, "admission_sha256", "candidate identities"
     )
     counts = _mapping(candidate_manifest.get("counts"), "candidate counts")
-    semantic_point_count = counts.get("semantic_documents")
-    if (
-        not isinstance(semantic_point_count, int)
-        or isinstance(semantic_point_count, bool)
-        or semantic_point_count < 0
-    ):
-        raise ActiveProductionReleaseError(
-            "candidate semantic_documents count is invalid"
-        )
+    semantic_point_count = _required_positive_int(
+        counts, "semantic_documents", "candidate counts"
+    )
 
     qdrant_collection = _required_string(
         promotion, "qdrant_candidate_collection", "production promotion"
@@ -167,6 +176,8 @@ def _validate_production_artifact_family(
 ) -> None:
     production = _artifacts_by_kind(production_manifest, release_id)
     candidate = _artifacts_by_kind(candidate_manifest, release_id)
+    _require_runtime_artifact_family(production)
+    _require_runtime_artifact_family(candidate)
     if set(production) != set(candidate):
         raise ActiveProductionReleaseError(
             "production/candidate artifact family mismatch"
@@ -180,8 +191,14 @@ def _validate_production_artifact_family(
                 )
 
 
-def _validate_artifact_family(manifest: Mapping[str, Any], release_id: str) -> None:
-    _artifacts_by_kind(manifest, release_id)
+def _require_runtime_artifact_family(
+    artifacts: Mapping[str, Mapping[str, Any]],
+) -> None:
+    missing = sorted(RUNTIME_REQUIRED_ARTIFACT_KINDS - set(artifacts))
+    if missing:
+        raise ActiveProductionReleaseError(
+            "required runtime artifacts missing: " + ",".join(missing)
+        )
 
 
 def _artifacts_by_kind(
@@ -247,19 +264,31 @@ def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     return value
 
 
-def _required_string(
-    value: Mapping[str, Any], key: str, label: str
-) -> str:
+def _required_string(value: Mapping[str, Any], key: str, label: str) -> str:
     observed = value.get(key)
     if not isinstance(observed, str) or not observed:
         raise ActiveProductionReleaseError(f"{label} missing {key}")
     return observed
 
 
-def _required_sha256(
-    value: Mapping[str, Any], key: str, label: str
-) -> str:
+def _required_git_sha(value: Mapping[str, Any], key: str, label: str) -> str:
+    observed = _required_string(value, key, label)
+    if len(observed) != 40 or any(ch not in "0123456789abcdef" for ch in observed):
+        raise ActiveProductionReleaseError(f"{label} {key} must be lowercase git sha")
+    return observed
+
+
+def _required_sha256(value: Mapping[str, Any], key: str, label: str) -> str:
     observed = _required_string(value, key, label)
     if len(observed) != 64 or any(ch not in "0123456789abcdef" for ch in observed):
         raise ActiveProductionReleaseError(f"{label} {key} must be lowercase sha256")
+    return observed
+
+
+def _required_positive_int(
+    value: Mapping[str, Any], key: str, label: str
+) -> int:
+    observed = value.get(key)
+    if isinstance(observed, bool) or not isinstance(observed, int) or observed <= 0:
+        raise ActiveProductionReleaseError(f"{label} {key} must be a positive integer")
     return observed
