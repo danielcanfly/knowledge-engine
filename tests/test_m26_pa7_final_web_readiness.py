@@ -859,7 +859,7 @@ def test_named_backend_tunnel_rejects_unsafe_hostnames(
 
 
 def test_named_backend_tunnel_accepts_zone_subdomain() -> None:
-    _require_hostname_under_zone("m26-query-backend.danielcanfly.com", "danielcanfly.com")
+    _require_hostname_under_zone("backend.example.com", "example.com")
 
 
 @pytest.mark.parametrize(
