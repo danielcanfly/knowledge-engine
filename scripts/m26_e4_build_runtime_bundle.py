@@ -125,6 +125,172 @@ def source_rows_from_index(raw: Any) -> list[dict[str, Any]]:
     return [dict(item) for item in values if isinstance(item, dict)]
 
 
+def git_blob_sha(data: bytes) -> str:
+    header = f"blob {len(data)}\0".encode()
+    return hashlib.sha1(header + data, usedforsecurity=False).hexdigest()
+
+
+def source_file_identity(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    ordered = sorted(rows, key=lambda row: str(row["origin_path"]))
+    paths = [str(row["origin_path"]) for row in ordered]
+    if len(ordered) != EXPECTED_SOURCE_COUNT:
+        raise SystemExit(f"source file identity count mismatch: {len(ordered)}")
+    if len(paths) != len(set(paths)):
+        raise SystemExit("source file identity contains duplicate paths")
+    return {
+        "file_count": len(ordered),
+        "duplicate_path_count": len(paths) - len(set(paths)),
+        "rows_sha256": sha256_bytes(canonical_json_bytes(ordered).rstrip(b"\n")),
+    }
+
+
+def build_blog_checkout_identity(blog_root: Path) -> dict[str, Any]:
+    content_root = blog_root / "src/content/blog"
+    rows = []
+    for path in sorted(content_root.glob("*/en.md")):
+        data = path.read_bytes()
+        rows.append(
+            {
+                "origin_path": path.relative_to(blog_root).as_posix(),
+                "origin_blob_sha": git_blob_sha(data),
+                "content_sha256": sha256_bytes(data),
+                "bytes": len(data),
+            }
+        )
+    return source_file_identity(rows)
+
+
+def build_source_archive_identity(pack: Path) -> dict[str, Any]:
+    source_index_path = pack / "candidate-release/source-index.json"
+    source_index = read_json(source_index_path)
+    rows = source_rows_from_index(source_index)
+    identities = []
+    for row in rows:
+        origin_path = row.get("origin_path")
+        if (
+            not isinstance(origin_path, str)
+            or not origin_path.startswith("src/content/blog/")
+            or not origin_path.endswith("/en.md")
+        ):
+            raise SystemExit("source archive origin path is malformed")
+        if row.get("origin_repository") != "danielcanfly/daniel-blog":
+            raise SystemExit("source archive origin repository mismatch")
+        if row.get("origin_commit") != EXPECTED_BLOG_SOURCE_SHA:
+            raise SystemExit("source archive origin commit mismatch")
+        slug = Path(origin_path).parts[-2]
+        data = (pack / "sources" / f"{slug}.md").read_bytes()
+        identity = {
+            "origin_path": origin_path,
+            "origin_blob_sha": git_blob_sha(data),
+            "content_sha256": sha256_bytes(data),
+            "bytes": len(data),
+        }
+        for key, value in identity.items():
+            if row.get(key) != value:
+                raise SystemExit(f"source archive file identity mismatch: {origin_path}:{key}")
+        identities.append(identity)
+    result = source_file_identity(identities)
+    result.update(
+        {
+            "origin_repository": "danielcanfly/daniel-blog",
+            "origin_commit_sha": EXPECTED_BLOG_SOURCE_SHA,
+            "source_index_sha256": sha256_file(source_index_path),
+            "source_release_manifest_sha256": sha256_file(
+                pack / "candidate-release/release-manifest.json"
+            ),
+            "source_admission_sha256": EXPECTED_ADMISSION_SHA256,
+        }
+    )
+    return result
+
+
+def qualify_real_candidate(
+    bundle_root: Path,
+    manifest_key: str,
+) -> dict[str, Any]:
+    manifest_path = bundle_root / manifest_key
+    manifest_data = manifest_path.read_bytes()
+    manifest = read_json(manifest_path)
+    expected = {
+        "schema_version": "knowledge-engine-release/v1",
+        "release_id": EXPECTED_RELEASE_ID,
+        "status": "candidate",
+        "qdrant_collection": QDRANT_COLLECTION,
+    }
+    for key, value in expected.items():
+        if manifest.get(key) != value:
+            raise SystemExit(f"real candidate manifest qualification failed: {key}")
+    identities = manifest.get("identities")
+    if not isinstance(identities, dict):
+        raise SystemExit("real candidate manifest identities are missing")
+    expected_identities = {
+        "engine_commit_sha": EXPECTED_ENGINE_COMMIT_SHA,
+        "source_commit_sha": EXPECTED_BLOG_SOURCE_SHA,
+        "source_repository_head_sha": EXPECTED_SOURCE_HEAD_SHA,
+        "admission_sha256": EXPECTED_ADMISSION_SHA256,
+        "pack_sha256": EXPECTED_PACK_SHA256,
+    }
+    for key, value in expected_identities.items():
+        if identities.get(key) != value:
+            raise SystemExit(f"real candidate identity qualification failed: {key}")
+    authority = manifest.get("authority")
+    if not isinstance(authority, dict):
+        raise SystemExit("real candidate manifest authority is missing")
+    expected_authority = {
+        "candidate_only": True,
+        "source_admitted": True,
+        "candidate_release_authorized": True,
+        "semantic_serving_authorized": True,
+        "production_pointer_authorized": False,
+        "public_production_traffic_authorized": False,
+        "production_pointer_writes": 0,
+    }
+    for key, value in expected_authority.items():
+        if authority.get(key) != value:
+            raise SystemExit(f"real candidate authority qualification failed: {key}")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list) or set(
+        str(entry.get("kind")) for entry in artifacts if isinstance(entry, dict)
+    ) != set(ARTIFACT_KINDS):
+        raise SystemExit("real candidate artifact family qualification failed")
+    artifact_checks = []
+    for entry in artifacts:
+        if not isinstance(entry, dict):
+            raise SystemExit("real candidate artifact entry is malformed")
+        key = entry.get("key")
+        if not isinstance(key, str) or not key.startswith(
+            f"releases/{EXPECTED_RELEASE_ID}/artifacts/"
+        ):
+            raise SystemExit("real candidate artifact key is outside release namespace")
+        data = (bundle_root / key).read_bytes()
+        if len(data) != entry.get("bytes") or sha256_bytes(data) != entry.get("sha256"):
+            raise SystemExit(f"real candidate artifact integrity failed: {key}")
+        artifact_checks.append(key)
+    semantic = read_json(
+        bundle_root / f"releases/{EXPECTED_RELEASE_ID}/artifacts/semantic_inputs.json"
+    )
+    documents = semantic.get("documents")
+    if not isinstance(documents, list) or len(documents) != EXPECTED_SEMANTIC_COUNT:
+        raise SystemExit("real candidate semantic document count qualification failed")
+    for document in documents:
+        payload = document.get("payload") if isinstance(document, dict) else None
+        if not isinstance(payload, dict):
+            raise SystemExit("real candidate semantic payload is malformed")
+        if payload.get("candidate_release_eligible") is not True:
+            raise SystemExit("real candidate semantic payload is not eligible")
+        if payload.get("production_authority") is not False:
+            raise SystemExit("real candidate semantic payload has production authority")
+    return {
+        "status": "PASS",
+        "manifest_key": manifest_key,
+        "manifest_sha256": sha256_bytes(manifest_data),
+        "artifact_integrity_count": len(artifact_checks),
+        "semantic_candidate_eligible_count": len(documents),
+        "semantic_production_authority_count": 0,
+        "synthetic_pointer_used": False,
+    }
+
+
 def section_identity_evidence(
     lexical_rows: list[dict[str, Any]],
     semantic_rows: list[dict[str, Any]],
@@ -184,6 +350,7 @@ def build_bundle(pack: Path, out_dir: Path) -> dict[str, Any]:
         raise SystemExit("node count mismatch")
     if len(edge_rows) != EXPECTED_EDGE_COUNT:
         raise SystemExit("edge count mismatch")
+    source_archive_identity = build_source_archive_identity(pack)
     identity_evidence = section_identity_evidence(lexical_rows, semantic_rows)
 
     provenance_by_source = {
@@ -558,6 +725,10 @@ def build_bundle(pack: Path, out_dir: Path) -> dict[str, Any]:
     (bundle_root / manifest_key).parent.mkdir(parents=True, exist_ok=True)
     (bundle_root / manifest_key).write_bytes(manifest_data)
     manifest_sha = sha256_bytes(manifest_data)
+    real_candidate_qualification = qualify_real_candidate(
+        bundle_root,
+        manifest_key,
+    )
 
     return {
         "bundle_root": str(bundle_root),
@@ -568,6 +739,8 @@ def build_bundle(pack: Path, out_dir: Path) -> dict[str, Any]:
         "counts": manifest["counts"],
         "qdrant_collection": QDRANT_COLLECTION,
         "section_identity": identity_evidence,
+        "source_archive_identity": source_archive_identity,
+        "real_candidate_qualification": real_candidate_qualification,
         "source_file_sha256": {
             "semantic_inputs": sha256_file(candidate / "semantic-inputs.jsonl"),
             "lexical_documents": sha256_file(candidate / "lexical-documents.jsonl"),
@@ -718,6 +891,9 @@ def validate_with_runtime_code(bundle_info: Mapping[str, Any], repo_root: Path) 
         }
     return {
         "runtime_loader_status": "PASS",
+        "validation_class": "LOCAL_SYNTHETIC_POINTER_FIXTURE_VALIDATION",
+        "fixture_scope": "temporary_local_bundle_only",
+        "real_candidate_schema_proof": False,
         "compatibility_report": report,
         "retrieval_smoke": retrieval_smoke,
     }

@@ -49,6 +49,14 @@ def _bundle(tmp_path: Path) -> tuple[Path, str]:
             }
         )
     )
+    fixture_pointer = bundle / "channels/production.json"
+    fixture_promotion = bundle / "releases" / release / "promotion/fixture.json"
+    sidecar = bundle / "releases" / release / "unlisted-sidecar.json"
+    fixture_pointer.parent.mkdir(parents=True)
+    fixture_pointer.write_bytes(b'{"validation_fixture_only":true}\n')
+    fixture_promotion.parent.mkdir(parents=True)
+    fixture_promotion.write_bytes(b'{"validation_fixture_only":true}\n')
+    sidecar.write_bytes(b'{"unlisted":true}\n')
     return bundle, manifest.relative_to(bundle).as_posix()
 
 
@@ -65,6 +73,9 @@ def test_manifest_is_deferred_until_explicit_finalization(tmp_path: Path) -> Non
     assert artifacts["manifest_deferred"] is True
     assert store.head(manifest_key) is None
     assert len(artifacts["uploaded"]) == 1
+    assert store.head("channels/production.json") is None
+    assert store.head("releases/candidate-test-release/promotion/fixture.json") is None
+    assert store.head("releases/candidate-test-release/unlisted-sidecar.json") is None
 
     finalized = subject.finalize_candidate_manifest(store, bundle, manifest_key)
     assert finalized["created"] is True

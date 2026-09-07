@@ -140,11 +140,25 @@ class Qdrant:
             raise SystemExit(f"Qdrant non-ok response at {path}: {payload.get('status')}")
         return payload
 
-    def collection_path(self) -> str:
-        return f"/collections/{quote(QDRANT_COLLECTION, safe='')}"
+    def collection_path(self, collection_name: str = QDRANT_COLLECTION) -> str:
+        return f"/collections/{quote(collection_name, safe='')}"
 
-    def snapshot(self) -> dict[str, Any] | None:
-        payload = self.request("GET", self.collection_path())
+    def aliases_for(self, collection_name: str) -> list[str]:
+        payload = self.request("GET", "/aliases")
+        result = payload.get("result")
+        aliases = result.get("aliases") if isinstance(result, Mapping) else None
+        if not isinstance(aliases, list):
+            raise SystemExit("Qdrant alias census response is malformed")
+        return sorted(
+            str(row["alias_name"])
+            for row in aliases
+            if isinstance(row, Mapping)
+            and row.get("collection_name") == collection_name
+            and isinstance(row.get("alias_name"), str)
+        )
+
+    def snapshot(self, collection_name: str = QDRANT_COLLECTION) -> dict[str, Any] | None:
+        payload = self.request("GET", self.collection_path(collection_name))
         if payload.get("status") == "missing":
             return None
         result = payload.get("result")
@@ -450,6 +464,28 @@ def build_active_sync_evidence(
     }
 
 
+def build_production_census(
+    store: ObjectStore,
+    qdrant: Qdrant,
+    bundle_root: Path,
+    bundle_info: Mapping[str, Any],
+) -> dict[str, Any]:
+    sync = build_active_sync_evidence(store, bundle_root, bundle_info)
+    return {
+        "pointer_key": sync["production_pointer_key"],
+        "pointer_sha256": sync["production_pointer_sha256"],
+        "release_id": sync["active_release_id"],
+        "production_manifest_key": sync["active_production_manifest_key"],
+        "production_manifest_sha256": sync["active_production_manifest_sha256"],
+        "candidate_manifest_key": sync["active_candidate_manifest_key"],
+        "candidate_manifest_sha256": sync["active_candidate_manifest_sha256"],
+        "qdrant_collection": sync["active_qdrant_collection"],
+        "qdrant_collection_snapshot": qdrant.snapshot(sync["active_qdrant_collection"]),
+        "qdrant_aliases": qdrant.aliases_for(sync["active_qdrant_collection"]),
+        "deployment_identity": "not_observable_from_bounded_ingestion_path",
+    }
+
+
 def read_json_bytes(data: bytes) -> dict[str, Any]:
     value = json.loads(data)
     if not isinstance(value, dict):
@@ -580,7 +616,14 @@ def main() -> int:
     bundle_root = Path(str(bundle_info["bundle_root"]))
     settings = Settings.from_env()
     store = create_object_store(settings)
+    qdrant = Qdrant(require_env("QDRANT_URL"), require_env("QDRANT_API_KEY"))
     initial_sync = build_active_sync_evidence(store, bundle_root, bundle_info)
+    production_before = build_production_census(
+        store,
+        qdrant,
+        bundle_root,
+        bundle_info,
+    )
     sections = load_materialization_sections(bundle_root)
     points, point_ids_sha, expected_aggregate = build_points(sections)
 
@@ -595,7 +638,6 @@ def main() -> int:
         str(bundle_info["manifest_key"]),
     )
 
-    qdrant = Qdrant(require_env("QDRANT_URL"), require_env("QDRANT_API_KEY"))
     collection_action, before, after_create = qdrant.ensure_collection()
     qdrant.validate_collection_shape(after_create)
     if after_create.get("points_count") not in (0, EXPECTED_SEMANTIC_COUNT):
@@ -612,11 +654,28 @@ def main() -> int:
     qdrant.validate_collection_shape(final_snapshot)
     if final_snapshot.get("points_count") != EXPECTED_SEMANTIC_COUNT:
         raise SystemExit(f"Qdrant final point count mismatch: {final_snapshot}")
+    pre_finalize_sync = build_active_sync_evidence(store, bundle_root, bundle_info)
+    production_pre_finalize = build_production_census(
+        store,
+        qdrant,
+        bundle_root,
+        bundle_info,
+    )
+    if pre_finalize_sync != initial_sync or production_pre_finalize != production_before:
+        raise SystemExit("production authority drifted before candidate manifest finalization")
     manifest = finalize_candidate_manifest(
         store,
         bundle_root,
         str(bundle_info["manifest_key"]),
     )
+    production_after = build_production_census(
+        store,
+        qdrant,
+        bundle_root,
+        bundle_info,
+    )
+    if production_after != production_before:
+        raise SystemExit("production authority changed during candidate materialization")
 
     receipt = {
         "schema_version": RECEIPT_SCHEMA,
@@ -641,6 +700,16 @@ def main() -> int:
             "runtime_compatibility_mismatch_counts": validation["compatibility_report"].get(
                 "mismatch_counts"
             ),
+        },
+        "qualification": {
+            "REAL_CANDIDATE_SCHEMA_AND_ARTIFACT_QUALIFICATION": {
+                **bundle_info["real_candidate_qualification"],
+                "immutable_remote_artifact_count": r2_artifacts["total_artifact_files"],
+                "immutable_remote_manifest_verified": manifest["verified_exact"],
+                "qdrant_full_readback_count": readback["point_count"],
+                "qdrant_payload_eligibility_verified": True,
+            },
+            "LOCAL_SYNTHETIC_POINTER_FIXTURE_VALIDATION": validation,
         },
         "lexical_candidate": bundle_info["section_identity"],
         "deterministic_sync": {
@@ -708,6 +777,10 @@ def main() -> int:
             "access_mutations": 0,
             "public_traffic_mutations": 0,
             "merge_actions": 0,
+            "before": production_before,
+            "pre_finalize": production_pre_finalize,
+            "after": production_after,
+            "before_equals_after": True,
         },
     }
     if not receipt["lexical_qdrant_parity"]["exact_section_id_set_equal"]:

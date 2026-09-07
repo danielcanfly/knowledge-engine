@@ -23,6 +23,10 @@ on:
         description: UTC observation time for the fresh census
         required: true
         type: string
+      blog_file_identity_sha256:
+        description: Canonical SHA256 of fresh per-file blog identities
+        required: true
+        type: string
   repository_dispatch:
     types:
       - m26_e4_source_archive_materialize
@@ -123,8 +127,11 @@ jobs:
           except (TypeError, ValueError) as exc:
               raise SystemExit('fresh English source count is malformed') from exc
           observed_at = census.get('blog_census_observed_at')
+          file_identity_sha256 = census.get('blog_file_identity_sha256')
           if not isinstance(observed_at, str) or not observed_at.endswith('Z'):
               raise SystemExit('fresh source census observation time is missing')
+          if not isinstance(file_identity_sha256, str) or len(file_identity_sha256) != 64:
+              raise SystemExit('fresh source file identity digest is malformed')
           if content_tree != os.environ['EXPECTED_BLOG_CONTENT_TREE_SHA']:
               raise SystemExit('published blog content tree drifted')
           if series_blob != os.environ['EXPECTED_BLOG_SERIES_BLOB_SHA']:
@@ -140,6 +147,7 @@ jobs:
               'content_authority_commit_sha': os.environ['EXPECTED_BLOG_SOURCE_SHA'],
               'english_published_source_count': english_count,
               'duplicate_path_count': 0,
+              'fresh_blog_file_identity_sha256': file_identity_sha256,
               'candidate_source_archive_head_sha': os.environ['EXPECTED_SOURCE_HEAD_SHA'],
               'observed_at': observed_at,
               'observation_transport': 'authorized_dispatch_input',
@@ -184,6 +192,7 @@ jobs:
           import json
           import os
           import pathlib
+          import sys
           import urllib.error
           import urllib.request
           import zipfile
@@ -247,6 +256,31 @@ jobs:
               raise SystemExit('source archive release_id mismatch')
           if release.get('candidate_only') is not True or release.get('production_pointer_authorized') is not False:
               raise SystemExit('source release authority mismatch')
+          sys.path.insert(0, str(pathlib.Path.cwd()))
+          from scripts.m26_e4_build_runtime_bundle import build_source_archive_identity
+
+          archive_identity = build_source_archive_identity(pack)
+          census = event.get('inputs') or event.get('client_payload') or {}
+          fresh_identity_sha256 = census.get('blog_file_identity_sha256')
+          if archive_identity['rows_sha256'] != fresh_identity_sha256:
+              raise SystemExit('fresh blog/archive per-file identity digest mismatch')
+          census_path = pathlib.Path('/tmp/m26-e4-source-census.json')
+          census_report = json.loads(census_path.read_text(encoding='utf-8'))
+          census_report['source_archive'] = {
+              **archive_identity,
+              'archive_zip_sha256': archive_sha,
+              'archive_zip_bytes': len(data),
+          }
+          census_report['cross_credential_source_equivalence'] = {
+              'status': 'PASS',
+              'exact_per_file_identity_equal': True,
+              'fresh_blog_file_identity_sha256': fresh_identity_sha256,
+              'source_archive_file_identity_sha256': archive_identity['rows_sha256'],
+          }
+          census_path.write_text(
+              json.dumps(census_report, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
           print('M26_E4_MATERIALIZER_SOURCE_IDENTITY_PASS')
           print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data)}, sort_keys=True))
           PY
