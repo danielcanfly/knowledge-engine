@@ -7,12 +7,11 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_engine import m26_ask_api
 from knowledge_engine import m26_active_production_dense as dense
+from knowledge_engine import m26_ask_api
 from knowledge_engine.m26_active_production_release import ActiveProductionRelease
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import PA7ArbitraryQueryError
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
-
 
 ROOT = Path(__file__).resolve().parents[1]
 GATE_PATH = ROOT / "pilot/m26/m26-pa-7-resolved-production-gate.json"
