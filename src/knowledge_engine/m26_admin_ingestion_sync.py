@@ -29,11 +29,12 @@ def build_manifest_diff(
 ) -> dict[str, list[str]]:
     source = {str(item["document_id"]): str(item["digest"]) for item in documents}
     active = {str(key): str(value) for key, value in active_document_digests.items()}
+    shared = source.keys() & active.keys()
     return {
         "added": sorted(set(source) - set(active)),
-        "changed": sorted(key for key in source.keys() & active.keys() if source[key] != active[key]),
+        "changed": sorted(key for key in shared if source[key] != active[key]),
         "removed": sorted(set(active) - set(source)),
-        "unchanged": sorted(key for key in source.keys() & active.keys() if source[key] == active[key]),
+        "unchanged": sorted(key for key in shared if source[key] == active[key]),
     }
 
 
