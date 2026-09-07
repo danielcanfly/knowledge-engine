@@ -30,6 +30,8 @@ jobs:
           ruff check \
             src/knowledge_engine/m26_active_production_release.py \
             src/knowledge_engine/m26_production_answer_bundle.py \
+            src/knowledge_engine/m26_active_release_dense.py \
+            src/knowledge_engine/m26_ask_api.py \
             src/knowledge_engine/m26_admin_contract.py \
             src/knowledge_engine/m26_admin_ingestion.py \
             src/knowledge_engine/m26_admin_ingestion_sync.py \
@@ -37,6 +39,8 @@ jobs:
             src/knowledge_engine/m26_ingestion_candidate_qdrant.py \
             tests/test_m26_active_production_release.py \
             tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_active_release_dense.py \
+            tests/test_m26_ask_active_release_dense_wiring.py \
             tests/test_m26_admin_control_plane.py \
             tests/test_m26_admin_ingestion.py \
             tests/test_m26_admin_ingestion_sync.py \
@@ -49,6 +53,8 @@ jobs:
           pytest -q \
             tests/test_m26_active_production_release.py \
             tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_active_release_dense.py \
+            tests/test_m26_ask_active_release_dense_wiring.py \
             tests/test_m26_admin_control_plane.py \
             tests/test_m26_admin_ingestion.py \
             tests/test_m26_admin_ingestion_sync.py \
