@@ -66,7 +66,8 @@ jobs:
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_REGION: auto
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CLOUDFLARE_AI_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN || secrets.CF_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL || vars.QDRANT_ENDPOINT || secrets.QDRANT_ENDPOINT }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY || secrets.QDRANT_WRITE_API_KEY || secrets.QDRANT_API_KEY_WRITE }}
       KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
@@ -94,7 +95,7 @@ jobs:
               'R2_ACCESS_KEY_ID',
               'R2_SECRET_ACCESS_KEY',
               'CLOUDFLARE_ACCOUNT_ID',
-              'CLOUDFLARE_API_TOKEN',
+              'CLOUDFLARE_AI_TOKEN',
               'QDRANT_URL',
               'QDRANT_API_KEY',
           ]
