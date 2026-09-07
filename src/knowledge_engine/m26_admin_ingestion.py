@@ -108,6 +108,16 @@ def _begin_operation(request: Request, payload: Any) -> tuple[str, bool]:
     )
 
 
+def _begin_stateful_operation(request: Request, payload: Any) -> Any:
+    return request.app.state.admin_idempotency.begin_stateful(
+        actor_id=actor_from(request).actor_id,
+        method=request.method,
+        path=request.url.path,
+        idempotency_key=request.headers.get("idempotency-key", ""),
+        request_payload=payload,
+    )
+
+
 def _accepted(
     request: Request,
     operation_id: str,
@@ -195,16 +205,27 @@ def _router() -> APIRouter:
         # not a new authority surface.
         _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
         payload = body.model_dump()
-        operation_id, replayed = _begin_operation(request, payload)
-        if replayed:
-            return _accepted(request, operation_id, True)
-        adapter = _adapter(request)
-        sync = require_sync_adapter(adapter)
-        _audit(request, "ingestion.sync", operation_id, "ADMIN_INGESTION_SYNC_ACCEPTED")
-        result = sync(operation_id, body)
+        coordinator = request.app.state.admin_idempotency
+        lease = _begin_stateful_operation(request, payload)
+        if lease.replayed:
+            return _accepted(request, lease.operation_id, True)
+        try:
+            adapter = _adapter(request)
+            sync = require_sync_adapter(adapter)
+            _audit(
+                request,
+                "ingestion.sync",
+                lease.operation_id,
+                "ADMIN_INGESTION_SYNC_ACCEPTED",
+            )
+            result = sync(lease.operation_id, body)
+        except Exception:
+            coordinator.fail_stateful(lease)
+            raise
+        coordinator.succeed_stateful(lease)
         return _accepted(
             request,
-            operation_id,
+            lease.operation_id,
             False,
             result=result if isinstance(result, dict) else None,
         )
