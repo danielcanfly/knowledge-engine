@@ -324,9 +324,21 @@ def test_safe_abstention_terminal(client: TestClient, monkeypatch: pytest.Monkey
 
 
 def test_cors_allows_configured_origin_and_rejects_invalid_origin(client: TestClient) -> None:
-    allowed = client.options("/v1/answers", headers={"origin": "https://danielcanfly.com"})
+    allowed = client.options(
+        "/v1/answers",
+        headers={
+            "origin": "https://danielcanfly.com",
+            "access-control-request-method": "POST",
+            "access-control-request-headers": "content-type,x-m26-owner-bypass",
+        },
+    )
     assert allowed.status_code == 204
     assert allowed.headers["access-control-allow-origin"] == "https://danielcanfly.com"
+    allowed_headers = {
+        item.strip().casefold()
+        for item in allowed.headers["access-control-allow-headers"].split(",")
+    }
+    assert {"content-type", "x-m26-owner-bypass"} <= allowed_headers
     rejected = client.post(
         "/v1/answers",
         headers={"origin": "https://evil.example"},

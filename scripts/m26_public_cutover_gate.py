@@ -87,7 +87,7 @@ def main() -> int:
         headers={
             "Origin": args.origin,
             "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "content-type",
+            "Access-Control-Request-Headers": "content-type, x-m26-owner-bypass",
         },
         timeout=args.timeout,
     )
@@ -103,6 +103,18 @@ def main() -> int:
     )
     if allow_origin != args.origin:
         raise ValueError("CORS preflight did not return the requested production origin")
+    allow_headers = next(
+        (
+            value.casefold()
+            for key, value in cors_headers.items()
+            if key.casefold() == "access-control-allow-headers"
+        ),
+        "",
+    )
+    required_headers = {"content-type", "x-m26-owner-bypass"}
+    observed_headers = {item.strip() for item in allow_headers.split(",") if item.strip()}
+    if not required_headers.issubset(observed_headers):
+        raise ValueError("CORS preflight does not allow the live frontend request headers")
 
     answer_status, _, answer_body = _request(
         args.answers_url,

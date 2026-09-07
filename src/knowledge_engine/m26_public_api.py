@@ -68,6 +68,7 @@ FALLBACK_DAILY_LIMIT = 10
 PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS = 2
 PUBLIC_REQUEST_SCHEMA = "danielcanfly-answers-request/v1"
 PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"
+OWNER_BYPASS_HEADER = "x-m26-owner-bypass"
 
 ALLOWED_FIELDS = {"question"}
 FORBIDDEN_SELECTION_FIELDS = {"provider", "model"}
@@ -985,7 +986,7 @@ def _preflight_headers(*, origin: str | None) -> dict[str, str]:
     headers.update(
         {
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "content-type",
+            "Access-Control-Allow-Headers": f"content-type, {OWNER_BYPASS_HEADER}",
             "Access-Control-Max-Age": "300",
         }
     )
