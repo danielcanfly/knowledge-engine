@@ -1,16 +1,21 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 
-import knowledge_engine.m26_active_production_dense as dense
+from knowledge_engine import m26_ask_api
+from knowledge_engine import m26_active_production_dense as dense
 from knowledge_engine.m26_active_production_release import ActiveProductionRelease
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import PA7ArbitraryQueryError
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
 
 
+ROOT = Path(__file__).resolve().parents[1]
+GATE_PATH = ROOT / "pilot/m26/m26-pa-7-resolved-production-gate.json"
 SUCCESSOR_RELEASE_ID = "m26-successor-release"
 SUCCESSOR_COLLECTION = "m26_successor_dense"
 SUCCESSOR_SOURCE_SHA = "a" * 40
@@ -180,3 +185,54 @@ def test_remote_dense_required_config_does_not_require_collection_env(
     channel = dense.production_dense_channel_from_env(require_remote=True)
 
     assert channel is not None
+
+
+def test_query_route_injects_pointer_bound_dense_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owner_subject_hash = "9" * 64
+    backend_token = "route-dense-test-token"
+    sentinel_channel = object()
+    observed: dict[str, Any] = {}
+
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", owner_subject_hash)
+    monkeypatch.setenv("M26_QUERY_BACKEND_TOKEN", backend_token)
+
+    def fake_channel_from_env(*, require_remote: bool = False) -> object:
+        observed["require_remote"] = require_remote
+        return sentinel_channel
+
+    def fake_run_owner_query_for_web(**kwargs: Any) -> dict[str, Any]:
+        observed.update(kwargs)
+        return {"status": "ok", "route_binding": "pointer_bound_dense"}
+
+    monkeypatch.setattr(
+        m26_ask_api,
+        "production_dense_channel_from_env",
+        fake_channel_from_env,
+    )
+    monkeypatch.setattr(
+        m26_ask_api,
+        "run_owner_query_for_web",
+        fake_run_owner_query_for_web,
+    )
+
+    app = m26_ask_api.create_app(
+        root=ROOT,
+        gate_path=GATE_PATH,
+        require_remote_dense=True,
+    )
+    response = TestClient(app).post(
+        "/api/m26/query",
+        headers={
+            "authorization": f"Bearer {backend_token}",
+            "x-m26-owner-subject-hash": owner_subject_hash,
+        },
+        json={"question": "Which active production dense collection should be used?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["route_binding"] == "pointer_bound_dense"
+    assert observed["require_remote"] is True
+    assert observed["dense_channel"] is sentinel_channel
+    assert observed["require_remote_dense"] is True
