@@ -782,6 +782,16 @@ def _terminal_event_from_dto(dto: Mapping[str, Any]) -> dict[str, Any]:
             "citations": _public_citations(dto.get("citations")),
             "sources": _public_sources(dto.get("sources")),
             "claims": _public_claims(dto.get("answer_claims")),
+            # Preserve the evidence-aware material for the post-response QA
+            # evaluator; these fields remain ephemeral and are not persisted
+            # for PASS events.
+            "selected_evidence": dto.get("selected_evidence", []),
+            "evidence_utilization_trace": dto.get("evidence_utilization_trace", {}),
+            "semantic_closure": dto.get("semantic_closure", {}),
+            "retrieval": dto.get("retrieval", {}),
+            "integrity": dto.get("integrity", {}),
+            "identities": dto.get("identities", {}),
+            "canonical_runtime": dto.get("canonical_runtime", {}),
             "provider_routing": _public_provider_routing(dto),
         }
     return {

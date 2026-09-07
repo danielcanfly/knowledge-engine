@@ -4,6 +4,7 @@ import json
 import os
 import time
 from collections.abc import Callable, Mapping
+from decimal import Decimal
 from functools import lru_cache
 from typing import Any
 
@@ -23,6 +24,11 @@ from .m26_admin_qa import (
     install_admin_qa,
 )
 from .qa_answer_quality import submit_answer_capture
+from .qa_answer_quality_evaluator import (
+    AnswerQualitySemanticEvaluator,
+    ProviderAnswerQualityEvaluator,
+    UnavailableAnswerQualityEvaluator,
+)
 from .qa_answer_quality_sqlite import SqliteQaRepository
 from .storage import create_object_store
 
@@ -44,6 +50,22 @@ class QaExportRequest(BaseModel):
 @lru_cache(maxsize=1)
 def qa_repository_from_env() -> SqliteQaRepository:
     return SqliteQaRepository(create_object_store(Settings.from_env()))
+
+
+@lru_cache(maxsize=1)
+def qa_evaluator_from_env() -> AnswerQualitySemanticEvaluator:
+    """Reuse the qualified M26 reviewer client and fail closed when unconfigured."""
+    api_key = os.environ.get("MINIMAX_API_KEY", "").strip()
+    if not api_key:
+        return UnavailableAnswerQualityEvaluator()
+    from .m26_pa5_v8_live import MODEL, MiniMaxClient
+
+    client = MiniMaxClient(api_key, max_calls=20_000, max_cost=Decimal("100"))
+    return ProviderAnswerQualityEvaluator(
+        client,
+        provider_name="minimax",
+        model=MODEL,
+    )
 
 
 class RepositoryQaEventSource:
@@ -112,9 +134,11 @@ class QaAnswerCaptureMiddleware:
         app: ASGIApp,
         *,
         repository_provider: Callable[[], SqliteQaRepository],
+        evaluator_provider: Callable[[], AnswerQualitySemanticEvaluator],
     ) -> None:
         self.app = app
         self.repository_provider = repository_provider
+        self.evaluator_provider = evaluator_provider
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (
@@ -223,6 +247,7 @@ class QaAnswerCaptureMiddleware:
                 latency_ms=latency_ms,
                 country=_trusted_country(scope),
                 trace=trace,
+                evaluator=self.evaluator_provider(),
             )
         except Exception:
             return
@@ -312,9 +337,7 @@ def _error_reason_codes(error: Mapping[str, Any] | None) -> list[str]:
 
 def _legacy_event(event: Mapping[str, Any]) -> dict[str, Any]:
     release = (
-        event.get("release_identity")
-        if isinstance(event.get("release_identity"), Mapping)
-        else {}
+        event.get("release_identity") if isinstance(event.get("release_identity"), Mapping) else {}
     )
     failure_trace = (
         event.get("failure_trace") if isinstance(event.get("failure_trace"), Mapping) else {}
@@ -352,6 +375,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         from_ts: str | None = None,
         to_ts: str | None = None,
         result: str | None = None,
+        evaluation_status: str | None = None,
         country: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
@@ -363,6 +387,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 from_ts=from_ts,
                 to_ts=to_ts,
                 result=result,
+                evaluation_status=evaluation_status,
                 country=country,
                 limit=max(1, min(limit, 500)),
                 cursor=cursor,
@@ -475,6 +500,7 @@ def install_qa_inbox(
     app: FastAPI,
     *,
     repository_provider: Callable[[], SqliteQaRepository] = qa_repository_from_env,
+    evaluator_provider: Callable[[], AnswerQualitySemanticEvaluator] = qa_evaluator_from_env,
 ) -> FastAPI:
     if getattr(app.state, "qa_answer_quality_inbox_installed", False):
         return app
@@ -484,7 +510,11 @@ def install_qa_inbox(
     if registry is not None:
         registry.register("POST", f"{QA_INBOX_PREFIX}/clusters/{{cluster_id}}/lifecycle")
         registry.register("POST", f"{QA_INBOX_PREFIX}/export-jsonl")
-    app.add_middleware(QaAnswerCaptureMiddleware, repository_provider=repository_provider)
+    app.add_middleware(
+        QaAnswerCaptureMiddleware,
+        repository_provider=repository_provider,
+        evaluator_provider=evaluator_provider,
+    )
     app.state.qa_answer_quality_inbox_installed = True
     return app
 
@@ -495,5 +525,6 @@ __all__ = [
     "QaAnswerCaptureMiddleware",
     "RepositoryQaEventSource",
     "install_qa_inbox",
+    "qa_evaluator_from_env",
     "qa_repository_from_env",
 ]

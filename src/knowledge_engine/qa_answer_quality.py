@@ -18,7 +18,9 @@ from pydantic import BaseModel, Field
 from .errors import ReleaseConflictError
 from .storage import ObjectStore, sha256_bytes
 
-ANSWER_QUALITY_RUBRIC_VERSION = "ANSWER_QUALITY_RUBRIC_v1"
+# Retained only for compatibility/debug callers. Production capture uses the
+# semantic evaluator's canonical rubric from qa_answer_quality_evaluator.py.
+ANSWER_QUALITY_RUBRIC_VERSION = "ANSWER_QUALITY_HEURISTIC_LEGACY_v0"
 ANSWER_QUALITY_PASS_THRESHOLD = 85
 QA_INDEX_SCHEMA = "knowledge-engine-answer-quality-index/v1"
 QA_EVENT_SCHEMA = "knowledge-engine-answer-quality-event/v1"
@@ -390,11 +392,15 @@ class QaRepository:
                 raise ValueError(f"invalid lifecycle transition: {current} -> {target}")
             if target == "IGNORED" and not reason:
                 raise ValueError("IGNORED requires a reason")
-            if target == "VERIFIED" and not (resolved_by_release or cluster.get("resolved_by_release")):
+            if target == "VERIFIED" and not (
+                resolved_by_release or cluster.get("resolved_by_release")
+            ):
                 raise ValueError("VERIFIED requires resolved_by_release")
             cluster["lifecycle"] = target
             if reason:
-                cluster["ignored_reason"] = reason if target == "IGNORED" else cluster.get("ignored_reason")
+                cluster["ignored_reason"] = (
+                    reason if target == "IGNORED" else cluster.get("ignored_reason")
+                )
             if resolved_by_release:
                 cluster["resolved_by_release"] = resolved_by_release
             return dict(cluster)
@@ -415,7 +421,9 @@ class QaRepository:
             if not eligible:
                 prepared.update({"created": False, "reason": "NO_NEW_FAILURES"})
                 return dict(prepared)
-            membership = [f"{item['cluster_id']}:{int(item.get('version', 1))}" for item in eligible]
+            membership = [
+                f"{item['cluster_id']}:{int(item.get('version', 1))}" for item in eligible
+            ]
             digest = hashlib.sha256("\n".join(membership).encode("utf-8")).hexdigest()[:20]
             batch_id = f"aqx_{digest}"
             export_key = f"{self.prefix}/exports/{batch_id}.jsonl"
@@ -435,11 +443,15 @@ class QaRepository:
                         "failure_stage": cluster.get("failure_stage"),
                         "failure_class": cluster.get("failure_class"),
                         "failure_signature": cluster.get("failure_signature"),
-                        "sample_trace_ids": list(cluster.get("sample_trace_ids", []))[:QA_MAX_SAMPLE_TRACES],
+                        "sample_trace_ids": list(cluster.get("sample_trace_ids", []))[
+                            :QA_MAX_SAMPLE_TRACES
+                        ],
                         "resolved_by_release": cluster.get("resolved_by_release"),
                     }
                 )
-            jsonl = "".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records)
+            jsonl = "".join(
+                json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records
+            )
             body = jsonl.encode("utf-8")
             try:
                 self.store.put(
@@ -502,8 +514,12 @@ def evaluate_answer_quality(*, question: str, response: Mapping[str, Any]) -> di
     directness = 15 if answer and not safe_abstention else (5 if safe_abstention else 0)
     correctness = 25 if material_support and unsupported == 0 else 0
     evidence_coverage = 15 if (selected_evidence or citations or source_cards) else 0
-    completeness = 15 if answer and len(answer) >= 80 and not safe_abstention else (8 if answer else 0)
-    citation_support = 15 if citations and locator_valid else (8 if source_cards and locator_valid else 0)
+    completeness = (
+        15 if answer and len(answer) >= 80 and not safe_abstention else (8 if answer else 0)
+    )
+    citation_support = (
+        15 if citations and locator_valid else (8 if source_cards and locator_valid else 0)
+    )
     safety = 15 if unsupported == 0 and material_support and locator_valid else 0
 
     hard_fail_reasons: list[str] = []
@@ -519,7 +535,11 @@ def evaluate_answer_quality(*, question: str, response: Mapping[str, Any]) -> di
         hard_fail_reasons.append("CITATION_LOCATOR_INVALID")
     if answer and not safe_abstention and not (citations or source_cards or selected_evidence):
         hard_fail_reasons.append("ANSWER_WITHOUT_MEANINGFUL_EVIDENCE")
-    if safe_abstention and not reason_codes and status_value not in {"not_found", "abstain", "safe_abstain"}:
+    if (
+        safe_abstention
+        and not reason_codes
+        and status_value not in {"not_found", "abstain", "safe_abstain"}
+    ):
         hard_fail_reasons.append("UNEXPLAINED_ABSTENTION")
 
     score = directness + correctness + evidence_coverage + completeness + citation_support + safety
@@ -565,30 +585,50 @@ def trusted_country_from_request(request: Request) -> str:
 
 
 def submit_answer_capture(
-    repository_provider: Callable[[], QaRepository],
+    repository_provider: Callable[[], Any],
     *,
     question: str,
     response: Mapping[str, Any],
     latency_ms: int,
     country: str,
     trace: Mapping[str, Any] | None = None,
+    evaluator: Any | None = None,
 ) -> bool:
+    # Capture is synchronous and compact; only semantic evaluation is queued.
+    # This guarantees queue pressure cannot erase the underlying query event.
+    repository = repository_provider()
+    event = repository.record_answer(
+        question=question,
+        response=response,
+        latency_ms=latency_ms,
+        country=country,
+        trace=trace,
+    )
     if not _CAPTURE_SLOTS.acquire(blocking=False):
+        repository.mark_not_evaluated(event["event_id"], reason_code="EVALUATION_QUEUE_SATURATED")
         return False
 
     def task() -> None:
         try:
-            repository_provider().record_answer(
-                question=question,
-                response=response,
-                latency_ms=latency_ms,
-                country=country,
-                trace=trace,
+            from .qa_answer_quality_evaluator import UnavailableAnswerQualityEvaluator
+
+            repository.evaluate_event(
+                event["event_id"],
+                evaluator=evaluator or UnavailableAnswerQualityEvaluator(),
+                answer_payload=response,
+                forensic_trace=trace,
             )
+        except Exception:
+            repository.mark_not_evaluated(event["event_id"], reason_code="CAPTURE_EVALUATION_ERROR")
         finally:
             _CAPTURE_SLOTS.release()
 
-    _CAPTURE_POOL.submit(task)
+    try:
+        _CAPTURE_POOL.submit(task)
+    except RuntimeError:
+        repository.mark_not_evaluated(event["event_id"], reason_code="EVALUATION_QUEUE_UNAVAILABLE")
+        _CAPTURE_SLOTS.release()
+        return False
     return True
 
 
@@ -604,7 +644,9 @@ def register_qa_answer_quality_routes(
     def admin_guard(principal: Any = Depends(principal_dependency)) -> Any:
         audiences = set(getattr(principal, "audiences", set()))
         if "internal" not in audiences:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="internal access required")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="internal access required"
+            )
         return principal
 
     @app.get("/v1/admin/qa/events")
@@ -629,14 +671,18 @@ def register_qa_answer_quality_routes(
                 cursor=cursor,
             )
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
 
     @app.get("/v1/admin/qa/events/{event_id}")
     def qa_event_detail(event_id: str, _principal: Any = Depends(admin_guard)) -> dict[str, Any]:
         try:
             return repository().get_event(event_id)
         except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QA event not found") from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="QA event not found"
+            ) from exc
 
     @app.get("/v1/admin/qa/summary")
     def qa_summary(
@@ -648,7 +694,9 @@ def register_qa_answer_quality_routes(
         try:
             return repository().summary(range_name=range_name, from_ts=from_ts, to_ts=to_ts)
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+            ) from exc
 
     @app.get("/v1/admin/qa/clusters")
     def qa_clusters(
@@ -671,7 +719,9 @@ def register_qa_answer_quality_routes(
                 resolved_by_release=update.resolved_by_release,
             )
         except KeyError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="QA cluster not found") from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="QA cluster not found"
+            ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
@@ -711,11 +761,17 @@ def _build_failure_trace(
             "country": event["country"],
             "release_identity": event["release_identity"],
             "index_identity": event["index_identity"],
-            "provider_path": response.get("provider_routing") or raw_trace.get("provider_routing") or {},
+            "provider_path": response.get("provider_routing")
+            or raw_trace.get("provider_routing")
+            or {},
             "retrieval": response.get("retrieval") or raw_trace.get("retrieval") or {},
-            "selected_evidence": response.get("selected_evidence") or raw_trace.get("selected_evidence") or [],
+            "selected_evidence": response.get("selected_evidence")
+            or raw_trace.get("selected_evidence")
+            or [],
             "synthesis_validation": {
-                "semantic_closure": response.get("semantic_closure") or raw_trace.get("semantic_closure") or {},
+                "semantic_closure": response.get("semantic_closure")
+                or raw_trace.get("semantic_closure")
+                or {},
                 "reason_codes": response.get("reason_codes") or raw_trace.get("reason_codes") or [],
                 "safe_abstention": response.get("safe_abstention"),
                 "answer": response.get("answer_text") or response.get("answer"),
@@ -743,7 +799,8 @@ def _redact(value: Any) -> Any:
         for key, item in value.items():
             normalized = str(key).casefold().replace("-", "_")
             if normalized in redacted or any(
-                marker in normalized for marker in ("secret", "password", "authorization", "cookie", "api_key")
+                marker in normalized
+                for marker in ("secret", "password", "authorization", "cookie", "api_key")
             ):
                 clean[str(key)] = "[REDACTED]"
             else:
@@ -770,8 +827,14 @@ def _dedupe_identity(question: str, response: Mapping[str, Any]) -> str:
 
 
 def _release_identity(response: Mapping[str, Any]) -> dict[str, Any]:
-    canonical = response.get("canonical_runtime") if isinstance(response.get("canonical_runtime"), Mapping) else {}
-    identities = response.get("identities") if isinstance(response.get("identities"), Mapping) else {}
+    canonical = (
+        response.get("canonical_runtime")
+        if isinstance(response.get("canonical_runtime"), Mapping)
+        else {}
+    )
+    identities = (
+        response.get("identities") if isinstance(response.get("identities"), Mapping) else {}
+    )
     return {
         "release_id": response.get("release_id") or identities.get("production_release_id"),
         "build_sha": canonical.get("build_sha"),
@@ -780,7 +843,9 @@ def _release_identity(response: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _index_identity(response: Mapping[str, Any]) -> dict[str, Any]:
-    identities = response.get("identities") if isinstance(response.get("identities"), Mapping) else {}
+    identities = (
+        response.get("identities") if isinstance(response.get("identities"), Mapping) else {}
+    )
     return {
         "manifest_sha256": identities.get("production_manifest_sha256"),
         "pointer_digest": identities.get("production_pointer_digest"),
@@ -813,7 +878,11 @@ def _failure_stage_and_class(
 ) -> tuple[str, str]:
     reasons = set(hard_fail_reasons)
     if "RUNTIME_OR_PROVIDER_FAILURE" in reasons:
-        provider = response.get("provider_routing") if isinstance(response.get("provider_routing"), Mapping) else {}
+        provider = (
+            response.get("provider_routing")
+            if isinstance(response.get("provider_routing"), Mapping)
+            else {}
+        )
         if provider:
             return "provider", "provider_contract_or_capacity"
         return "runtime", "runtime_failure"
