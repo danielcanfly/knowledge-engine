@@ -1,330 +1,80 @@
-name: M26 E4 Materialize Source Archive
+name: M26 BP4 Read-only Promotion Qualification
 
 on:
   workflow_dispatch:
-    inputs:
-      blog_repository_head_sha:
-        description: Fresh authoritative daniel-blog main SHA
-        required: true
-        type: string
-      blog_content_tree_sha:
-        description: Fresh src/content/blog tree SHA
-        required: true
-        type: string
-      blog_series_blob_sha:
-        description: Fresh src/utils/seriesMeta.ts blob SHA
-        required: true
-        type: string
-      blog_english_source_count:
-        description: Fresh published English source count
-        required: true
-        type: string
-      blog_census_observed_at:
-        description: UTC observation time for the fresh census
-        required: true
-        type: string
-      blog_file_identity_sha256:
-        description: Canonical SHA256 of fresh per-file blog identities
-        required: true
-        type: string
-  repository_dispatch:
-    types:
-      - m26_e4_source_archive_materialize
 
 permissions:
   contents: read
 
 concurrency:
-  group: m26-bp3-repaired-candidate-materialization-a738f20
+  group: m26-bp4-read-only-promotion-qualification
   cancel-in-progress: false
 
 jobs:
-  materialize:
+  qualify:
     runs-on: ubuntu-24.04
     environment: production
     env:
       APP_ENV: test
       AUTH_MODE: disabled
-      EXPECTED_SOURCE_HEAD_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
-      EXPECTED_BLOG_SOURCE_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
-      EXPECTED_BLOG_REPOSITORY_HEAD_SHA: 3475cb26eedb95ade52ff6341ad7a64218572139
-      EXPECTED_BLOG_CONTENT_TREE_SHA: 86c43fd02642087d773afd2614c6d4fb1c7c7bf2
-      EXPECTED_BLOG_SERIES_BLOB_SHA: f0d317928f2733f9ed72ca7a2411cc49062579b1
-      EXPECTED_SOURCE_ARCHIVE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
-      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp3r-${{ github.sha }}
-      CANDIDATE_ENGINE_COMMIT_SHA: ${{ github.sha }}
-      VECTOR_REUSE_COLLECTION: m26_blog_m26blog_ec79a3cad1d8_59012fe3818c_bp2_17a3f93b0b4ef72c525175743fe2efaf4618b726
-      VECTOR_REUSE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp2-17a3f93b0b4ef72c525175743fe2efaf4618b726
-      EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
-      EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
-      EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
-      EXPECTED_NODES_SHA256: 58540242ab29e3c884ef1c421f4d25f37c55df4657c045c19762c7b2435ce9a8
-      EXPECTED_EDGES_SHA256: 5e7951e70d6fd144ca0f7c7ff32fdb94ce95fb912ab036b5bcb53d29746679cb
-      EXPECTED_SOURCE_INDEX_SHA256: 3b63e70b99b25cc0e83a2ceb56bf8b515402f92774af0a839839abd6cb0b864f
       OBJECT_STORE_BACKEND: r2
       R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       R2_REGION: auto
-      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
-      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN || secrets.CF_API_TOKEN }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL || vars.QDRANT_ENDPOINT || secrets.QDRANT_ENDPOINT }}
-      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY || secrets.QDRANT_WRITE_API_KEY || secrets.QDRANT_API_KEY_WRITE }}
-      KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
+      QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+      QDRANT_READ_CREDENTIAL: ${{ secrets.QDRANT_READ_ONLY_API_KEY || secrets.QDRANT_API_KEY_READ || secrets.QDRANT_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install runtime dependencies
+      - name: Verify exact base and bounded repair surface
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse 24e99a3deb20beb3e4d2888c3143fcc75962aa05^{tree})" = 72d0e0969a6551ad15fa4947a524738b5176c5dc
+          git diff --name-only 24e99a3deb20beb3e4d2888c3143fcc75962aa05..HEAD > /tmp/bp4-paths.txt
+          diff -u <(printf '%s\n' \
+            '.github/workflows/m26-e4-materialize-source-archive.yml' \
+            'scripts/m26_bp4_read_only_qualify.py' \
+            'src/knowledge_engine/m26_production_promotion.py' \
+            'tests/test_m26_production_promotion.py') /tmp/bp4-paths.txt
+          printf '%s\n' BP4_EXACT_BASE_AND_BOUNDED_SURFACE_PASS
+      - name: Install exact-tip dependencies
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install -e .
-      - name: Validate materializer credentials are wired without revealing values
+          python -m pip install -e . pytest
+      - name: Run local promotion and rollback qualification
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
-          import json
-          import os
-
-          required = [
-              'R2_ENDPOINT_URL',
-              'R2_BUCKET',
-              'R2_ACCESS_KEY_ID',
-              'R2_SECRET_ACCESS_KEY',
-              'CLOUDFLARE_ACCOUNT_ID',
-              'CLOUDFLARE_AI_TOKEN',
-              'QDRANT_URL',
-              'QDRANT_API_KEY',
-          ]
-          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
-          payload = event.get('client_payload') or {}
-          archive_url = payload.get('archive_url')
-          if not archive_url:
-              required.append('KNOWLEDGE_SOURCE_READ_TOKEN')
-          missing = [name for name in required if not os.environ.get(name)]
-          if missing:
-              raise SystemExit('missing required materializer environment values: ' + ','.join(missing))
-          print('M26_E4_MATERIALIZER_ENV_WIRING_PASS')
-          PY
-      - name: Fresh census authoritative published blog source
+          mkdir -p /tmp/m26-bp4-qualification
+          PYTHONPATH=src pytest -q \
+            tests/test_m26_production_promotion.py \
+            tests/test_m26_active_production_release.py \
+            tests/test_m25_10_blog_production_promotion.py \
+            | tee /tmp/m26-bp4-qualification/test-transcript.txt
+      - name: Run fresh remote read-only census and dry-run planning
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
-          import json
-          import os
-          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
-          census = event.get('inputs') or event.get('client_payload') or {}
-          commit = census.get('blog_repository_head_sha')
-          if commit != os.environ['EXPECTED_BLOG_REPOSITORY_HEAD_SHA']:
-              raise SystemExit('authoritative blog main drifted after BP-2 plan')
-          content_tree = census.get('blog_content_tree_sha')
-          series_blob = census.get('blog_series_blob_sha')
-          try:
-              english_count = int(census.get('blog_english_source_count'))
-          except (TypeError, ValueError) as exc:
-              raise SystemExit('fresh English source count is malformed') from exc
-          observed_at = census.get('blog_census_observed_at')
-          file_identity_sha256 = census.get('blog_file_identity_sha256')
-          if not isinstance(observed_at, str) or not observed_at.endswith('Z'):
-              raise SystemExit('fresh source census observation time is missing')
-          if not isinstance(file_identity_sha256, str) or len(file_identity_sha256) != 64:
-              raise SystemExit('fresh source file identity digest is malformed')
-          if content_tree != os.environ['EXPECTED_BLOG_CONTENT_TREE_SHA']:
-              raise SystemExit('published blog content tree drifted')
-          if series_blob != os.environ['EXPECTED_BLOG_SERIES_BLOB_SHA']:
-              raise SystemExit('blog series catalog drifted')
-          if english_count != 180:
-              raise SystemExit(f'fresh English source census mismatch: {english_count}')
-          report = {
-              'schema_version': 'm26-bp2-fresh-source-census/v1',
-              'repository': 'danielcanfly/daniel-blog',
-              'repository_head_sha': commit,
-              'published_content_tree_sha': content_tree,
-              'series_catalog_blob_sha': series_blob,
-              'content_authority_commit_sha': os.environ['EXPECTED_BLOG_SOURCE_SHA'],
-              'english_published_source_count': english_count,
-              'duplicate_path_count': 0,
-              'fresh_blog_file_identity_sha256': file_identity_sha256,
-              'candidate_source_archive_head_sha': os.environ['EXPECTED_SOURCE_HEAD_SHA'],
-              'observed_at': observed_at,
-              'observation_transport': 'authorized_dispatch_input',
-          }
-          with open('/tmp/m26-e4-source-census.json', 'w', encoding='utf-8') as handle:
-              json.dump(report, handle, indent=2, sort_keys=True)
-              handle.write('\n')
-          print('M26_BP2_FRESH_SOURCE_CENSUS_PASS')
-          print(json.dumps(report, sort_keys=True))
-          PY
-      - name: Validate materialization payload and mask archive URL
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
-          import json
-          import os
-          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
-          payload = event.get('client_payload') or {}
-          archive_url = payload.get('archive_url') or (
-              'https://api.github.com/repos/danielcanfly/knowledge-source/zipball/'
-              + os.environ['EXPECTED_SOURCE_HEAD_SHA']
+          python scripts/m26_bp4_read_only_qualify.py \
+            --output-dir /tmp/m26-bp4-qualification \
+            | tee /tmp/m26-bp4-qualification/qualification-transcript.txt
+          (
+            cd /tmp/m26-bp4-qualification
+            find . -maxdepth 1 -type f ! -name CHECKSUMS.sha256 -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > CHECKSUMS.sha256
+            sha256sum --check CHECKSUMS.sha256
           )
-          print(f'::add-mask::{archive_url}')
-          source_head_sha = payload.get('source_head_sha') or os.environ['EXPECTED_SOURCE_HEAD_SHA']
-          release_id = payload.get('release_id') or os.environ['EXPECTED_RELEASE_ID']
-          mode = payload.get('mode') or 'materialize'
-          if source_head_sha != os.environ['EXPECTED_SOURCE_HEAD_SHA']:
-              raise SystemExit('source_head_sha mismatch')
-          if release_id != os.environ['EXPECTED_RELEASE_ID']:
-              raise SystemExit('release_id mismatch')
-          if mode != 'materialize':
-              raise SystemExit('materializer requires mode=materialize')
-          print('M26_E4_MATERIALIZER_PAYLOAD_ACCEPTED')
-          PY
-      - name: Download exact source archive and fail closed on identity
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
-          import hashlib
-          import json
-          import os
-          import pathlib
-          import sys
-          import urllib.error
-          import urllib.request
-          import zipfile
-
-          event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
-          payload = event.get('client_payload') or {}
-          archive_url = payload.get('archive_url') or (
-              'https://api.github.com/repos/danielcanfly/knowledge-source/zipball/'
-              + os.environ['EXPECTED_SOURCE_HEAD_SHA']
-          )
-          print(f'::add-mask::{archive_url}')
-          token = os.environ.get('KNOWLEDGE_SOURCE_READ_TOKEN')
-          headers = {
-              'User-Agent': 'm26-e4-materializer',
-              'Accept': 'application/vnd.github+json',
-          }
-          if token:
-              print(f'::add-mask::{token}')
-              headers['Authorization'] = f'Bearer {token}'
-          elif 'api.github.com/repos/danielcanfly/knowledge-source/' in archive_url:
-              raise SystemExit('missing KNOWLEDGE_SOURCE_READ_TOKEN for private source archive API')
-          req = urllib.request.Request(archive_url, headers=headers)
-          try:
-              with urllib.request.urlopen(req, timeout=180) as response:
-                  data = response.read()
-          except urllib.error.HTTPError as exc:
-              raise SystemExit(f'source archive download failed: HTTP {exc.code}') from exc
-          zpath = pathlib.Path('/tmp/m26-e4-source.zip')
-          zpath.write_bytes(data)
-          archive_sha = hashlib.sha256(data).hexdigest()
-          extract = pathlib.Path('/tmp/m26-e4-source')
-          if extract.exists():
-              import shutil; shutil.rmtree(extract)
-          with zipfile.ZipFile(zpath) as zf:
-              bad = zf.testzip()
-              if bad:
-                  raise SystemExit(f'zip integrity failure at {bad}')
-              zf.extractall(extract)
-          roots = [p for p in extract.iterdir() if p.is_dir()]
-          if len(roots) != 1:
-              raise SystemExit(f'unexpected root count {len(roots)}')
-          pack = roots[0] / 'documents' / 'daniel-blog-en-180-f5e20062'
-          cand = pack / 'candidate-release'
-          files = {
-              'semantic_inputs': cand / 'semantic-inputs.jsonl',
-              'lexical_documents': cand / 'lexical-documents.jsonl',
-              'provenance': cand / 'provenance.jsonl',
-              'nodes': pack / 'candidate-nodes.jsonl',
-              'edges': pack / 'candidate-edges.jsonl',
-              'source_index': cand / 'source-index.json',
-          }
-          for key, path in files.items():
-              if not path.is_file():
-                  raise SystemExit(f'missing {key}')
-              observed = hashlib.sha256(path.read_bytes()).hexdigest()
-              expected = os.environ['EXPECTED_' + key.upper() + '_SHA256']
-              if observed != expected:
-                  raise SystemExit(f'{key} sha mismatch')
-          release = json.loads((cand / 'release-manifest.json').read_text(encoding='utf-8'))
-          if release.get('release_id') != os.environ['EXPECTED_SOURCE_ARCHIVE_RELEASE_ID']:
-              raise SystemExit('source archive release_id mismatch')
-          if release.get('candidate_only') is not True or release.get('production_pointer_authorized') is not False:
-              raise SystemExit('source release authority mismatch')
-          sys.path.insert(0, str(pathlib.Path.cwd()))
-          from scripts.m26_e4_build_runtime_bundle import build_source_archive_identity
-
-          archive_identity = build_source_archive_identity(pack)
-          census = event.get('inputs') or event.get('client_payload') or {}
-          fresh_identity_sha256 = census.get('blog_file_identity_sha256')
-          if archive_identity['rows_sha256'] != fresh_identity_sha256:
-              raise SystemExit('fresh blog/archive per-file identity digest mismatch')
-          census_path = pathlib.Path('/tmp/m26-e4-source-census.json')
-          census_report = json.loads(census_path.read_text(encoding='utf-8'))
-          census_report['source_archive'] = {
-              **archive_identity,
-              'archive_zip_sha256': archive_sha,
-              'archive_zip_bytes': len(data),
-          }
-          census_report['cross_credential_source_equivalence'] = {
-              'status': 'PASS',
-              'exact_per_file_identity_equal': True,
-              'fresh_blog_file_identity_sha256': fresh_identity_sha256,
-              'source_archive_file_identity_sha256': archive_identity['rows_sha256'],
-          }
-          census_path.write_text(
-              json.dumps(census_report, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
-          )
-          print('M26_E4_MATERIALIZER_SOURCE_IDENTITY_PASS')
-          print(json.dumps({'archive_sha256': archive_sha, 'archive_bytes': len(data)}, sort_keys=True))
-          PY
-      - name: Materialize isolated R2 bundle and Qdrant collection
-        run: |
-          set -euo pipefail
-          python scripts/m26_e4_materialize_runtime_successor.py \
-            --source-extract /tmp/m26-e4-source \
-            --output-dir /tmp/m26-e4-materialization-first \
-            --repo-root .
-      - name: Exact replay requires zero candidate writes
-        run: |
-          set -euo pipefail
-          python scripts/m26_e4_materialize_runtime_successor.py \
-            --source-extract /tmp/m26-e4-source \
-            --output-dir /tmp/m26-e4-materialization-replay \
-            --repo-root .
-          python - <<'PY'
-          import json
-          receipt = json.load(open('/tmp/m26-e4-materialization-replay/m26-e4-isolated-materialization-receipt.json', encoding='utf-8'))
-          mutations = receipt['candidate_mutations']
-          expected = {
-              'r2_artifact_creates': 0,
-              'r2_manifest_creates': 0,
-              'qdrant_collection_creates': 0,
-              'qdrant_payload_index_creates': 0,
-              'qdrant_upsert_batches': 0,
-          }
-          observed = {key: mutations.get(key) for key in expected}
-          if observed != expected:
-              raise SystemExit(f'exact replay performed candidate writes: {observed}')
-          print('M26_BP3_REPAIRED_CANDIDATE_EXACT_REPLAY_ZERO_WRITES_PASS')
-          PY
-      - name: Upload materialization receipt
+      - name: Upload qualification evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: m26-e4-isolated-materialization
-          path: |
-            /tmp/m26-e4-materialization-first/m26-e4-isolated-materialization-receipt.json
-            /tmp/m26-e4-materialization-replay/m26-e4-isolated-materialization-receipt.json
-            /tmp/m26-e4-source-census.json
-          if-no-files-found: warn
+          name: m26-bp4-read-only-promotion-qualification
+          path: /tmp/m26-bp4-qualification/
+          if-no-files-found: error
           retention-days: 14
