@@ -703,6 +703,55 @@ class SqliteQaRepository:
                 detail["failure_trace"] = {"unavailable": True, "trace_key": trace_key}
         return detail
 
+    def record_suggested_questions_evaluation(
+        self,
+        event_id: str,
+        *,
+        status: str,
+        score: int | None,
+        result: str | None,
+        rubric_version: str,
+        promotion_id: str,
+        production_published: bool = False,
+        publication_revision: str | None = None,
+    ) -> dict[str, Any]:
+        allowed_statuses = {"not_evaluated", "ineligible", "eligible", "evaluated_rejected", "published"}
+        normalized_status = str(status).strip().casefold()
+        if normalized_status not in allowed_statuses:
+            raise ValueError("invalid Suggested Questions evaluation status")
+        if score is not None and (isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 100):
+            raise ValueError("Suggested Questions score must be an integer from 0 to 100")
+        if result is not None and result not in {"pass", "fail"}:
+            raise ValueError("Suggested Questions result must be pass or fail")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT suggested_questions_json FROM qa_events WHERE event_id=?",
+                (event_id,),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                raise KeyError(event_id)
+            payload = _load(row["suggested_questions_json"], {})
+            payload.update(
+                {
+                    "evaluation_status": normalized_status,
+                    "score": score,
+                    "result": result,
+                    "rubric": rubric_version,
+                    "promotion_id": promotion_id,
+                    "production_published": bool(production_published),
+                    "publication_revision": publication_revision,
+                    "evaluated_at": _iso_now(),
+                }
+            )
+            connection.execute(
+                "UPDATE qa_events SET suggested_questions_json=? WHERE event_id=?",
+                (_dump(payload), event_id),
+            )
+            connection.commit()
+        return self.get_event(event_id)
+
     def summary(
         self, *, range_name: str = "24h", from_ts: str | None = None, to_ts: str | None = None
     ) -> dict[str, Any]:

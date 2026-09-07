@@ -118,7 +118,7 @@ def test_get_projects_git_source_into_canonical_read_envelope() -> None:
     assert payload["observed_at"] == "2026-09-04T14:35:00Z"
     assert payload["freshness"] == "live"
     assert payload["data"]["publication"]["revision"] == "github-blob:blob123"
-    assert payload["data"]["publication"]["write_authority"] == "unselected"
+    assert payload["data"]["publication"]["write_authority"] == "governed_git_adapter"
     assert payload["data"]["publication"]["question_count"] == 2
     assert [item["state"] for item in payload["data"]["questions"]] == [
         "published",
@@ -144,7 +144,7 @@ def test_put_is_fail_closed_when_publish_capability_is_missing() -> None:
     assert response.json()["error"]["code"] == "ADMIN_CAPABILITY_EVIDENCE_REQUIRED"
 
 
-def test_put_still_blocks_when_capability_is_enabled_but_write_authority_is_unselected() -> None:
+def test_put_still_blocks_when_capability_is_enabled_and_requires_governed_promotion() -> None:
     response = TestClient(make_app(publish_enabled=True)).put(
         "/v1/admin/suggested-questions",
         headers=headers(
@@ -159,4 +159,4 @@ def test_put_still_blocks_when_capability_is_enabled_but_write_authority_is_unse
         },
     )
     assert response.status_code == 409
-    assert response.json()["error"]["code"] == "SUGGESTED_QUESTIONS_WRITE_AUTHORITY_UNSELECTED"
+    assert response.json()["error"]["code"] == "SUGGESTED_QUESTIONS_GOVERNED_PROMOTION_REQUIRED"
