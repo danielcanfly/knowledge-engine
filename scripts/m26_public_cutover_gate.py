@@ -8,6 +8,13 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+SMOKE_QUESTIONS = (
+    "How should I know if I need a workflow or an agent?",
+    "How should teams choose an agent architecture before committing to a framework?",
+    "What responsibilities belong in a complete agent harness architecture?",
+)
+VALID_TERMINALS = {"answer.completed", "answer.abstained"}
+
 
 def _request(
     url: str,
@@ -46,7 +53,9 @@ def _validate_health(payload: dict[str, Any], expected_sha: str) -> None:
         raise ValueError(f"health build SHA mismatch: {build_sha or '<empty>'}")
 
 
-def _validate_answer(events: list[dict[str, Any]], expected_sha: str) -> None:
+def _validate_transport(events: list[dict[str, Any]], expected_sha: str) -> dict[str, Any]:
+    if not events:
+        raise ValueError("answer stream has no SSE events")
     accepted = next((event for event in events if event.get("type") == "request.accepted"), None)
     if accepted is None:
         raise ValueError("answer stream has no request.accepted event")
@@ -54,12 +63,26 @@ def _validate_answer(events: list[dict[str, Any]], expected_sha: str) -> None:
     if build_sha != expected_sha:
         raise ValueError(f"answer stream build SHA mismatch: {build_sha or '<empty>'}")
     terminal = [event for event in events if str(event.get("type", "")).startswith("answer.")]
-    if len(terminal) != 1 or terminal[0].get("type") != "answer.completed":
-        raise ValueError("answer stream did not produce exactly one answer.completed terminal")
-    if not str(terminal[0].get("answer", "")).strip():
-        raise ValueError("answer.completed has no answer")
-    if not terminal[0].get("sources"):
-        raise ValueError("answer.completed has no sources")
+    if len(terminal) != 1 or terminal[0].get("type") not in VALID_TERMINALS:
+        raise ValueError("answer stream did not produce exactly one valid terminal")
+    if terminal[0] is not events[-1]:
+        raise ValueError("answer stream contains events after its terminal")
+    return terminal[0]
+
+
+def _validate_usability(terminals: list[dict[str, Any]]) -> None:
+    if len(terminals) < len(SMOKE_QUESTIONS):
+        raise ValueError("product usability gate did not run the full fixed smoke set")
+    completed = [event for event in terminals if event.get("type") == "answer.completed"]
+    usable = [
+        event
+        for event in completed
+        if str(event.get("answer", "")).strip()
+        and isinstance(event.get("sources"), list)
+        and event["sources"]
+    ]
+    if not usable:
+        raise ValueError("fixed smoke set produced no completed answer with sources")
 
 
 def main() -> int:
@@ -68,10 +91,6 @@ def main() -> int:
     parser.add_argument("--answers-url", required=True)
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--origin", default="https://danielcanfly.com")
-    parser.add_argument(
-        "--question",
-        default="What is the safest way to validate a deployment before a production cutover?",
-    )
     parser.add_argument("--timeout", type=float, default=120)
     args = parser.parse_args()
 
@@ -116,34 +135,65 @@ def main() -> int:
     if not required_headers.issubset(observed_headers):
         raise ValueError("CORS preflight does not allow the live frontend request headers")
 
-    answer_status, _, answer_body = _request(
-        args.answers_url,
-        method="POST",
-        data=json.dumps({"question": args.question}).encode("utf-8"),
-        headers={
-            "Accept": "text/event-stream",
-            "Content-Type": "application/json",
-            "Origin": args.origin,
-        },
-        timeout=args.timeout,
-    )
-    combined = health_body + b"\n" + cors_body + b"\n" + answer_body
+    outcomes: list[dict[str, Any]] = []
+    terminals: list[dict[str, Any]] = []
+    combined = health_body + b"\n" + cors_body
+    for index, question in enumerate(SMOKE_QUESTIONS, start=1):
+        answer_status, answer_headers, answer_body = _request(
+            args.answers_url,
+            method="POST",
+            data=json.dumps({"question": question}).encode("utf-8"),
+            headers={
+                "Accept": "text/event-stream",
+                "Content-Type": "application/json",
+                "Origin": args.origin,
+            },
+            timeout=args.timeout,
+        )
+        combined += b"\n" + answer_body
+        if answer_status != 200:
+            raise ValueError(f"smoke {index} answer HTTP status is {answer_status}")
+        content_type = next(
+            (
+                value.casefold()
+                for key, value in answer_headers.items()
+                if key.casefold() == "content-type"
+            ),
+            "",
+        )
+        if not content_type.startswith("text/event-stream"):
+            raise ValueError(f"smoke {index} response is not text/event-stream")
+        terminal = _validate_transport(_parse_sse(answer_body), args.expected_sha)
+        terminals.append(terminal)
+        outcomes.append(
+            {
+                "answer_present": bool(str(terminal.get("answer", "")).strip()),
+                "code": terminal.get("code"),
+                "index": index,
+                "source_count": (
+                    len(terminal["sources"])
+                    if isinstance(terminal.get("sources"), list)
+                    else 0
+                ),
+                "terminal": terminal["type"],
+            }
+        )
     if b"m24-internal" in combined.lower():
         raise ValueError("forbidden legacy hostname is exposed by the public API")
-    if answer_status != 200:
-        raise ValueError(f"answer HTTP status is {answer_status}")
-    events = _parse_sse(answer_body)
-    _validate_answer(events, args.expected_sha)
+    _validate_usability(terminals)
 
     print(
         json.dumps(
             {
-                "answer_event_count": len(events),
                 "answers_url": args.answers_url,
                 "cors": "PASS",
                 "expected_sha": args.expected_sha,
                 "forbidden_hostname_absent": True,
                 "health_url": args.health_url,
+                "smoke_outcomes": outcomes,
+                "smoke_set_size": len(SMOKE_QUESTIONS),
+                "transport_gate": "PASS",
+                "usability_gate": "PASS",
                 "status": "PASS",
             },
             sort_keys=True,
@@ -155,6 +205,6 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (ValueError, json.JSONDecodeError, urllib.error.URLError) as exc:
+    except (ValueError, json.JSONDecodeError, TimeoutError, urllib.error.URLError) as exc:
         print(json.dumps({"status": "FAIL", "error": str(exc)}, sort_keys=True), file=sys.stderr)
         raise SystemExit(1) from exc
