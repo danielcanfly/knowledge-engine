@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 import pytest
 
-from knowledge_engine import m26_active_production_dense as dense
+import knowledge_engine.m26_active_production_dense as dense
 from knowledge_engine.m26_active_production_release import ActiveProductionRelease
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import PA7ArbitraryQueryError
 from knowledge_engine.m26_production_answer_bundle import ProductionAnswerBundle
