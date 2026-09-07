@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: m26-e4-isolated-materialization-a738f20
+  group: m26-bp2-candidate-materialization-a738f20
   cancel-in-progress: false
 
 jobs:
@@ -21,7 +21,13 @@ jobs:
       APP_ENV: test
       AUTH_MODE: disabled
       EXPECTED_SOURCE_HEAD_SHA: a738f20b16f10925c8adfe4d625be8db30fb269c
-      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      EXPECTED_BLOG_SOURCE_SHA: f5e20062c1400d7320fe2dbecf6409a0a8c910a7
+      EXPECTED_BLOG_REPOSITORY_HEAD_SHA: 3475cb26eedb95ade52ff6341ad7a64218572139
+      EXPECTED_BLOG_CONTENT_TREE_SHA: 86c43fd02642087d773afd2614c6d4fb1c7c7bf2
+      EXPECTED_BLOG_SERIES_BLOB_SHA: f0d317928f2733f9ed72ca7a2411cc49062579b1
+      EXPECTED_SOURCE_ARCHIVE_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440
+      EXPECTED_RELEASE_ID: m26blog-ec79a3cad1d8-59012fe3818c-bp2-${{ github.sha }}
+      CANDIDATE_ENGINE_COMMIT_SHA: ${{ github.sha }}
       EXPECTED_SEMANTIC_INPUTS_SHA256: 0982aaa55893bb2f95a8c0e0571cf5bef8beffb56346c9edf05c5a2e83597012
       EXPECTED_LEXICAL_DOCUMENTS_SHA256: 1ee4e01ff7b08ef6f54b445112db25565eb8f72b932ec89473947fb7ba4dc3bf
       EXPECTED_PROVENANCE_SHA256: 60642a49269864271f4a90a133c5f9140edc3abf5195c88b2ea23f20d4bf40f0
@@ -39,6 +45,7 @@ jobs:
       QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL || vars.QDRANT_ENDPOINT || secrets.QDRANT_ENDPOINT }}
       QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY || secrets.QDRANT_WRITE_API_KEY || secrets.QDRANT_API_KEY_WRITE }}
       KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_TOKEN || secrets.SOURCE_REPO_READ_TOKEN }}
+      BLOG_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN || secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,6 +73,7 @@ jobs:
               'CLOUDFLARE_API_TOKEN',
               'QDRANT_URL',
               'QDRANT_API_KEY',
+              'BLOG_SOURCE_READ_TOKEN',
           ]
           event = json.loads(open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8').read())
           payload = event.get('client_payload') or {}
@@ -76,6 +84,77 @@ jobs:
           if missing:
               raise SystemExit('missing required materializer environment values: ' + ','.join(missing))
           print('M26_E4_MATERIALIZER_ENV_WIRING_PASS')
+          PY
+      - name: Fresh census authoritative published blog source
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+          import json
+          import os
+          import urllib.request
+
+          token = os.environ['BLOG_SOURCE_READ_TOKEN']
+          headers = {
+              'Accept': 'application/vnd.github+json',
+              'Authorization': f'Bearer {token}',
+              'User-Agent': 'm26-bp2-source-census',
+              'X-GitHub-Api-Version': '2022-11-28',
+          }
+          def request(path: str) -> dict:
+              req = urllib.request.Request(
+                  'https://api.github.com/repos/danielcanfly/daniel-blog/' + path,
+                  headers=headers,
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  value = json.load(response)
+              if not isinstance(value, dict):
+                  raise SystemExit('GitHub response was not an object')
+              return value
+
+          commit = request('commits/main')['sha']
+          if commit != os.environ['EXPECTED_BLOG_REPOSITORY_HEAD_SHA']:
+              raise SystemExit('authoritative blog main drifted after BP-2 plan')
+          tree = request(f'git/trees/{commit}?recursive=1')
+          if tree.get('truncated') is True:
+              raise SystemExit('authoritative blog tree was truncated')
+          rows = tree.get('tree') or []
+          content = next(
+              row for row in rows
+              if row.get('path') == 'src/content/blog' and row.get('type') == 'tree'
+          )
+          series = next(
+              row for row in rows
+              if row.get('path') == 'src/utils/seriesMeta.ts' and row.get('type') == 'blob'
+          )
+          english = sorted(
+              row['path'] for row in rows
+              if row.get('type') == 'blob'
+              and row.get('path', '').startswith('src/content/blog/')
+              and row.get('path', '').endswith('/en.md')
+          )
+          if content['sha'] != os.environ['EXPECTED_BLOG_CONTENT_TREE_SHA']:
+              raise SystemExit('published blog content tree drifted')
+          if series['sha'] != os.environ['EXPECTED_BLOG_SERIES_BLOB_SHA']:
+              raise SystemExit('blog series catalog drifted')
+          if len(english) != 180 or len(english) != len(set(english)):
+              raise SystemExit(f'fresh English source census mismatch: {len(english)}')
+          report = {
+              'schema_version': 'm26-bp2-fresh-source-census/v1',
+              'repository': 'danielcanfly/daniel-blog',
+              'repository_head_sha': commit,
+              'published_content_tree_sha': content['sha'],
+              'series_catalog_blob_sha': series['sha'],
+              'content_authority_commit_sha': os.environ['EXPECTED_BLOG_SOURCE_SHA'],
+              'english_published_source_count': len(english),
+              'duplicate_path_count': len(english) - len(set(english)),
+              'candidate_source_archive_head_sha': os.environ['EXPECTED_SOURCE_HEAD_SHA'],
+          }
+          with open('/tmp/m26-e4-source-census.json', 'w', encoding='utf-8') as handle:
+              json.dump(report, handle, indent=2, sort_keys=True)
+              handle.write('\n')
+          print('M26_BP2_FRESH_SOURCE_CENSUS_PASS')
+          print(json.dumps(report, sort_keys=True))
           PY
       - name: Validate materialization payload and mask archive URL
         run: |
@@ -170,8 +249,8 @@ jobs:
               if observed != expected:
                   raise SystemExit(f'{key} sha mismatch')
           release = json.loads((cand / 'release-manifest.json').read_text(encoding='utf-8'))
-          if release.get('release_id') != os.environ['EXPECTED_RELEASE_ID']:
-              raise SystemExit('release_id mismatch')
+          if release.get('release_id') != os.environ['EXPECTED_SOURCE_ARCHIVE_RELEASE_ID']:
+              raise SystemExit('source archive release_id mismatch')
           if release.get('candidate_only') is not True or release.get('production_pointer_authorized') is not False:
               raise SystemExit('source release authority mismatch')
           print('M26_E4_MATERIALIZER_SOURCE_IDENTITY_PASS')
@@ -189,6 +268,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: m26-e4-isolated-materialization
-          path: /tmp/m26-e4-materialization/m26-e4-isolated-materialization-receipt.json
+          path: |
+            /tmp/m26-e4-materialization/m26-e4-isolated-materialization-receipt.json
+            /tmp/m26-e4-source-census.json
           if-no-files-found: warn
           retention-days: 14
