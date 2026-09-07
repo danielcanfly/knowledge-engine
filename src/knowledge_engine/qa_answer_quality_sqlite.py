@@ -622,9 +622,11 @@ class SqliteQaRepository:
         range_name: str = "24h",
         from_ts: str | None = None,
         to_ts: str | None = None,
+        search: str | None = None,
         result: str | None = None,
         evaluation_status: str | None = None,
         country: str | None = None,
+        lifecycle: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -634,9 +636,16 @@ class SqliteQaRepository:
             start.isoformat().replace("+00:00", "Z"),
             end.isoformat().replace("+00:00", "Z"),
         ]
+        normalized_search = _normalize_search(search)
+        if normalized_search:
+            clauses.append("question LIKE ? ESCAPE '!' COLLATE NOCASE")
+            params.append(_like_contains(normalized_search))
         if result:
+            normalized_result = result.casefold()
+            if normalized_result not in {"pass", "fail"}:
+                raise ValueError("invalid result")
             clauses.append("result=?")
-            params.append(result)
+            params.append(normalized_result)
         if evaluation_status:
             normalized = evaluation_status.upper()
             if normalized not in _EVALUATION_STATUSES:
@@ -646,6 +655,16 @@ class SqliteQaRepository:
         if country:
             clauses.append("country=?")
             params.append(_normalize_country(country))
+        if lifecycle:
+            from .qa_answer_quality import LIFECYCLE_STATES
+
+            normalized_lifecycle = lifecycle.upper()
+            if normalized_lifecycle not in LIFECYCLE_STATES:
+                raise ValueError("invalid lifecycle")
+            clauses.append(
+                "cluster_id IN (SELECT cluster_id FROM qa_clusters WHERE lifecycle=?)"
+            )
+            params.append(normalized_lifecycle)
         where = " AND ".join(clauses)
         offset = _decode_cursor(cursor)
         page_limit = max(1, min(limit, 500))
@@ -817,6 +836,7 @@ class SqliteQaRepository:
                     "cluster_match_method": c["cluster_match_method"],
                     "cluster_identity_version": c["cluster_identity_version"],
                     "sample_trace_ids": c["sample_trace_ids"][:QA_MAX_SAMPLE_TRACES],
+                    "sample_traces": self._sample_traces_for_cluster(connection, c),
                     "resolved_by_release": c.get("resolved_by_release"),
                 }
                 for c in clusters
@@ -860,6 +880,308 @@ class SqliteQaRepository:
             )
             connection.commit()
         return {"created": True, **meta, "jsonl": body.decode()}
+
+    def export_selected_failures(
+        self,
+        *,
+        event_ids: list[str] | tuple[str, ...] = (),
+        cluster_ids: list[str] | tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        selected_events = _bounded_export_ids(event_ids, label="event_ids")
+        selected_clusters = _bounded_export_ids(cluster_ids, label="cluster_ids")
+        if not selected_events and not selected_clusters:
+            raise ValueError("selected export requires event_ids or cluster_ids")
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cluster_id_set = set(selected_clusters)
+            if selected_events:
+                placeholders = ",".join("?" for _ in selected_events)
+                rows = connection.execute(
+                    f"SELECT event_id,cluster_id FROM qa_events WHERE event_id IN ({placeholders})",
+                    selected_events,
+                ).fetchall()
+                found = {str(row["event_id"]): row["cluster_id"] for row in rows}
+                missing = sorted(set(selected_events) - set(found))
+                if missing:
+                    connection.rollback()
+                    raise ValueError("unknown selected event_ids: " + ",".join(missing[:10]))
+                non_failures = sorted(
+                    event_id for event_id, cluster_id in found.items() if not cluster_id
+                )
+                if non_failures:
+                    connection.rollback()
+                    raise ValueError(
+                        "selected events must be clustered failures: "
+                        + ",".join(non_failures[:10])
+                    )
+                cluster_id_set.update(str(cluster_id) for cluster_id in found.values())
+            if len(cluster_id_set) > 500:
+                connection.rollback()
+                raise ValueError("selected export may resolve to at most 500 unique clusters")
+
+            clusters = self._load_export_clusters(connection, sorted(cluster_id_set))
+            requested_cluster_ids = set(cluster_id_set)
+            found_cluster_ids = {str(cluster["cluster_id"]) for cluster in clusters}
+            missing_clusters = sorted(requested_cluster_ids - found_cluster_ids)
+            if missing_clusters:
+                connection.rollback()
+                raise ValueError(
+                    "unknown or legacy selected cluster_ids: "
+                    + ",".join(missing_clusters[:10])
+                )
+            return self._materialize_secondary_export(
+                connection,
+                clusters,
+                mode="selected",
+            )
+
+    def export_filtered_failures(
+        self,
+        *,
+        range_name: str = "24h",
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+        search: str | None = None,
+        result: str | None = None,
+        evaluation_status: str | None = None,
+        country: str | None = None,
+        lifecycle: str | None = None,
+    ) -> dict[str, Any]:
+        start, end = _resolve_range(range_name, from_ts, to_ts)
+        clauses = [
+            "e.timestamp >= ?",
+            "e.timestamp <= ?",
+            "e.cluster_id IS NOT NULL",
+            "c.failure_class NOT LIKE 'legacy_heuristic:%'",
+        ]
+        params: list[Any] = [
+            start.isoformat().replace("+00:00", "Z"),
+            end.isoformat().replace("+00:00", "Z"),
+        ]
+        normalized_search = _normalize_search(search)
+        if normalized_search:
+            clauses.append("e.question LIKE ? ESCAPE '!' COLLATE NOCASE")
+            params.append(_like_contains(normalized_search))
+        if result:
+            normalized_result = result.casefold()
+            if normalized_result not in {"pass", "fail"}:
+                raise ValueError("invalid result")
+            clauses.append("e.result=?")
+            params.append(normalized_result)
+        if evaluation_status:
+            normalized_status = evaluation_status.upper()
+            if normalized_status not in _EVALUATION_STATUSES:
+                raise ValueError("invalid evaluation_status")
+            clauses.append("e.evaluation_status=?")
+            params.append(normalized_status)
+        if country:
+            clauses.append("e.country=?")
+            params.append(_normalize_country(country))
+        if lifecycle:
+            from .qa_answer_quality import LIFECYCLE_STATES
+
+            normalized_lifecycle = lifecycle.upper()
+            if normalized_lifecycle not in LIFECYCLE_STATES:
+                raise ValueError("invalid lifecycle")
+            clauses.append("c.lifecycle=?")
+            params.append(normalized_lifecycle)
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                "SELECT DISTINCT c.* FROM qa_clusters c "
+                "JOIN qa_events e ON e.cluster_id=c.cluster_id WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY c.cluster_id",
+                params,
+            ).fetchall()
+            clusters = [self._cluster_from_row(row) for row in rows]
+            return self._materialize_secondary_export(
+                connection,
+                clusters,
+                mode="current_filter",
+            )
+
+    def _load_export_clusters(
+        self,
+        connection: sqlite3.Connection,
+        cluster_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        if not cluster_ids:
+            return []
+        placeholders = ",".join("?" for _ in cluster_ids)
+        rows = connection.execute(
+            f"SELECT * FROM qa_clusters WHERE cluster_id IN ({placeholders}) "
+            "AND failure_class NOT LIKE 'legacy_heuristic:%' ORDER BY cluster_id",
+            cluster_ids,
+        ).fetchall()
+        return [self._cluster_from_row(row) for row in rows]
+
+    def _sample_traces_for_cluster(
+        self,
+        connection: sqlite3.Connection,
+        cluster: Mapping[str, Any],
+    ) -> list[dict[str, Any]]:
+        trace_ids = [
+            str(trace_id)
+            for trace_id in list(cluster.get("sample_trace_ids", []))[:QA_MAX_SAMPLE_TRACES]
+            if str(trace_id)
+        ]
+        if not trace_ids:
+            return []
+        placeholders = ",".join("?" for _ in trace_ids)
+        rows = connection.execute(
+            f"SELECT trace_id,failure_trace_key FROM qa_events "
+            f"WHERE cluster_id=? AND trace_id IN ({placeholders})",
+            [cluster["cluster_id"], *trace_ids],
+        ).fetchall()
+        trace_keys = {
+            str(row["trace_id"]): str(row["failure_trace_key"] or "") for row in rows
+        }
+        traces: list[dict[str, Any]] = []
+        for trace_id in trace_ids:
+            key = trace_keys.get(trace_id, "")
+            if not key:
+                traces.append({"trace_id": trace_id, "unavailable": True})
+                continue
+            try:
+                payload = json.loads(self.store.get(key).decode("utf-8"))
+            except (FileNotFoundError, json.JSONDecodeError, UnicodeDecodeError):
+                traces.append({"trace_id": trace_id, "unavailable": True})
+                continue
+            if not isinstance(payload, dict):
+                traces.append({"trace_id": trace_id, "unavailable": True})
+                continue
+            traces.append(payload)
+        return traces
+
+    def _materialize_secondary_export(
+        self,
+        connection: sqlite3.Connection,
+        clusters: list[dict[str, Any]],
+        *,
+        mode: str,
+    ) -> dict[str, Any]:
+        if not clusters:
+            connection.rollback()
+            return {"created": False, "reason": "NO_MATCHING_FAILURES", "mode": mode}
+
+        membership = [f"{item['cluster_id']}:{item['version']}" for item in clusters]
+        record_payloads = [
+            {
+                "schema_version": QA_EXPORT_RECORD_SCHEMA,
+                "cluster_id": c["cluster_id"],
+                "cluster_version": c["version"],
+                "representative_question": c["representative_question"],
+                "variants": c["variants"],
+                "count": c["count"],
+                "first_seen": c["first_seen"],
+                "last_seen": c["last_seen"],
+                "failure_stage": c["failure_stage"],
+                "failure_class": c["failure_class"],
+                "failure_signature": c["failure_signature"],
+                "intent_family": c["intent_family"],
+                "cluster_match_method": c["cluster_match_method"],
+                "cluster_identity_version": c["cluster_identity_version"],
+                "sample_trace_ids": c["sample_trace_ids"][:QA_MAX_SAMPLE_TRACES],
+                "sample_traces": self._sample_traces_for_cluster(connection, c),
+                "resolved_by_release": c.get("resolved_by_release"),
+            }
+            for c in clusters
+        ]
+        snapshot_digest = hashlib.sha256(
+            _json_bytes({"mode": mode, "records": record_payloads})
+        ).hexdigest()[:20]
+        batch_id = f"aqx_{snapshot_digest}"
+        key = f"{self.prefix}/exports/{batch_id}.jsonl"
+        records = [{"batch_id": batch_id, **record} for record in record_payloads]
+        body = "".join(
+            json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records
+        ).encode()
+        body_sha256 = sha256_bytes(body)
+
+        existing = connection.execute(
+            "SELECT * FROM qa_exports WHERE batch_id=?", (batch_id,)
+        ).fetchone()
+        if existing is not None:
+            if str(existing["sha256"]) != body_sha256:
+                connection.rollback()
+                raise ReleaseConflictError("QA export batch identity content mismatch")
+            try:
+                stored = self.store.get(key)
+            except FileNotFoundError:
+                stored = body
+                self.store.put(
+                    key,
+                    body,
+                    content_type="application/x-ndjson",
+                    sha256=body_sha256,
+                    only_if_absent=True,
+                )
+            if stored != body:
+                connection.rollback()
+                raise ReleaseConflictError("QA export object content mismatch")
+            connection.rollback()
+            return {
+                "created": False,
+                "reused": True,
+                "mode": mode,
+                "schema_version": QA_EXPORT_SCHEMA,
+                "batch_id": batch_id,
+                "created_at": str(existing["created_at"]),
+                "cluster_count": len(clusters),
+                "membership": membership,
+                "object_key": key,
+                "sha256": body_sha256,
+                "jsonl": body.decode(),
+            }
+
+        try:
+            self.store.put(
+                key,
+                body,
+                content_type="application/x-ndjson",
+                sha256=body_sha256,
+                only_if_absent=True,
+            )
+        except ReleaseConflictError:
+            if self.store.get(key) != body:
+                connection.rollback()
+                raise
+        created = _iso_now()
+        for cluster in clusters:
+            history = list(cluster["export_history"])
+            history.append(
+                {
+                    "batch_id": batch_id,
+                    "cluster_version": cluster["version"],
+                    "exported_at": created,
+                    "export_mode": mode,
+                }
+            )
+            connection.execute(
+                "UPDATE qa_clusters SET export_history_json=? WHERE cluster_id=?",
+                (_dump(history[-20:]), cluster["cluster_id"]),
+            )
+        connection.execute(
+            "INSERT INTO qa_exports(batch_id,created_at,cluster_count,membership_json,object_key,sha256) VALUES(?,?,?,?,?,?)",
+            (batch_id, created, len(clusters), _dump(membership), key, body_sha256),
+        )
+        connection.commit()
+        return {
+            "created": True,
+            "reused": False,
+            "mode": mode,
+            "schema_version": QA_EXPORT_SCHEMA,
+            "batch_id": batch_id,
+            "created_at": created,
+            "cluster_count": len(clusters),
+            "membership": membership,
+            "object_key": key,
+            "sha256": body_sha256,
+            "jsonl": body.decode(),
+        }
 
     def _event_from_row(self, row: sqlite3.Row) -> dict[str, Any]:
         return {
@@ -923,6 +1245,37 @@ def qa_db_path_from_env(store: ObjectStore) -> Path:
     if os.environ.get("APP_ENV", "").strip().casefold() == "production":
         return QA_DEFAULT_PRODUCTION_DB
     return Path(tempfile.gettempdir()) / f"m26-qa-inbox-{os.getpid()}.sqlite3"
+
+
+def _normalize_search(value: str | None) -> str:
+    if value is None:
+        return ""
+    normalized = " ".join(str(value).split())
+    if len(normalized) > 500:
+        raise ValueError("search must be at most 500 characters")
+    return normalized
+
+
+def _like_contains(value: str) -> str:
+    escaped = value.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    return f"%{escaped}%"
+
+
+def _bounded_export_ids(values: list[str] | tuple[str, ...], *, label: str) -> list[str]:
+    if len(values) > 500:
+        raise ValueError(f"{label} may contain at most 500 items")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        item = str(value).strip()
+        if not item:
+            continue
+        if len(item) > 256:
+            raise ValueError(f"{label} item is too long")
+        if item not in seen:
+            normalized.append(item)
+            seen.add(item)
+    return normalized
 
 
 def _decode_cursor(cursor: str | None) -> int:

@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable, Mapping
 from decimal import Decimal
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, FastAPI, Request
 from pydantic import BaseModel, Field
@@ -44,7 +44,18 @@ class QaLifecycleRequest(BaseModel):
 
 
 class QaExportRequest(BaseModel):
+    mode: Literal["new", "selected", "current_filter"] = "new"
     include_previously_exported: bool = False
+    event_ids: list[str] = Field(default_factory=list, max_length=500)
+    cluster_ids: list[str] = Field(default_factory=list, max_length=500)
+    range_name: str = Field(default="24h", max_length=16)
+    from_ts: str | None = Field(default=None, max_length=64)
+    to_ts: str | None = Field(default=None, max_length=64)
+    search: str | None = Field(default=None, max_length=500)
+    result: str | None = Field(default=None, max_length=32)
+    evaluation_status: str | None = Field(default=None, max_length=32)
+    country: str | None = Field(default=None, max_length=8)
+    lifecycle: str | None = Field(default=None, max_length=32)
 
 
 @lru_cache(maxsize=1)
@@ -377,9 +388,11 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         range_name: str = "24h",
         from_ts: str | None = None,
         to_ts: str | None = None,
+        search: str | None = None,
         result: str | None = None,
         evaluation_status: str | None = None,
         country: str | None = None,
+        lifecycle: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -389,9 +402,11 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 range_name=range_name,
                 from_ts=from_ts,
                 to_ts=to_ts,
+                search=search,
                 result=result,
                 evaluation_status=evaluation_status,
                 country=country,
+                lifecycle=lifecycle,
                 limit=max(1, min(limit, 500)),
                 cursor=cursor,
             )
@@ -477,14 +492,57 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
     @router.post("/export-jsonl", operation_id="exportQaNewFailuresJsonl")
     async def export_jsonl(request: Request, payload: QaExportRequest) -> Response:
         require_capability(request, QA_CAPABILITY_EXPORT, mutation=True)
-        if payload.include_previously_exported:
+        repository = repository_provider()
+        try:
+            filter_fields_set = any(
+                (
+                    payload.from_ts,
+                    payload.to_ts,
+                    payload.search,
+                    payload.result,
+                    payload.evaluation_status,
+                    payload.country,
+                    payload.lifecycle,
+                )
+            ) or payload.range_name != "24h"
+            selection_fields_set = bool(payload.event_ids or payload.cluster_ids)
+            if payload.mode == "new":
+                if payload.include_previously_exported:
+                    raise ValueError(
+                        "include_previously_exported is not valid for primary new-failures export"
+                    )
+                if selection_fields_set or filter_fields_set:
+                    raise ValueError(
+                        "new export does not accept selection/filter fields; use selected or current_filter"
+                    )
+                result = repository.export_new_failures()
+            elif payload.mode == "selected":
+                if payload.include_previously_exported or filter_fields_set:
+                    raise ValueError("selected export accepts only event_ids/cluster_ids")
+                result = repository.export_selected_failures(
+                    event_ids=payload.event_ids,
+                    cluster_ids=payload.cluster_ids,
+                )
+            else:
+                if payload.include_previously_exported or selection_fields_set:
+                    raise ValueError("current_filter export accepts filters, not selected IDs")
+                result = repository.export_filtered_failures(
+                    range_name=payload.range_name,
+                    from_ts=payload.from_ts,
+                    to_ts=payload.to_ts,
+                    search=payload.search,
+                    result=payload.result,
+                    evaluation_status=payload.evaluation_status,
+                    country=payload.country,
+                    lifecycle=payload.lifecycle,
+                )
+        except ValueError as exc:
             raise AdminAPIError(
-                status_code=409,
-                code="QA_ADVANCED_EXPORT_NOT_IMPLEMENTED",
-                message="Primary export only includes NEW and REOPENED cluster versions.",
-            )
-        result = repository_provider().export_new_failures()
-        if not result.get("created"):
+                status_code=422,
+                code="QA_EXPORT_REQUEST_INVALID",
+                message=str(exc),
+            ) from exc
+        if "jsonl" not in result:
             return Response(status_code=204)
         return Response(
             content=str(result["jsonl"]),
@@ -493,6 +551,8 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 "Content-Disposition": f'attachment; filename="{result["batch_id"]}.jsonl"',
                 "X-QA-Export-Batch": str(result["batch_id"]),
                 "X-QA-Export-SHA256": str(result["sha256"]),
+                "X-QA-Export-Mode": str(result.get("mode") or "new"),
+                "X-QA-Export-Reused": "true" if result.get("reused") else "false",
             },
         )
 
