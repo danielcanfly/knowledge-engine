@@ -34,13 +34,15 @@ jobs:
             src/knowledge_engine/m26_admin_ingestion.py \
             src/knowledge_engine/m26_admin_ingestion_sync.py \
             src/knowledge_engine/m26_ingestion_candidate_writer.py \
+            src/knowledge_engine/m26_ingestion_candidate_qdrant.py \
             tests/test_m26_active_production_release.py \
             tests/test_m26_production_answer_bundle.py \
             tests/test_m26_admin_control_plane.py \
             tests/test_m26_admin_ingestion.py \
             tests/test_m26_admin_ingestion_sync.py \
             tests/test_m26_admin_ingestion_idempotency.py \
-            tests/test_m26_ingestion_candidate_writer.py
+            tests/test_m26_ingestion_candidate_writer.py \
+            tests/test_m26_ingestion_candidate_qdrant.py
 
       - name: Focused pytest
         run: |
@@ -51,4 +53,5 @@ jobs:
             tests/test_m26_admin_ingestion.py \
             tests/test_m26_admin_ingestion_sync.py \
             tests/test_m26_admin_ingestion_idempotency.py \
-            tests/test_m26_ingestion_candidate_writer.py
+            tests/test_m26_ingestion_candidate_writer.py \
+            tests/test_m26_ingestion_candidate_qdrant.py
