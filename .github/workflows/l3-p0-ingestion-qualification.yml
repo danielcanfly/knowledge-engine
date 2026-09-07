@@ -1,0 +1,45 @@
+name: L3 P0 Ingestion Qualification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  focused-ingestion:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Focused Ruff
+        run: |
+          ruff check \
+            src/knowledge_engine/m26_active_production_release.py \
+            src/knowledge_engine/m26_production_answer_bundle.py \
+            src/knowledge_engine/m26_admin_ingestion_sync.py \
+            tests/test_m26_active_production_release.py \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_admin_ingestion_sync.py \
+            tests/test_m26_admin_control_plane.py
+
+      - name: Focused pytest
+        run: |
+          pytest -q \
+            tests/test_m26_active_production_release.py \
+            tests/test_m26_production_answer_bundle.py \
+            tests/test_m26_admin_ingestion_sync.py \
+            tests/test_m26_admin_control_plane.py
