@@ -51,6 +51,10 @@ class QdrantQualification:
     distance: str
     payload_indexes: tuple[str, ...]
     alias_count: int = 0
+    point_ids_sha256: str = ""
+    section_ids_sha256: str = ""
+    aggregate_identity_sha256: str = ""
+    vector_fingerprint_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,10 @@ class ProductionQdrantQualification:
     vector_dimension: int
     distance: str
     aliases: tuple[str, ...] = ()
+    point_ids_sha256: str = ""
+    section_ids_sha256: str = ""
+    aggregate_identity_sha256: str = ""
+    vector_fingerprint_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -126,8 +134,7 @@ class RollbackPlan:
 
 def pretty_json_bytes(value: Any) -> bytes:
     return (
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
-        + "\n"
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False) + "\n"
     ).encode("utf-8")
 
 
@@ -217,6 +224,7 @@ def execute_promotion(
     store: ObjectStore,
     plan: PromotionPlan,
     revalidate_qdrant: Callable[[], QdrantQualification] | None = None,
+    revalidate_predecessor_qdrant: Callable[[], ProductionQdrantQualification] | None = None,
 ) -> dict[str, Any]:
     """Execute a previously frozen plan. This is not called by BP-4 live qualification."""
 
@@ -226,6 +234,33 @@ def execute_promotion(
         active = resolve_active_production_release(store)
         if active.release_id != plan.candidate.release_id:
             raise IntegrityError("M26-PROMOTE-002 idempotent target resolver mismatch")
+        _, observed_candidate = _qualify_candidate(
+            store=store,
+            manifest_key=plan.candidate.manifest_key,
+            expected_manifest_sha256=plan.candidate.manifest_sha256,
+            qdrant=(revalidate_qdrant() if revalidate_qdrant else plan.candidate.qdrant),
+        )
+        if observed_candidate != plan.candidate:
+            raise IntegrityError("M26-PROMOTE-003 idempotent candidate health drift")
+        predecessor_store = _PointerOverlay(store, plan.predecessor.raw)
+        predecessor_active = resolve_active_production_release(predecessor_store)
+        _match_active_pointer(predecessor_active, plan.predecessor, "idempotent predecessor")
+        predecessor_artifacts = _validate_active_artifacts(store, predecessor_active)
+        observed_predecessor_qdrant = (
+            revalidate_predecessor_qdrant()
+            if revalidate_predecessor_qdrant
+            else plan.predecessor_qualification.qdrant
+        )
+        _validate_production_qdrant(observed_predecessor_qdrant, predecessor_active)
+        if (
+            _predecessor_from_active(
+                predecessor_active,
+                artifact_family=predecessor_artifacts,
+                qdrant=observed_predecessor_qdrant,
+            )
+            != plan.predecessor_qualification
+        ):
+            raise IntegrityError("M26-PROMOTE-004 idempotent predecessor health drift")
         return _promotion_result(plan, status="already_promoted", mutated=False)
 
     _require_same_pointer(current, plan.predecessor, "promotion predecessor")
@@ -262,9 +297,7 @@ def execute_rollback(
     *,
     store: ObjectStore,
     plan: RollbackPlan,
-    verify_predecessor_qdrant: Callable[
-        [ActiveProductionRelease], ProductionQdrantQualification
-    ],
+    verify_predecessor_qdrant: Callable[[ActiveProductionRelease], ProductionQdrantQualification],
 ) -> dict[str, Any]:
     """Execute B->A only; A retries are idempotent and any C fails before write."""
 
@@ -272,6 +305,16 @@ def execute_rollback(
     if current.raw == plan.predecessor.raw:
         active = resolve_active_production_release(store)
         _match_active_pointer(active, plan.predecessor, "restored predecessor")
+        predecessor_artifacts = _validate_active_artifacts(store, active)
+        observed_qdrant = verify_predecessor_qdrant(active)
+        _validate_production_qdrant(observed_qdrant, active)
+        if (
+            _predecessor_from_active(
+                active, artifact_family=predecessor_artifacts, qdrant=observed_qdrant
+            )
+            != plan.predecessor_qualification
+        ):
+            raise IntegrityError("M26-ROLLBACK-004 idempotent predecessor health drift")
         return _rollback_result(plan, status="already_rolled_back", mutated=False)
     _require_same_pointer(
         current,
@@ -317,9 +360,7 @@ def promotion_plan_receipt(plan: PromotionPlan) -> dict[str, Any]:
         "writes_performed": 0,
         "candidate": _jsonable_dataclass(plan.candidate),
         "predecessor": _pointer_receipt(plan.predecessor),
-        "predecessor_qualification": _jsonable_dataclass(
-            plan.predecessor_qualification
-        ),
+        "predecessor_qualification": _jsonable_dataclass(plan.predecessor_qualification),
         "proposed_production_manifest": {
             "key": plan.production_manifest_key,
             "sha256": plan.production_manifest_sha256,
@@ -347,9 +388,7 @@ def rollback_plan_receipt(plan: RollbackPlan) -> dict[str, Any]:
         "writes_performed": 0,
         "expected_current_promoted_pointer": _pointer_receipt(plan.expected_promoted),
         "exact_predecessor_pointer": _pointer_receipt(plan.predecessor),
-        "predecessor_qualification": _jsonable_dataclass(
-            plan.predecessor_qualification
-        ),
+        "predecessor_qualification": _jsonable_dataclass(plan.predecessor_qualification),
         "ordered_future_steps": [
             "require current pointer bytes/hash/identity to equal expected promoted target",
             "resolve expected promoted target chain",
@@ -504,13 +543,14 @@ def _validate_active_artifacts(
         try:
             data = store.get(key)
         except (FileNotFoundError, KeyError) as exc:
-            raise IntegrityError(
-                f"M26-PREDECESSOR-004 artifact missing: {kind}"
-            ) from exc
+            raise IntegrityError(f"M26-PREDECESSOR-004 artifact missing: {kind}") from exc
         if len(data) != expected_bytes or sha256_bytes(data) != expected_sha:
-            raise IntegrityError(
-                f"M26-PREDECESSOR-005 artifact integrity mismatch: {kind}"
-            )
+            raise IntegrityError(f"M26-PREDECESSOR-005 artifact integrity mismatch: {kind}")
+    missing = sorted(REQUIRED_ARTIFACT_KINDS - kinds)
+    if missing:
+        raise IntegrityError(
+            "M26-PREDECESSOR-006 required artifact family missing: " + ",".join(missing)
+        )
     return tuple(sorted(kinds))
 
 
@@ -530,6 +570,13 @@ def _validate_production_qdrant(
         raise IntegrityError("M26-PREDECESSOR-009 Qdrant vector shape mismatch")
     if qdrant.distance.casefold() != "cosine":
         raise IntegrityError("M26-PREDECESSOR-010 Qdrant distance mismatch")
+    for value in (
+        qdrant.point_ids_sha256,
+        qdrant.section_ids_sha256,
+        qdrant.aggregate_identity_sha256,
+        qdrant.vector_fingerprint_sha256,
+    ):
+        _hex(identity_value=value, length=64)
 
 
 def _predecessor_qualification_sha256(value: PredecessorQualification) -> str:
@@ -564,6 +611,13 @@ def _validate_qdrant(
         raise IntegrityError("M26-QDRANT-006 payload indexes missing: " + ",".join(missing))
     if qdrant.alias_count != 0:
         raise IntegrityError("M26-QDRANT-007 candidate collection has aliases")
+    for value in (
+        qdrant.point_ids_sha256,
+        qdrant.section_ids_sha256,
+        qdrant.aggregate_identity_sha256,
+        qdrant.vector_fingerprint_sha256,
+    ):
+        _hex(identity_value=value, length=64)
 
 
 def _build_production_manifest(
@@ -592,13 +646,12 @@ def _build_production_manifest(
         "public_production_traffic_authorized": False,
         "public_production_traffic_target": None,
         "qdrant_candidate_collection": candidate.qdrant.collection,
+        "qdrant_candidate_identity": _jsonable_dataclass(candidate.qdrant),
         "qdrant_candidate_authority_filter": {
             "candidate_release_eligible": True,
             "production_authority": False,
         },
-        "predecessor_qualification_sha256": _predecessor_qualification_sha256(
-            predecessor
-        ),
+        "predecessor_qualification_sha256": _predecessor_qualification_sha256(predecessor),
     }
     return result
 
@@ -727,12 +780,17 @@ def _pointer_receipt(pointer: FrozenPointer) -> dict[str, Any]:
 
 def _jsonable_dataclass(value: Any) -> dict[str, Any]:
     result = asdict(value)
-    qdrant = result.get("qdrant")
-    if isinstance(qdrant, dict) and "payload_indexes" in qdrant:
-        qdrant["payload_indexes"] = list(qdrant["payload_indexes"])
-    if "artifact_family" in result:
-        result["artifact_family"] = list(result["artifact_family"])
-    return result
+
+    def normalize(value: Any) -> Any:
+        if isinstance(value, tuple):
+            return [normalize(item) for item in value]
+        if isinstance(value, dict):
+            return {key: normalize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [normalize(item) for item in value]
+        return value
+
+    return normalize(result)
 
 
 def _json_object(data: bytes, label: str) -> dict[str, Any]:

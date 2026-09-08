@@ -121,6 +121,10 @@ def _qdrant(release_id: str = CANDIDATE) -> QdrantQualification:
         distance="Cosine",
         payload_indexes=tuple(sorted(REQUIRED_QDRANT_PAYLOAD_INDEXES)),
         alias_count=0,
+        point_ids_sha256="a" * 64,
+        section_ids_sha256="b" * 64,
+        aggregate_identity_sha256="c" * 64,
+        vector_fingerprint_sha256="d" * 64,
     )
 
 
@@ -134,6 +138,10 @@ def _predecessor_qdrant(_active: Any = None) -> ProductionQdrantQualification:
         vector_dimension=1024,
         distance="Cosine",
         aliases=(),
+        point_ids_sha256="a" * 64,
+        section_ids_sha256="b" * 64,
+        aggregate_identity_sha256="c" * 64,
+        vector_fingerprint_sha256="d" * 64,
     )
 
 
@@ -428,9 +436,7 @@ def test_rollback_exact_replay_is_idempotent(tmp_path: Path) -> None:
     store, predecessor, promotion = _seed(tmp_path)
     execute_promotion(store=store, plan=promotion)
     rollback = build_rollback_plan(promotion)
-    execute_rollback(
-        store=store, plan=rollback, verify_predecessor_qdrant=_predecessor_qdrant
-    )
+    execute_rollback(store=store, plan=rollback, verify_predecessor_qdrant=_predecessor_qdrant)
     result = execute_rollback(
         store=store, plan=rollback, verify_predecessor_qdrant=_predecessor_qdrant
     )
@@ -521,15 +527,11 @@ def test_rollback_predecessor_artifact_failure_stops_before_write(tmp_path: Path
     execute_promotion(store=store, plan=promotion)
     rollback = build_rollback_plan(promotion)
     manifest = json.loads(store.get(f"releases/{PREDECESSOR}/manifest.json"))
-    manifest["artifacts"] = [
-        row for row in manifest["artifacts"] if row["kind"] != "lexical_index"
-    ]
+    manifest["artifacts"] = [row for row in manifest["artifacts"] if row["kind"] != "lexical_index"]
     changed = _put(store, f"releases/{PREDECESSOR}/manifest.json", manifest)
     production = json.loads(store.get(rollback.predecessor.manifest_key))
     production["artifacts"] = manifest["artifacts"]
-    production["production_promotion"]["source_candidate_manifest_sha256"] = sha256_bytes(
-        changed
-    )
+    production["production_promotion"]["source_candidate_manifest_sha256"] = sha256_bytes(changed)
     production_bytes = _put(store, rollback.predecessor.manifest_key, production)
     predecessor_value = json.loads(rollback.predecessor.raw)
     predecessor_value["manifest_sha256"] = sha256_bytes(production_bytes)
@@ -616,3 +618,91 @@ def test_dry_run_receipts_are_explicitly_zero_write(tmp_path: Path) -> None:
     assert rollback_receipt["mode"] == "deterministic_dry_run"
     assert promotion_receipt["writes_performed"] == 0
     assert rollback_receipt["writes_performed"] == 0
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "point_ids_sha256",
+        "section_ids_sha256",
+        "aggregate_identity_sha256",
+        "vector_fingerprint_sha256",
+    ],
+)
+def test_promotion_revalidation_fails_on_exact_qdrant_identity_drift(
+    tmp_path: Path, field: str
+) -> None:
+    store, predecessor, plan = _seed(tmp_path)
+    drifted = replace(plan.candidate.qdrant, **{field: "f" * 64})
+    with pytest.raises(IntegrityError, match="candidate qualification drift"):
+        execute_promotion(store=store, plan=plan, revalidate_qdrant=lambda: drifted)
+    assert store.get(PRODUCTION_POINTER_KEY) == predecessor
+    assert store.head(plan.production_manifest_key) is None
+
+
+def test_already_promoted_revalidates_candidate_and_predecessor_qdrant(
+    tmp_path: Path,
+) -> None:
+    store, _, plan = _seed(tmp_path)
+    execute_promotion(store=store, plan=plan)
+    drifted = replace(plan.candidate.qdrant, vector_fingerprint_sha256="e" * 64)
+    with pytest.raises(IntegrityError, match="idempotent candidate health drift"):
+        execute_promotion(store=store, plan=plan, revalidate_qdrant=lambda: drifted)
+    result = execute_promotion(
+        store=store,
+        plan=plan,
+        revalidate_qdrant=lambda: plan.candidate.qdrant,
+        revalidate_predecessor_qdrant=lambda: plan.predecessor_qualification.qdrant,
+    )
+    assert result["status"] == "already_promoted"
+
+
+def test_already_rolled_back_revalidates_predecessor_qdrant(tmp_path: Path) -> None:
+    store, _, promotion = _seed(tmp_path)
+    execute_promotion(store=store, plan=promotion)
+    rollback = build_rollback_plan(promotion)
+    execute_rollback(store=store, plan=rollback, verify_predecessor_qdrant=_predecessor_qdrant)
+    drifted = replace(
+        rollback.predecessor_qualification.qdrant,
+        aggregate_identity_sha256="d" * 64,
+    )
+    with pytest.raises(IntegrityError, match="idempotent predecessor health drift"):
+        execute_rollback(
+            store=store,
+            plan=rollback,
+            verify_predecessor_qdrant=lambda _active: drifted,
+        )
+
+
+def test_predecessor_missing_required_artifact_family_fails_closed(tmp_path: Path) -> None:
+    store, _, promotion = _seed(tmp_path)
+    execute_promotion(store=store, plan=promotion)
+    rollback = build_rollback_plan(promotion)
+    manifest_key = f"releases/{PREDECESSOR}/manifest.json"
+    manifest = json.loads(store.get(manifest_key))
+    manifest["artifacts"] = [
+        row for row in manifest["artifacts"] if row["kind"] != "semantic_inputs"
+    ]
+    changed = _put(store, manifest_key, manifest)
+    production = json.loads(store.get(rollback.predecessor.manifest_key))
+    production["artifacts"] = manifest["artifacts"]
+    production["production_promotion"]["source_candidate_manifest_sha256"] = sha256_bytes(changed)
+    production_bytes = _put(store, rollback.predecessor.manifest_key, production)
+    pointer = json.loads(rollback.predecessor.raw)
+    pointer["manifest_sha256"] = sha256_bytes(production_bytes)
+    raw = pretty_json_bytes(pointer)
+    tampered = replace(
+        rollback,
+        predecessor=replace(
+            rollback.predecessor,
+            raw=raw,
+            sha256=sha256_bytes(raw),
+            manifest_sha256=sha256_bytes(production_bytes),
+        ),
+    )
+    with pytest.raises(IntegrityError, match="required artifact family missing"):
+        execute_rollback(
+            store=store,
+            plan=tampered,
+            verify_predecessor_qdrant=_predecessor_qdrant,
+        )

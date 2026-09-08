@@ -30,16 +30,13 @@ from knowledge_engine.m26_production_promotion import (
 )
 from knowledge_engine.storage import ObjectMetadata, sha256_bytes
 
-BASE_COMMIT = "24e99a3deb20beb3e4d2888c3143fcc75962aa05"
-BASE_TREE = "72d0e0969a6551ad15fa4947a524738b5176c5dc"
+BASE_COMMIT = "5db3233187bd5afd0878a752b3cb495b4bc7e2d1"
+BASE_TREE = "edb2de9d5c13d90edb19ecbf67d7aa7f17aa962f"
 CANDIDATE_RELEASE = (
-    "m26blog-ec79a3cad1d8-59012fe3818c-bp3r-"
-    "24e99a3deb20beb3e4d2888c3143fcc75962aa05"
+    "m26blog-ec79a3cad1d8-59012fe3818c-bp3r-24e99a3deb20beb3e4d2888c3143fcc75962aa05"
 )
 CANDIDATE_MANIFEST_KEY = f"releases/{CANDIDATE_RELEASE}/manifest.json"
-CANDIDATE_MANIFEST_SHA256 = (
-    "e6f8dc6d5e6e90afc7b5f1d7b36368f2127a7ea45584b223ea44d5546a3da2aa"
-)
+CANDIDATE_MANIFEST_SHA256 = "e6f8dc6d5e6e90afc7b5f1d7b36368f2127a7ea45584b223ea44d5546a3da2aa"
 PROMOTED_AT = "2026-09-08T00:00:00Z"
 OWNER_AUTHORIZATION = "BP-4 deterministic dry-run only; live production promotion forbidden"
 
@@ -121,12 +118,18 @@ class QdrantReadOnly:
         self.rejected_mutation_calls = 0
 
     def request(self, method: str, path: str, body: Any | None = None) -> dict[str, Any]:
-        allowed_get = method == "GET" and body is None and (
-            path == "/aliases" or path.startswith("/collections/")
+        allowed_get = (
+            method == "GET"
+            and body is None
+            and (path == "/aliases" or path.startswith("/collections/"))
         )
-        allowed_post = method == "POST" and body is not None and (
-            path.endswith("/points/count?consistency=all")
-            or path.endswith("/points/scroll?consistency=all")
+        allowed_post = (
+            method == "POST"
+            and body is not None
+            and (
+                path.endswith("/points/count?consistency=all")
+                or path.endswith("/points/scroll?consistency=all")
+            )
         )
         if not (allowed_get or allowed_post):
             self.rejected_mutation_calls += 1
@@ -186,9 +189,7 @@ class QdrantReadOnly:
             if isinstance(row, Mapping) and row.get("collection_name") == collection
         )
 
-    def exact_count(
-        self, collection: str, filter_value: Mapping[str, Any] | None = None
-    ) -> int:
+    def exact_count(self, collection: str, filter_value: Mapping[str, Any] | None = None) -> int:
         body: dict[str, Any] = {"exact": True}
         if filter_value is not None:
             body["filter"] = dict(filter_value)
@@ -210,7 +211,7 @@ class QdrantReadOnly:
             body: dict[str, Any] = {
                 "limit": 256,
                 "with_payload": True,
-                "with_vector": False,
+                "with_vector": ["default"],
             }
             if offset is not None:
                 body["offset"] = offset
@@ -276,6 +277,7 @@ def qdrant_identity_census(
     count = qdrant.exact_count(collection)
     points = qdrant.inventory(collection)
     identities = []
+    vectors = []
     drift = []
     for point in points:
         payload = point.get("payload")
@@ -287,23 +289,32 @@ def qdrant_identity_census(
             "admission_sha256": admission_sha256,
         }
         if candidate:
-            expected.update(
-                {"candidate_release_eligible": True, "production_authority": False}
-            )
+            expected.update({"candidate_release_eligible": True, "production_authority": False})
         mismatches = sorted(key for key, value in expected.items() if payload.get(key) != value)
         if mismatches:
             drift.append({"point_id": str(point.get("id")), "fields": mismatches})
-        identities.append(
-            {
-                "point_id": str(point.get("id")),
-                "section_id": str(payload.get("section_id")),
-                "release_id": payload.get("release_id"),
-                "source_commit_sha": payload.get("source_commit_sha"),
-                "admission_sha256": payload.get("admission_sha256"),
-                "candidate_release_eligible": payload.get("candidate_release_eligible"),
-                "production_authority": payload.get("production_authority"),
-            }
-        )
+        vector = point.get("vector")
+        if isinstance(vector, Mapping):
+            vector = vector.get("default")
+        if not isinstance(vector, list) or not vector:
+            raise SystemExit("Qdrant default vector content missing")
+        identity = {
+            "point_id": str(point.get("id")),
+            "section_id": str(payload.get("section_id")),
+            "release_id": payload.get("release_id"),
+            "source_commit_sha": payload.get("source_commit_sha"),
+            "admission_sha256": payload.get("admission_sha256"),
+            "candidate_release_eligible": payload.get("candidate_release_eligible"),
+            "production_authority": payload.get("production_authority"),
+            "text_sha256": payload.get("text_sha256"),
+            "embedding_input_sha256": payload.get("embedding_input_sha256"),
+            "embedding_provider": payload.get("embedding_provider"),
+            "embedding_model": payload.get("embedding_model"),
+            "vector_name": "default",
+            "vector_dimension": len(vector),
+        }
+        identities.append(identity)
+        vectors.append({"point_id": identity["point_id"], "vector_sha256": digest(vector)})
     point_ids = [row["point_id"] for row in identities]
     section_ids = [row["section_id"] for row in identities]
     if (
@@ -328,6 +339,7 @@ def qdrant_identity_census(
         "point_ids_sha256": digest(sorted(point_ids)),
         "section_ids_sha256": digest(sorted(section_ids)),
         "aggregate_identity_sha256": digest(sorted(identities, key=lambda row: row["point_id"])),
+        "vector_fingerprint_sha256": digest(sorted(vectors, key=lambda row: row["point_id"])),
     }
 
 
@@ -422,6 +434,10 @@ def candidate_qdrant_qualification(
         distance=str(snapshot["distance"]),
         payload_indexes=tuple(sorted(dict(snapshot["payload_schema"]))),
         alias_count=len(full["aliases"]),
+        point_ids_sha256=str(full["point_ids_sha256"]),
+        section_ids_sha256=str(full["section_ids_sha256"]),
+        aggregate_identity_sha256=str(full["aggregate_identity_sha256"]),
+        vector_fingerprint_sha256=str(full["vector_fingerprint_sha256"]),
     )
     if not REQUIRED_QDRANT_PAYLOAD_INDEXES.issubset(qualification.payload_indexes):
         raise SystemExit("candidate required Qdrant payload indexes missing")
@@ -443,6 +459,10 @@ def production_qdrant_qualification(
         vector_dimension=int(snapshot["vector_dimension"]),
         distance=str(snapshot["distance"]),
         aliases=tuple(str(value) for value in qdrant["aliases"]),
+        point_ids_sha256=str(qdrant["point_ids_sha256"]),
+        section_ids_sha256=str(qdrant["section_ids_sha256"]),
+        aggregate_identity_sha256=str(qdrant["aggregate_identity_sha256"]),
+        vector_fingerprint_sha256=str(qdrant["vector_fingerprint_sha256"]),
     )
 
 
@@ -499,9 +519,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("a remote mutation call reached a read-only guard")
 
     (output / "exact-predecessor-production-pointer.json").write_bytes(plan.predecessor.raw)
-    (output / "proposed-production-manifest.json").write_bytes(
-        plan.production_manifest_bytes
-    )
+    (output / "proposed-production-manifest.json").write_bytes(plan.production_manifest_bytes)
     (output / "proposed-production-pointer.json").write_bytes(plan.target_pointer_bytes)
     write_json(output / "production-census-before.json", before)
     write_json(output / "production-census-after.json", after)
@@ -540,6 +558,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         "candidate_qdrant_collection": qdrant_qualification.collection,
         "candidate_qdrant_full_count": candidate_qdrant["full_scroll_count"],
         "candidate_qdrant_filtered_count": qdrant_qualification.filtered_point_count,
+        "candidate_qdrant_point_ids_sha256": qdrant_qualification.point_ids_sha256,
+        "candidate_qdrant_section_ids_sha256": qdrant_qualification.section_ids_sha256,
+        "candidate_qdrant_aggregate_identity_sha256": (
+            qdrant_qualification.aggregate_identity_sha256
+        ),
+        "candidate_qdrant_vector_fingerprint_sha256": (
+            qdrant_qualification.vector_fingerprint_sha256
+        ),
+        "predecessor_qdrant_point_ids_sha256": (
+            plan.predecessor_qualification.qdrant.point_ids_sha256
+        ),
+        "predecessor_qdrant_section_ids_sha256": (
+            plan.predecessor_qualification.qdrant.section_ids_sha256
+        ),
+        "predecessor_qdrant_aggregate_identity_sha256": (
+            plan.predecessor_qualification.qdrant.aggregate_identity_sha256
+        ),
+        "predecessor_qdrant_vector_fingerprint_sha256": (
+            plan.predecessor_qualification.qdrant.vector_fingerprint_sha256
+        ),
         "production_pointer_writes": 0,
         "production_manifest_writes": 0,
         "candidate_mutations": 0,

@@ -1,0 +1,83 @@
+name: M26 BP4 R1 Read-only Exact Identity Qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: m26-bp4-r1-read-only-exact-identity-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    environment: production
+    env:
+      APP_ENV: test
+      AUTH_MODE: disabled
+      OBJECT_STORE_BACKEND: r2
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_REGION: auto
+      QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+      QDRANT_READ_CREDENTIAL: ${{ secrets.QDRANT_READ_ONLY_API_KEY || secrets.QDRANT_API_KEY_READ || secrets.QDRANT_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact R0 base and bounded R1 surface
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse 5db3233187bd5afd0878a752b3cb495b4bc7e2d1^{tree})" = edb2de9d5c13d90edb19ecbf67d7aa7f17aa962f
+          test "$(sha256sum .github/workflows/m26-e4-materialize-source-archive.yml | cut -d' ' -f1)" = c7d1c1aba4941a93a4d8c83064a873ebac1cd17f2368648ed9372950490863db
+          git diff --name-only 5db3233187bd5afd0878a752b3cb495b4bc7e2d1..HEAD > /tmp/bp4-r1-paths.txt
+          diff -u <(printf '%s\n' \
+            '.github/workflows/m26-bp4-r1-read-only-qualification.yml' \
+            '.github/workflows/m26-e4-materialize-source-archive.yml' \
+            'scripts/m26_bp4_read_only_qualify.py' \
+            'src/knowledge_engine/m26_production_promotion.py' \
+            'tests/test_m26_production_promotion.py') /tmp/bp4-r1-paths.txt
+          printf '%s\n' BP4_R1_EXACT_BASE_SURFACE_AND_WORKFLOW_RESTORATION_PASS
+      - name: Install exact-tip dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+      - name: Run promotion and rollback qualification
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/m26-bp4-r1-qualification
+          PYTHONPATH=src pytest -q \
+            tests/test_m26_production_promotion.py \
+            tests/test_m26_active_production_release.py \
+            tests/test_m25_10_blog_production_promotion.py \
+            | tee /tmp/m26-bp4-r1-qualification/test-transcript.txt
+      - name: Run fresh remote read-only census and dry-run planning
+        run: |
+          set -euo pipefail
+          python scripts/m26_bp4_read_only_qualify.py \
+            --output-dir /tmp/m26-bp4-r1-qualification \
+            | tee /tmp/m26-bp4-r1-qualification/qualification-transcript.txt
+          (
+            cd /tmp/m26-bp4-r1-qualification
+            find . -maxdepth 1 -type f ! -name CHECKSUMS.sha256 -print0 \
+              | sort -z \
+              | xargs -0 sha256sum > CHECKSUMS.sha256
+            sha256sum --check CHECKSUMS.sha256
+          )
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m26-bp4-r1-read-only-exact-identity-qualification
+          path: /tmp/m26-bp4-r1-qualification/
+          if-no-files-found: error
+          retention-days: 14
