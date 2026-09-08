@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator
@@ -276,6 +277,44 @@ def test_language_gate_rejects_chinese_without_consuming_quota(
     assert _problem(client.post("/v1/answers", json={"question": "What is safe?"}))["code"] == (
         "DAILY_IP_LIMIT_EXCEEDED"
     )
+
+
+def test_valid_owner_bypass_skips_per_ip_quota_but_invalid_token_does_not(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_answer(monkeypatch)
+    owner_token = "owner-test-token"
+    monkeypatch.setenv(
+        "M26_ASK_OWNER_BYPASS_TOKEN_SHA256",
+        hashlib.sha256(owner_token.encode("utf-8")).hexdigest(),
+    )
+    owner_headers = {
+        "origin": "https://danielcanfly.com",
+        "x-m26-owner-bypass": owner_token,
+        "cf-connecting-ip": "198.51.100.44",
+    }
+    for _ in range(m26_public_api.PER_IP_DAILY_LIMIT + 2):
+        response = client.post(
+            "/v1/answers",
+            headers=owner_headers,
+            json={"question": "What is safe?"},
+        )
+        assert response.status_code == 200
+
+    invalid_headers = {**owner_headers, "x-m26-owner-bypass": "wrong-token"}
+    for _ in range(m26_public_api.PER_IP_DAILY_LIMIT):
+        assert client.post(
+            "/v1/answers",
+            headers=invalid_headers,
+            json={"question": "What is safe?"},
+        ).status_code == 200
+    blocked = client.post(
+        "/v1/answers",
+        headers=invalid_headers,
+        json={"question": "What is safe?"},
+    )
+    assert _problem(blocked)["code"] == "DAILY_IP_LIMIT_EXCEEDED"
 
 
 def test_sse_contract_has_monotonic_seq_single_terminal_and_no_early_answer_text(

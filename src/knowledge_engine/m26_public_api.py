@@ -145,7 +145,13 @@ class PublicQuotaLedger:
                 """
             )
 
-    def admit(self, *, ip_key: str, now: datetime | None = None) -> Problem | None:
+    def admit(
+        self,
+        *,
+        ip_key: str,
+        now: datetime | None = None,
+        owner_bypass: bool = False,
+    ) -> Problem | None:
         current = now or datetime.now(UTC)
         day = current.strftime("%Y-%m-%d")
         minute = current.strftime("%Y-%m-%dT%H:%M")
@@ -184,6 +190,8 @@ class PublicQuotaLedger:
                     ),
                 )
                 for scope, key, window, limit, code, limit_reset, retry in checks:
+                    if owner_bypass and scope in {"ip_daily", "ip_burst"}:
+                        continue
                     if self._count(db, scope, key, window) >= limit:
                         db.execute("ROLLBACK")
                         return Problem(
@@ -216,6 +224,8 @@ class PublicQuotaLedger:
                         retry_after_seconds=1,
                     )
                 for scope, key, window, *_ in checks:
+                    if owner_bypass and scope in {"ip_daily", "ip_burst"}:
+                        continue
                     self._increment_count(db, scope, key, window)
                 self._increment_active(db, "ip_active", ip_key)
                 self._increment_active(db, "global_active", "global")
@@ -430,7 +440,10 @@ def create_app(
         fallback_problem = ledger.fallback_budget_available()
         if fallback_problem is not None and _fallback_expected():
             return _problem_response(fallback_problem, request_id=request_id, origin=origin)
-        admission_problem = ledger.admit(ip_key=ip_key)
+        admission_problem = ledger.admit(
+            ip_key=ip_key,
+            owner_bypass=_owner_bypass_matches(request),
+        )
         if admission_problem is not None:
             return _problem_response(admission_problem, request_id=request_id, origin=origin)
         admission = Admission(
@@ -1011,6 +1024,18 @@ def _pseudonymous_ip_key(request: Request, *, now: datetime) -> str:
     secret = os.environ["M26_PUBLIC_IP_HMAC_SECRET"].encode("utf-8")
     digest = hmac.new(secret, f"{day}:{raw_ip}".encode(), hashlib.sha256).hexdigest()
     return f"ipday_{day}_{digest}"
+
+
+def _owner_bypass_matches(request: Request) -> bool:
+    """Accept only the provisioned owner token for per-IP quota bypass."""
+    expected_digest = os.environ.get("M26_ASK_OWNER_BYPASS_TOKEN_SHA256", "").strip().lower()
+    supplied = request.headers.get(OWNER_BYPASS_HEADER, "")
+    if not expected_digest or not supplied:
+        return False
+    if len(expected_digest) != 64 or any(char not in "0123456789abcdef" for char in expected_digest):
+        return False
+    supplied_digest = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(supplied_digest, expected_digest)
 
 
 def _authoritative_client_ip(request: Request) -> str:
