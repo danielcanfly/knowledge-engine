@@ -1,0 +1,83 @@
+name: L3B exact backend qualification
+
+on:
+  push:
+    branches:
+      - tmp/l3b-backend-qualification-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXACT_SHA: 543926766f85f0938ec5fe9b60c65a70c33d754d
+      EXACT_TREE: 26ae48090854b61c377983ce7894b0f94bd04654
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout and assert exact product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qualification-logs
+          git checkout --detach "$EXACT_SHA"
+          test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXACT_TREE"
+          printf 'sha=%s\ntree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" | tee qualification-logs/source-identity.log
+          find tests -maxdepth 1 -type f -name '*.py' -printf '%f\n' | sort | grep -Ei 'qa|admin|wrapper' | tee qualification-logs/discovered-qa-tests.log || true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install exact project dev dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pip install --upgrade pip 2>&1 | tee qualification-logs/pip-upgrade.log
+          python -m pip install -e '.[dev]' 2>&1 | tee qualification-logs/pip-install.log
+
+      - name: Compileall
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m compileall -q src tests scripts 2>&1 | tee qualification-logs/compileall.log
+
+      - name: Exact QA and admin regression cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t tests_to_run < <(find tests -maxdepth 1 -type f -name '*.py' | grep -Ei '/test_.*(qa|admin|wrapper).*\.py$' | sort)
+          printf '%s\n' "${tests_to_run[@]}" | tee qualification-logs/selected-tests.log
+          test "${#tests_to_run[@]}" -gt 0
+          set -o pipefail
+          python -m pytest -q "${tests_to_run[@]}" 2>&1 | tee qualification-logs/pytest.log
+
+      - name: Ruff
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m ruff check src tests scripts 2>&1 | tee qualification-logs/ruff.log
+
+      - name: Product source immutability guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$EXACT_TREE"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git status --short | tee qualification-logs/final-status.log
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l3b-backend-qualification-evidence
+          path: qualification-logs/
+          retention-days: 3
