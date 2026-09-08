@@ -261,6 +261,28 @@ def test_dynamic_source_accepts_181st_article_and_removed_requires_confirmation(
         )
 
 
+def test_active_manifest_drift_fails_before_candidate_work(tmp_path: Path) -> None:
+    source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
+    active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {}}
+    active_calls = 0
+
+    def active_observer() -> dict[str, object]:
+        nonlocal active_calls
+        active_calls += 1
+        return {**active, "manifest_sha256": "msha2"} if active_calls == 2 else dict(active)
+
+    ledger = SQLiteIngestionLedger(tmp_path / "active-drift.sqlite3")
+    lease = _lease(ledger, "active-drift-key01")
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: source,
+        active_manifest_observer=active_observer,
+        candidate_executor=lambda *_args: pytest.fail("active drift must close before work"),
+    )
+    with pytest.raises(AdminAPIError, match="changed"):
+        adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+
+
 def test_noop_and_success_replay_do_zero_candidate_work(tmp_path: Path) -> None:
     source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
     active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {"a": "a"}}
