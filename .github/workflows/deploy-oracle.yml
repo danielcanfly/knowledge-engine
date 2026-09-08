@@ -90,6 +90,7 @@ jobs:
           JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
         run: |
