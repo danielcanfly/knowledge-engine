@@ -229,11 +229,14 @@ def test_explicit_install_bb02_lifecycle_surface_is_non_empty() -> None:
             question,
             "direct_grounded_knowledge",
         )
-        assert {item.requirement_id for item in runtime_requirements} == {
+        assert {
             "durable_state",
             "completion_verification",
             "observability",
-        }
+            "explanatory_answer",
+            "process_sequence",
+            "process_boundary",
+        }.issubset({item.requirement_id for item in runtime_requirements})
         assert runtime._visible_semantic_failures(answer, runtime_requirements, question) == []
         """
     )
@@ -268,10 +271,13 @@ def test_explicit_install_bb10_comparison_precedes_generic_lifecycle_surface() -
             question,
             "direct_grounded_knowledge",
         )
-        assert {item.requirement_id for item in runtime_requirements} == {
+        assert {
             "durable_state",
             "completion_verification",
-        }
+            "explanatory_answer",
+            "comparison_or_distinction",
+            "multi_dimension_structure",
+        }.issubset({item.requirement_id for item in runtime_requirements})
         """
     )
 

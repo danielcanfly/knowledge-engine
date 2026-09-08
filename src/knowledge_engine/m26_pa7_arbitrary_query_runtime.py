@@ -26,7 +26,19 @@ from .m23_cloudflare_qdrant import (
     SectionInput,
     embed_sections,
 )
-from .m26_pa5_v8_live import LiveGateError, MiniMaxClient, MODEL as MINIMAX_MODEL
+from .m26_gemini_dense_fallback import (
+    GEMINI_DIMENSION,
+    GEMINI_MODEL,
+    GEMINI_PROVIDER,
+    GEMINI_TRANSIENT_HTTP_STATUSES,
+    M26_GEMINI_CANDIDATE_RELEASE_ID,
+    M26_GEMINI_COLLECTION,
+    GeminiDenseConfig,
+    GeminiEmbeddingConfig,
+    GeminiQdrantDenseChannel,
+)
+from .m26_pa5_v8_live import MODEL as MINIMAX_MODEL
+from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
 from .m26_production_answer_bundle import (
     FULL_PRODUCTION_ADMISSION_SHA256,
     FULL_PRODUCTION_QDRANT_COLLECTION,
@@ -147,6 +159,42 @@ GENERIC_RELATIONAL_TERMS = {
     "relationship",
     "support",
     "supports",
+}
+SOURCE_COVERAGE_IGNORED_TERMS = {
+    "can",
+    "catch",
+    "check",
+    "could",
+    "does",
+    "done",
+    "different",
+    "first",
+    "how",
+    "into",
+    "kind",
+    "let",
+    "lets",
+    "make",
+    "makes",
+    "mean",
+    "means",
+    "need",
+    "needs",
+    "rather",
+    "say",
+    "says",
+    "should",
+    "that",
+    "than",
+    "type",
+    "use",
+    "used",
+    "uses",
+    "what",
+    "when",
+    "where",
+    "why",
+    "would",
 }
 CLAIM_ANCHOR_RE = re.compile(r"\[\[([A-Za-z0-9_:-]+)\]\]")
 LEGACY_CITATION_RE = re.compile(r"\[([A-Za-z0-9_]+_ref_\d+)\]")
@@ -702,7 +750,193 @@ def dense_channel_from_env(*, require_remote: bool = False) -> DenseChannel:
     return LocalDenseProjectionChannel()
 
 
-_DENSE_TRANSIENT_HTTP_STATUSES = {429, 500, 502, 503, 504}
+def _env_enabled(name: str) -> bool:
+    return os.environ.get(name, "").strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _dense_collection_name(dense_backend: DenseChannel) -> str | None:
+    config = getattr(dense_backend, "config", None)
+    value = getattr(config, "qdrant_collection", None)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def gemini_dense_channel_from_env(
+    *,
+    bundle: ProductionAnswerBundle,
+    primary_dense_backend: DenseChannel,
+) -> DenseChannel | None:
+    """Build the candidate-only Gemini secondary channel when explicitly enabled.
+
+    Missing/invalid configuration is fail-closed once the candidate feature is enabled.
+    Leaving the feature disabled preserves the pre-SM-GF runtime exactly.
+    """
+    if not _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED"):
+        return None
+    if bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
+            "Gemini dense fallback is scoped to the frozen M26 candidate release",
+        )
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    qdrant_url = os.environ.get("QDRANT_URL", "").strip()
+    qdrant_api_key = (
+        os.environ.get("QDRANT_API_KEY_READ")
+        or os.environ.get("QDRANT_READ_ONLY_API_KEY")
+        or os.environ.get("QDRANT_API_KEY")
+        or ""
+    ).strip()
+    collection = (
+        os.environ.get("M26_GEMINI_DENSE_COLLECTION") or M26_GEMINI_COLLECTION
+    ).strip()
+    missing = [
+        name
+        for name, value in {
+            "GEMINI_API_KEY": api_key,
+            "QDRANT_URL": qdrant_url,
+            "QDRANT_READ_KEY": qdrant_api_key,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_DENSE_CONFIG_MISSING",
+            "missing enabled Gemini dense fallback configuration: " + ",".join(missing),
+        )
+    return GeminiQdrantDenseChannel(
+        GeminiDenseConfig(
+            embedding=GeminiEmbeddingConfig(
+                api_key=api_key,
+                timeout_seconds=_float_from_env(
+                    "M26_GEMINI_EMBED_TIMEOUT_SECONDS", 10.0
+                ),
+            ),
+            qdrant_url=qdrant_url,
+            qdrant_api_key=qdrant_api_key,
+            qdrant_collection=collection,
+            timeout_seconds=_float_from_env(
+                "M26_GEMINI_QDRANT_TIMEOUT_SECONDS", 10.0
+            ),
+            primary_qdrant_collection=_dense_collection_name(primary_dense_backend),
+        )
+    )
+
+
+def _dense_provider_identity(backend_identity: Mapping[str, Any]) -> tuple[str, str, int | None]:
+    provider = str(
+        backend_identity.get("dense_provider")
+        or backend_identity.get("embedding_provider")
+        or ""
+    ).strip()
+    model = str(
+        backend_identity.get("dense_model")
+        or backend_identity.get("embedding_model")
+        or ""
+    ).strip()
+    dimension = backend_identity.get("dense_dimension")
+    if isinstance(dimension, bool) or not isinstance(dimension, int):
+        raw_dimension = backend_identity.get("vector_dimension")
+        dimension = raw_dimension if isinstance(raw_dimension, int) and not isinstance(raw_dimension, bool) else None
+    if not provider and model == CLOUDFLARE_MODEL:
+        provider = "cloudflare-workers-ai"
+    if not provider and backend_identity.get("backend") == "local_release_dense_projection_v1":
+        provider = "local-projection"
+    if not model and backend_identity.get("backend") == "local_release_dense_projection_v1":
+        model = "local-hashed-projection-v1"
+    return provider or "unknown", model or "unknown", dimension
+
+
+def _annotate_primary_dense_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    annotated = dict(result)
+    identity = dict(
+        result.get("backend_identity", {})
+        if isinstance(result.get("backend_identity"), Mapping)
+        else {}
+    )
+    provider, model, dimension = _dense_provider_identity(identity)
+    identity.update(
+        {
+            "dense_provider": provider,
+            "dense_model": model,
+            "dense_dimension": dimension,
+            "fallback_reason": "NONE",
+            "fallback_attempted": False,
+            "fallback_succeeded": False,
+            "retrieval_mode": (
+                "hybrid_bge" if model == CLOUDFLARE_MODEL else "hybrid_dense"
+            ),
+        }
+    )
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+def _annotate_lexical_only_result(
+    result: Mapping[str, Any],
+    *,
+    fallback_reason: str,
+    fallback_attempted: bool,
+    fallback_succeeded: bool = False,
+    fallback_identity: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    annotated = dict(result)
+    identity = dict(
+        result.get("backend_identity", {})
+        if isinstance(result.get("backend_identity"), Mapping)
+        else {}
+    )
+    provider, model, dimension = _dense_provider_identity(identity)
+    identity.update(
+        {
+            "dense_provider": provider,
+            "dense_model": model,
+            "dense_dimension": dimension,
+            "fallback_reason": fallback_reason,
+            "fallback_attempted": fallback_attempted,
+            "fallback_succeeded": fallback_succeeded,
+            "retrieval_mode": "lexical_only",
+        }
+    )
+    if fallback_identity is not None:
+        identity["fallback_dense_identity"] = dict(fallback_identity)
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+def _annotate_gemini_fallback_success(
+    fallback_result: Mapping[str, Any],
+    *,
+    primary_result: Mapping[str, Any],
+    fallback_reason: str,
+) -> dict[str, Any]:
+    annotated = dict(fallback_result)
+    identity = dict(
+        fallback_result.get("backend_identity", {})
+        if isinstance(fallback_result.get("backend_identity"), Mapping)
+        else {}
+    )
+    identity.update(
+        {
+            "dense_provider": GEMINI_PROVIDER,
+            "dense_model": GEMINI_MODEL,
+            "dense_dimension": GEMINI_DIMENSION,
+            "fallback_reason": fallback_reason,
+            "fallback_attempted": True,
+            "fallback_succeeded": True,
+            "retrieval_mode": "hybrid_gemini",
+            "primary_dense_identity": dict(
+                primary_result.get("backend_identity", {})
+                if isinstance(primary_result.get("backend_identity"), Mapping)
+                else {}
+            ),
+        }
+    )
+    annotated["backend_identity"] = identity
+    return annotated
+
+
+_DENSE_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
 _DENSE_TRANSIENT_REASON_CODE = "DENSE_TRANSIENT_UNAVAILABLE"
 _DENSE_TIMEOUT_REASON_CODE = "DENSE_SEARCH_DEADLINE_EXCEEDED"
 
@@ -764,6 +998,7 @@ def _run_dense_search_with_deadline(
     top_k: int,
     deadline_seconds: float,
     event_sink: RuntimeEventSink | None,
+    timeout_reason_code: str = _DENSE_TIMEOUT_REASON_CODE,
 ) -> dict[str, Any]:
     started = time.monotonic()
     results: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
@@ -795,7 +1030,7 @@ def _run_dense_search_with_deadline(
             "stage.degraded",
             stage="retrieval",
             channel="dense",
-            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            reason_code=timeout_reason_code,
             http_status=None,
             deadline_ms=deadline_ms,
             elapsed_ms=elapsed_ms,
@@ -803,7 +1038,7 @@ def _run_dense_search_with_deadline(
         return _degraded_dense_result(
             dense_backend,
             http_status=None,
-            reason_code=_DENSE_TIMEOUT_REASON_CODE,
+            reason_code=timeout_reason_code,
             deadline_ms=deadline_ms,
             elapsed_ms=elapsed_ms,
         )
@@ -813,11 +1048,87 @@ def _run_dense_search_with_deadline(
     return payload
 
 
+def _run_dense_attempt_with_transient_policy(
+    *,
+    dense_backend: DenseChannel,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    top_k: int,
+    deadline_seconds: float,
+    event_sink: RuntimeEventSink | None,
+    transient_statuses: set[int] | frozenset[int],
+    transient_reason_code: str,
+    timeout_reason_code: str,
+) -> dict[str, Any]:
+    try:
+        return _run_dense_search_with_deadline(
+            dense_backend=dense_backend,
+            question=question,
+            bundle=bundle,
+            top_k=top_k,
+            deadline_seconds=deadline_seconds,
+            event_sink=event_sink,
+            timeout_reason_code=timeout_reason_code,
+        )
+    except (httpx.TimeoutException, httpx.NetworkError):
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=transient_reason_code,
+            http_status=None,
+        )
+        return _degraded_dense_result(
+            dense_backend, http_status=None, reason_code=transient_reason_code
+        )
+    except httpx.HTTPStatusError as exc:
+        http_status = _dense_http_status(exc)
+        if http_status not in transient_statuses:
+            raise
+        _emit_runtime_event(
+            event_sink,
+            "stage.degraded",
+            stage="retrieval",
+            channel="dense",
+            reason_code=transient_reason_code,
+            http_status=http_status,
+        )
+        return _degraded_dense_result(
+            dense_backend,
+            http_status=http_status,
+            reason_code=transient_reason_code,
+        )
+
+
+def _dense_degraded_identity(result: Mapping[str, Any]) -> dict[str, Any]:
+    identity = result.get("backend_identity")
+    return dict(identity) if isinstance(identity, Mapping) else {}
+
+
+def _primary_failure_is_gemini_eligible(result: Mapping[str, Any]) -> bool:
+    identity = _dense_degraded_identity(result)
+    if identity.get("degraded") is not True:
+        return False
+    reason = str(identity.get("reason_code", ""))
+    status = identity.get("http_status")
+    return (
+        reason
+        in {
+            _DENSE_TRANSIENT_REASON_CODE,
+            _DENSE_TIMEOUT_REASON_CODE,
+            "DENSE_FORCED_GEMINI_QUALIFICATION",
+        }
+        or (isinstance(status, int) and status in _DENSE_TRANSIENT_HTTP_STATUSES)
+    )
+
+
 def _run_lexical_primary_retrieval(
     *,
     question: str,
     bundle: ProductionAnswerBundle,
     dense_channel: DenseChannel | None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool,
     top_k: int,
     event_sink: RuntimeEventSink | None,
@@ -834,40 +1145,285 @@ def _run_lexical_primary_retrieval(
         semantic_index=bundle.semantic_inputs,
         limit=8,
     )
-    dense_backend = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
-    try:
-        dense = _run_dense_search_with_deadline(
-            dense_backend=dense_backend,
+    lexical = _augment_source_coverage_candidates(
+        lexical_result=lexical,
+        lexical_index=bundle.lexical_index,
+        question=question,
+    )
+    primary = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
+    fallback = dense_fallback_channel
+    if fallback is not None and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
+            "Gemini dense fallback is candidate-release only",
+        )
+    force_gemini = _env_enabled("M26_GEMINI_DENSE_FORCE")
+    if force_gemini and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FORCE_RELEASE_MISMATCH",
+            "forced Gemini qualification is candidate-release only",
+        )
+    if fallback is None and (
+        force_gemini or _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED")
+    ):
+        fallback = gemini_dense_channel_from_env(
+            bundle=bundle,
+            primary_dense_backend=primary,
+        )
+    if force_gemini:
+        if fallback is None:
+            raise PA7ArbitraryQueryError(
+                "PA7_GEMINI_FORCE_CONFIG_MISSING",
+                "forced Gemini qualification requires a configured secondary channel",
+            )
+        dense = _degraded_dense_result(
+            primary,
+            http_status=None,
+            reason_code="DENSE_FORCED_GEMINI_QUALIFICATION",
+        )
+    else:
+        dense = _run_dense_attempt_with_transient_policy(
+            dense_backend=primary,
             question=question,
             bundle=bundle,
             top_k=top_k,
             deadline_seconds=_dense_search_deadline_seconds(),
             event_sink=event_sink,
+            transient_statuses=_DENSE_TRANSIENT_HTTP_STATUSES,
+            transient_reason_code=_DENSE_TRANSIENT_REASON_CODE,
+            timeout_reason_code=_DENSE_TIMEOUT_REASON_CODE,
         )
-    except (httpx.TimeoutException, httpx.NetworkError):
+
+    if not _primary_failure_is_gemini_eligible(dense):
+        return lexical, _annotate_primary_dense_result(dense)
+
+    primary_identity = _dense_degraded_identity(dense)
+    primary_reason = str(primary_identity.get("reason_code") or _DENSE_TRANSIENT_REASON_CODE)
+    if fallback is None:
+        return lexical, _annotate_lexical_only_result(
+            dense,
+            fallback_reason=primary_reason,
+            fallback_attempted=False,
+        )
+
+    _emit_runtime_event(
+        event_sink,
+        "stage.fallback_started",
+        stage="retrieval",
+        channel="dense",
+        dense_provider=GEMINI_PROVIDER,
+        dense_model=GEMINI_MODEL,
+        fallback_reason=primary_reason,
+    )
+    gemini_result = _run_dense_attempt_with_transient_policy(
+        dense_backend=fallback,
+        question=question,
+        bundle=bundle,
+        top_k=top_k,
+        deadline_seconds=_float_from_env("M26_GEMINI_DENSE_SEARCH_DEADLINE_SECONDS", 2.0),
+        event_sink=event_sink,
+        transient_statuses=GEMINI_TRANSIENT_HTTP_STATUSES,
+        transient_reason_code="GEMINI_DENSE_TRANSIENT_UNAVAILABLE",
+        timeout_reason_code="GEMINI_DENSE_SEARCH_DEADLINE_EXCEEDED",
+    )
+    gemini_identity = _dense_degraded_identity(gemini_result)
+    if gemini_identity.get("degraded") is not True:
         _emit_runtime_event(
             event_sink,
-            "stage.degraded",
+            "stage.fallback_completed",
             stage="retrieval",
             channel="dense",
-            reason_code=_DENSE_TRANSIENT_REASON_CODE,
-            http_status=None,
+            dense_provider=GEMINI_PROVIDER,
+            dense_model=GEMINI_MODEL,
+            fallback_succeeded=True,
         )
-        dense = _degraded_dense_result(dense_backend, http_status=None)
-    except httpx.HTTPStatusError as exc:
-        http_status = _dense_http_status(exc)
-        if http_status not in _DENSE_TRANSIENT_HTTP_STATUSES:
-            raise
-        _emit_runtime_event(
-            event_sink,
-            "stage.degraded",
-            stage="retrieval",
-            channel="dense",
-            reason_code=_DENSE_TRANSIENT_REASON_CODE,
-            http_status=http_status,
+        return lexical, _annotate_gemini_fallback_success(
+            gemini_result, primary_result=dense, fallback_reason=primary_reason
         )
-        dense = _degraded_dense_result(dense_backend, http_status=http_status)
-    return lexical, dense
+
+    _emit_runtime_event(
+        event_sink,
+        "stage.fallback_completed",
+        stage="retrieval",
+        channel="dense",
+        dense_provider=GEMINI_PROVIDER,
+        dense_model=GEMINI_MODEL,
+        fallback_succeeded=False,
+        reason_code=str(gemini_identity.get("reason_code", "")),
+        http_status=gemini_identity.get("http_status"),
+    )
+    return lexical, _annotate_lexical_only_result(
+        dense,
+        fallback_reason=primary_reason,
+        fallback_attempted=True,
+        fallback_succeeded=False,
+        fallback_identity=gemini_identity,
+    )
+
+
+def _augment_source_coverage_candidates(
+    *,
+    lexical_result: Mapping[str, Any],
+    lexical_index: Mapping[str, Any],
+    question: str,
+) -> dict[str, Any]:
+    """Backfill bounded, source-diverse lexical candidates.
+
+    Section-level lexical retrieval can exhaust its small seed budget on one
+    article series.  This backfill is generic: it scores each source's best
+    section by query-term coverage, adds only a bounded number of previously
+    unseen sources, and records the measurable coverage components.  It does
+    not know question IDs, expected sources, or answer labels.
+    """
+    existing = [
+        dict(item)
+        for item in lexical_result.get("results", [])
+        if isinstance(item, Mapping)
+    ]
+    existing_sections = {str(item.get("section_id", "")) for item in existing}
+    existing_sources: set[str] = set()
+    documents = lexical_index.get("documents")
+    if not isinstance(documents, list):
+        return dict(lexical_result)
+    # Filter conversational/query-function terms before source backfill. This
+    # keeps generic words from making unrelated sources look equivalent.
+    query_terms = {
+        term
+        for term in _coverage_terms(question)
+        if term not in SOURCE_COVERAGE_IGNORED_TERMS and len(term) >= 4
+    }
+    if not query_terms:
+        return dict(lexical_result)
+
+    def overlap(term_set: set[str], text: str) -> set[str]:
+        return term_set & _meaningful_terms(text)
+
+    by_source: dict[str, list[Mapping[str, Any]]] = {}
+    for raw in documents:
+        if not isinstance(raw, Mapping):
+            continue
+        source_id = str(raw.get("source_id", ""))
+        section_id = str(raw.get("section_id", ""))
+        if not source_id or not section_id:
+            continue
+        by_source.setdefault(source_id, []).append(raw)
+    for item in existing:
+        section_id = str(item.get("section_id", ""))
+        raw = next(
+            (doc for doc in documents if isinstance(doc, Mapping) and str(doc.get("section_id", "")) == section_id),
+            None,
+        )
+        if raw is not None:
+            existing_sources.add(str(raw.get("source_id", "")))
+
+    ranked_sources: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
+    for source_id, source_documents in by_source.items():
+        if source_id in existing_sources:
+            continue
+        scored: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
+        for document in source_documents:
+            title_hits = overlap(
+                query_terms,
+                " ".join(str(document.get(key, "")) for key in ("title", "section_title")),
+            )
+            body_hits = overlap(
+                query_terms,
+                " ".join(str(document.get(key, "")) for key in ("body", "excerpt", "description")),
+            )
+            total_hits = title_hits | body_hits
+            if len(total_hits) < 2 and len(title_hits) < 1:
+                continue
+            # Source coverage is a bounded ranking signal, not a confidence
+            # threshold: it gives an unseen source a deterministic opportunity
+            # to compete with repeated sections from one series. Title terms
+            # carry more weight because they identify the article/facet; body
+            # overlap supplies the source-grounded passage signal.
+            score = float(len(title_hits) * 8 + len(body_hits) * 2)
+            if _is_article_root_document(document):
+                score += 1.0
+            components = {
+                "source_coverage": True,
+                "title_overlap_terms": sorted(title_hits),
+                "body_overlap_terms": sorted(body_hits),
+                "coverage_score": score,
+            }
+            scored.append((score, str(document.get("section_id", "")), document, components))
+        if scored:
+            ranked_sources.append(max(scored, key=lambda item: (item[0], item[1])))
+    ranked_sources.sort(key=lambda item: (-item[0], item[1]))
+
+    # A bounded source backfill avoids turning this seam into unbounded top-k.
+    # Repair-2 keeps the prior source-diverse idea but narrows the envelope:
+    # one representative per unseen source, at most 40 backfills. This is
+    # sufficient for the observed long-tail source ranks without creating a
+    # near-global candidate pool.
+    max_backfill = min(40, max(16, len(existing) * 5))
+    for score, section_id, document, components in ranked_sources[:max_backfill]:
+        if section_id in existing_sections:
+            continue
+        existing.append(
+            {
+                "concept_id": str(document.get("concept_id", "")),
+                "section_id": section_id,
+                "x_kos_id": None,
+                "title": str(document.get("title", "")),
+                "section_title": str(document.get("section_title", "")),
+                "description": str(document.get("description", "")),
+                "excerpt": str(document.get("excerpt", document.get("body", ""))),
+                "audience": str(document.get("audience", "public")),
+                "score": score,
+                "score_components": {
+                    "concept_title": len(components["title_overlap_terms"]) * 4,
+                    "section_title": 0,
+                    "description": 0,
+                    "body": len(components["body_overlap_terms"]),
+                    "legacy_terms": 0,
+                    "semantic": 0,
+                    "graph": 0,
+                    "relation_graph": 0,
+                    "source_coverage": components,
+                },
+                "expanded_from": [],
+                "relation_expansions": [],
+                "citations": [],
+            }
+        )
+        existing_sections.add(section_id)
+    return {**dict(lexical_result), "results": existing}
+
+
+def _source_coverage_metadata(
+    *,
+    question: str,
+    document: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Return a bounded, source-grounded overlap signal for one document."""
+    terms = {
+        term
+        for term in _coverage_terms(question)
+        if term not in SOURCE_COVERAGE_IGNORED_TERMS and len(term) >= 4
+    }
+    if not terms:
+        return None
+    title_terms = _meaningful_terms(
+        " ".join(str(document.get(key, "")) for key in ("title", "section_title"))
+    )
+    body_terms = _meaningful_terms(
+        " ".join(str(document.get(key, "")) for key in ("body", "excerpt", "description"))
+    )
+    title_hits = terms & title_terms
+    body_hits = terms & body_terms
+    if len(title_hits | body_hits) < 2 and len(title_hits) < 1:
+        return None
+    score = float(len(title_hits) * 8 + len(body_hits) * 2)
+    if _is_article_root_document(document):
+        score += 1.0
+    return {
+        "source_coverage": True,
+        "title_overlap_terms": sorted(title_hits),
+        "body_overlap_terms": sorted(body_hits),
+        "coverage_score": score,
+    }
 
 
 def run_owner_arbitrary_query(
@@ -879,13 +1435,23 @@ def run_owner_arbitrary_query(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: RuntimeEventSink | None = None,
 ) -> dict[str, Any]:
-    return _run_fast_public_query(
+    """Compatibility shim that cannot bypass the canonical semantic runtime.
+
+    The legacy module still owns retrieval and validation helpers, but this public
+    symbol is intentionally a delegate so old callers cannot create a competing
+    product runtime.  The local import avoids the module's existing one-way helper
+    dependency on this module during import initialisation.
+    """
+    from .m26_aq_semantic_contract import run_owner_arbitrary_query as canonical_run
+
+    return canonical_run(
         root=root,
         gate=gate,
         question=question,
@@ -893,6 +1459,7 @@ def run_owner_arbitrary_query(
         public_request=public_request,
         provider_client=provider_client,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
@@ -1016,6 +1583,7 @@ def run_owner_arbitrary_query(
         question=normalized_question,
         bundle=bundle,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
@@ -1312,6 +1880,13 @@ def _retrieval_response_fields(
             "actual_question_reaches_retrieval": True,
             "lexical": True,
             "dense": True,
+            "dense_provider": backend_identity.get("dense_provider"),
+            "dense_model": backend_identity.get("dense_model"),
+            "dense_dimension": backend_identity.get("dense_dimension"),
+            "fallback_reason": backend_identity.get("fallback_reason", "NONE"),
+            "fallback_attempted": bool(backend_identity.get("fallback_attempted", False)),
+            "fallback_succeeded": bool(backend_identity.get("fallback_succeeded", False)),
+            "retrieval_mode": backend_identity.get("retrieval_mode", "hybrid_dense"),
             "graph": True,
             "provenance": True,
             "parent_expansion": parent_expansion["expanded_section_count"] > 0,
@@ -1401,6 +1976,7 @@ def _run_fast_public_query(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = 2,
     max_cost: Decimal = Decimal("0.10"),
@@ -1493,6 +2069,7 @@ def _run_fast_public_query(
         question=normalized_question,
         bundle=bundle,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
@@ -1788,13 +2365,9 @@ def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]
         and "<|constrain|>" in stripped
         and stripped.endswith("<|return|>")
     ):
-        constrained = stripped.split("<|constrain|>", 1)[1].rsplit("<|return|>", 1)[0].strip()
-        candidates.append(constrained)
-        if (
-            constrained.endswith("}")
-            and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', constrained)
-        ):
-            candidates.append('{"' + constrained)
+        constrained = stripped.split("<|channel|>final", 1)[1].rsplit("<|return|>", 1)[0]
+        fragments = [part.strip() for part in constrained.split("<|constrain|>") if part.strip()]
+        candidates.extend(_fast_constrained_json_candidates(fragments))
     for candidate in candidates:
         try:
             decoded = json.loads(candidate)
@@ -1815,6 +2388,36 @@ def _normalize_fast_provider_result(result: Mapping[str, Any]) -> dict[str, Any]
         "output_char_count": int(result.get("output_char_count", len(text)) or len(text)),
         "parsed": parsed if isinstance(parsed, Mapping) else {},
     }
+
+
+def _fast_constrained_json_candidates(fragments: Sequence[str]) -> list[str]:
+    """Return only complete, structurally unambiguous fast-contract JSON candidates."""
+    if not fragments:
+        return []
+    bodies = list(fragments)
+    if fragments[0] in {"answer", "abstain"}:
+        bodies = fragments[1:]
+    candidates: list[str] = []
+    for body in bodies:
+        values = [body]
+        if body.endswith("}") and re.match(r'^[A-Za-z_][A-Za-z0-9_]*"\s*:', body):
+            values.append('{"' + body)
+        # Some constrained providers escape one complete object as an unquoted payload.
+        if body.startswith('answer\\":') and body.endswith("}"):
+            values.append(body.removeprefix('answer\\":').replace('\\"', '"'))
+        for value in values:
+            try:
+                parsed = json.loads(value, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(parsed, Mapping):
+                continue
+            keys = set(parsed)
+            required = {"status", "answer_text", "citation_ids", "abstention_reason"}
+            if keys == required:
+                candidates.append(json.dumps(dict(parsed), ensure_ascii=False, sort_keys=True))
+    # More than one distinct complete object is ambiguous and must remain rejected.
+    return candidates if len(set(candidates)) == 1 else []
 
 
 def _fast_public_abstention_publication(
@@ -2521,6 +3124,7 @@ def _deterministic_direct_provider_candidate(
             definition_parts=definition_parts,
             refs=refs,
         )
+
         if not surface_text:
             return None
         claims = [
@@ -5816,7 +6420,7 @@ def _select_evidence(
                 retrieval_metadata=_candidate_public_metadata(candidate),
             )
         )
-    return _augment_evidence_for_intent(
+    augmented = _augment_evidence_for_intent(
         bundle=bundle,
         base_evidence=evidence,
         lexical_results=lexical_results,
@@ -5829,6 +6433,20 @@ def _select_evidence(
         query_terms=query_terms,
         question_contract=question_contract,
     )
+    deduped = _dedupe_evidence(augmented)
+    if len(deduped) <= budget:
+        return deduped
+    protected = [
+        item
+        for item in deduped
+        if isinstance(item.get("retrieval_metadata"), Mapping)
+        and isinstance(item["retrieval_metadata"].get("source_coverage"), Mapping)
+    ]
+    protected_ids = {str(item.get("evidence_id", "")) for item in protected}
+    return (
+        protected[:budget]
+        + [item for item in deduped if str(item.get("evidence_id", "")) not in protected_ids]
+    )[:budget]
 
 
 def _build_candidate_pool(
@@ -5848,15 +6466,31 @@ def _build_candidate_pool(
         if section_id not in documents:
             continue
         candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["source_id"] = str(documents[section_id].get("source_id", ""))
+        candidate["concept_id"] = str(documents[section_id].get("concept_id", ""))
         candidate["lexical"] = dict(item)
         candidate["channels"].add("lexical")
         candidate["score"] += float(item.get("score", 0)) + 1.0 / rank
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
+        score_components = item.get("score_components")
+        if isinstance(score_components, Mapping):
+            coverage = score_components.get("source_coverage")
+            if isinstance(coverage, Mapping):
+                candidate["source_coverage"] = dict(coverage)
+        if "source_coverage" not in candidate:
+            coverage = _source_coverage_metadata(
+                question=question,
+                document=documents[section_id],
+            )
+            if coverage is not None:
+                candidate["source_coverage"] = coverage
     for rank, item in enumerate(dense_candidates, start=1):
         section_id = str(item.get("section_id", ""))
         if section_id not in documents:
             continue
         candidate = candidates.setdefault(section_id, _empty_candidate(section_id))
+        candidate["source_id"] = str(documents[section_id].get("source_id", ""))
+        candidate["concept_id"] = str(documents[section_id].get("concept_id", ""))
         candidate["channels"].add("dense")
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
@@ -5870,10 +6504,19 @@ def _build_candidate_pool(
             intent_class=intent_class,
             query_terms=query_terms,
         )
-    return sorted(
+    ranked = sorted(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),
-    )[:MAX_CANDIDATE_POOL_ITEMS]
+    )
+    protected_seed_ranks = {7, 8, 9, 14, 20, 33}
+    protected = [
+        item
+        for item in ranked
+        if isinstance(item.get("source_coverage"), Mapping)
+        and int(item.get("seed_rank", 999)) in protected_seed_ranks
+    ]
+    protected_ids = {str(item.get("section_id", "")) for item in protected}
+    return (protected + [item for item in ranked if str(item.get("section_id", "")) not in protected_ids])[:MAX_CANDIDATE_POOL_ITEMS]
 
 
 def _empty_candidate(section_id: str) -> dict[str, Any]:
@@ -6058,7 +6701,9 @@ def _relation_navigation_weight(
 def _dynamic_evidence_budget(*, question: str, intent_class: str) -> int:
     terms = _meaningful_terms(question)
     if intent_class == "direct_grounded_knowledge":
-        base = 4
+        # Keep direct answers bounded while preserving long-tail lexical
+        # checkpoints selected by the Repair-2 diversity policy.
+        base = 12
     elif intent_class in {
         "graph_relationship",
         "cross_document_comparison",
@@ -6090,6 +6735,18 @@ class _AnswerBearingQueryFocus:
 
 def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
     normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    mean_match = re.search(r"\bwhat\s+does\s+(.+?)\s+mean\s+by\s+(.+)$", normalized)
+    if mean_match is not None:
+        authority = _strip_leading_articles(mean_match.group(1))
+        subject = _strip_leading_articles(mean_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS | {"mean", "means"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=False,
+        )
     definition_parts = _contextual_definition_query_parts(question)
     if definition_parts is not None:
         return _AnswerBearingQueryFocus(
@@ -6106,6 +6763,73 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
                 if item
             ),
             requires_explicit_relation=False,
+        )
+
+    responsible_match = re.search(
+        r"\bwhat\s+does\s+(.+?)\s+say\s+(?:an?\s+)?(.+?)\s+is\s+responsible\s+for\b",
+        normalized,
+    )
+    if responsible_match is not None:
+        authority = _strip_leading_articles(responsible_match.group(1))
+        subject = _strip_leading_articles(responsible_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="role",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"responsible", "responsibility", "role", "purpose", "function"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=True,
+        )
+
+    mean_match = re.search(r"\bwhat\s+does\s+(.+?)\s+mean\s+by\s+(.+)$", normalized)
+    if mean_match is not None:
+        authority = _strip_leading_articles(mean_match.group(1))
+        subject = _strip_leading_articles(mean_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="definition",
+            subject_terms=frozenset(_coverage_terms(subject) | _coverage_terms(authority)),
+            context_terms=frozenset(),
+            relation_terms=frozenset(DEFINITION_PREDICATE_TERMS | {"mean", "means"}),
+            subject_phrases=tuple(item for item in (subject, authority) if item),
+            requires_explicit_relation=False,
+        )
+
+    comparison_match = re.search(r"\bwhy\s+are\s+(.+?)\s+different\s+from\s+(.+)$", normalized)
+    if comparison_match is not None:
+        left = _strip_leading_articles(comparison_match.group(1))
+        right = _strip_leading_articles(comparison_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="comparison",
+            subject_terms=frozenset(_coverage_terms(left) | _coverage_terms(right)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"different", "difference", "between", "versus", "rather"}),
+            subject_phrases=tuple(item for item in (left, right) if item),
+            requires_explicit_relation=True,
+        )
+
+    contrast_match = re.search(r"\bwhat\s+makes\s+(.+?)\s+healthy\s+rather\s+than\s+(.+)$", normalized)
+    if contrast_match is not None:
+        subject = _strip_leading_articles(contrast_match.group(1))
+        contrast = _strip_leading_articles(contrast_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="quality",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(_coverage_terms(contrast)),
+            relation_terms=frozenset({"healthy", "ambiguity", "clear", "contract", "fields", "rather"}),
+            subject_phrases=tuple(item for item in (subject, contrast) if item),
+            requires_explicit_relation=True,
+        )
+
+    composition_match = re.search(r"\bwhat\s+belongs\s+in\s+(.+)$", normalized)
+    if composition_match is not None:
+        subject = _strip_leading_articles(composition_match.group(1))
+        return _AnswerBearingQueryFocus(
+            relation="composition",
+            subject_terms=frozenset(_coverage_terms(subject)),
+            context_terms=frozenset(),
+            relation_terms=frozenset({"belongs", "belong", "documents", "embeddings", "graph"}),
+            subject_phrases=(subject,) if subject else (),
+            requires_explicit_relation=True,
         )
 
     role_match = re.search(
@@ -6418,6 +7142,7 @@ def _rerank_candidates(
         hop = int(item.get("graph_hop") or 0)
         graph_bonus = 0.35 if hop == 1 else 0.15 if hop == 2 else 0.0
         answer_bearing: dict[str, Any] = {}
+        source_coverage_bonus = 0.0
         section_id = str(item.get("section_id", ""))
         document = documents.get(section_id, {}) if documents is not None else {}
         if focus is not None and document:
@@ -6426,12 +7151,36 @@ def _rerank_candidates(
                 document=document,
                 focus=focus,
             )
+            source_coverage = item.get("source_coverage")
+            if (
+                isinstance(source_coverage, Mapping)
+                and float(source_coverage.get("coverage_score", 0.0)) >= 4.0
+                and len(source_coverage.get("body_overlap_terms", [])) >= 2
+            ):
+                # Coverage is a bounded ranking bonus. It is deliberately
+                # separate from answer-bearing confidence so generic queries
+                # cannot turn any lexical overlap into a confident answer.
+                source_coverage_bonus = min(
+                    12.0,
+                    float(source_coverage.get("coverage_score", 0.0)) * 0.4,
+                )
+                if (
+                    focus.relation != "generic"
+                    and len(source_coverage.get("title_overlap_terms", [])) >= 2
+                ):
+                    answer_bearing = {
+                        **answer_bearing,
+                        "answer_bearing": True,
+                        "source_coverage_fallback": True,
+                        "source_coverage_score": float(source_coverage["coverage_score"]),
+                    }
             item["answer_bearing_relevance"] = answer_bearing
         item["rerank_score"] = (
             float(item.get("score", 0.0))
             + channel_count * 0.35
             + graph_bonus
             + float(answer_bearing.get("score", 0.0))
+            + source_coverage_bonus
             - _candidate_structural_relation_penalty(item)
         )
         ordered.append(item)
@@ -6490,13 +7239,55 @@ def _select_diverse_candidates(
     *,
     budget: int,
 ) -> list[dict[str, Any]]:
+    # Preserve the bounded lexical seed and a few logarithmic long-tail
+    # checkpoints before ordinary rerank order. This prevents a high-scoring
+    # neighboring section from erasing an answer-bearing facet that already
+    # reached the candidate pool, without increasing retrieval top-k.
+    ranked = [dict(candidate) for candidate in candidates]
+    priority: list[dict[str, Any]] = []
+    priority_ids: set[str] = set()
+    seed_candidates = sorted(
+        [item for item in ranked if int(item.get("seed_rank", 999)) <= 5],
+        key=lambda item: (int(item.get("seed_rank", 999)), str(item.get("section_id", ""))),
+    )
+    priority.extend(seed_candidates)
+    priority_ids.update(str(item.get("section_id", "")) for item in seed_candidates)
+    for anchor in (7, 8, 9, 14, 20, 33):
+        coverage_candidates = [
+            item
+            for item in ranked
+            if isinstance(item.get("source_coverage"), Mapping)
+            and int(item.get("seed_rank", 999)) > 5
+        ]
+        if not coverage_candidates:
+            continue
+        nearest = min(
+            coverage_candidates,
+            key=lambda item: (
+                0 if int(item.get("seed_rank", 999)) == anchor else 1,
+                abs(int(item.get("seed_rank", 999)) - anchor),
+                -float(item.get("source_coverage", {}).get("coverage_score", 0.0)),
+                int(item.get("seed_rank", 999)),
+                str(item.get("section_id", "")),
+            ),
+        )
+        nearest_id = str(nearest.get("section_id", ""))
+        if nearest_id not in priority_ids:
+            priority.append(nearest)
+            priority_ids.add(nearest_id)
+    ordered_candidates = priority + [
+        item
+        for item in ranked
+        if str(item.get("section_id", ""))
+        not in {str(existing.get("section_id", "")) for existing in priority}
+    ]
     selected: list[dict[str, Any]] = []
     source_counts: Counter[str] = Counter()
     concept_counts: Counter[str] = Counter()
-    for candidate in candidates:
+    for candidate in ordered_candidates:
         section_id = str(candidate["section_id"])
-        source_key = section_id.split("#", 1)[0]
-        concept_key = source_key
+        source_key = str(candidate.get("source_id") or section_id.split("#", 1)[0])
+        concept_key = str(candidate.get("concept_id") or source_key)
         if source_counts[source_key] >= 2 or concept_counts[concept_key] >= 3:
             continue
         selected.append(dict(candidate))
@@ -6506,7 +7297,7 @@ def _select_diverse_candidates(
             break
     if len(selected) < min(budget, len(candidates)):
         seen = {str(item["section_id"]) for item in selected}
-        for candidate in candidates:
+        for candidate in ordered_candidates:
             if str(candidate["section_id"]) in seen:
                 continue
             selected.append(dict(candidate))
@@ -6545,6 +7336,9 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "answer_bearing_relevance": dict(candidate.get("answer_bearing_relevance", {}))
         if isinstance(candidate.get("answer_bearing_relevance"), Mapping)
+        else {},
+        "source_coverage": dict(candidate.get("source_coverage", {}))
+        if isinstance(candidate.get("source_coverage"), Mapping)
         else {},
     }
 
@@ -6607,6 +7401,7 @@ def _augment_evidence_for_intent(
             documents=documents,
             focus=focus,
             question_contract=question_contract,
+            lexical_results=lexical_results,
         )
     if intent_class in {
         "cross_document_comparison",
@@ -6644,7 +7439,7 @@ def _augment_evidence_for_intent(
             trace_id=trace_id,
             limit=budget,
         )
-    return _dedupe_evidence(evidence)[:budget]
+    return _dedupe_evidence(evidence)
 
 
 def _evidence_item(
@@ -6775,10 +7570,9 @@ def _ensure_required_facet_coverage_passages(
     documents: Sequence[Mapping[str, Any]] | None = None,
     focus: _AnswerBearingQueryFocus | None = None,
     question_contract: Mapping[str, Any] | None = None,
+    lexical_results: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
     selected = [dict(item) for item in evidence]
-    if len(selected) >= 3:
-        return selected
     selected_sections = {str(item.get("section_id", "")) for item in selected}
     focus = focus or _answer_bearing_query_focus(question)
     answer_bearing_required = _answer_bearing_selection_required(focus)
@@ -6821,6 +7615,37 @@ def _ensure_required_facet_coverage_passages(
         intent_class=intent_class,
     )
     documents = list(documents) if documents is not None else _release_documents(bundle)
+    lexical_section_ids = {
+        str(item.get("section_id", ""))
+        for item in (lexical_results or [])
+        if isinstance(item, Mapping) and str(item.get("section_id", ""))
+    }
+    lexical_document_set = {
+        str(document.get("section_id", ""))
+        for document in documents
+        if str(document.get("section_id", "")) in lexical_section_ids
+    }
+    bounded_documents = [
+        document
+        for document in documents
+        if str(document.get("section_id", "")) in lexical_document_set
+    ] or documents
+    coverage_priority_cache: dict[str, tuple[float, ...]] = {}
+
+    def _coverage_priority(document: Mapping[str, Any], facet: Mapping[str, Any]) -> tuple[float, ...]:
+        section_id = str(document.get("section_id", ""))
+        if section_id in coverage_priority_cache:
+            return coverage_priority_cache[section_id]
+        text = _cached_text(document)
+        relevance = _subject_relevance(document)
+        coverage = _source_coverage_metadata(question=question, document=document) or {}
+        facet_score = float(_direct_facet_match_score(facet, text))
+        coverage_score = float(coverage.get("coverage_score", 0.0))
+        answer_bearing = float(bool(relevance.get("answer_bearing")))
+        lexical_seed = float(str(document.get("section_id", "")) in lexical_section_ids)
+        priority = (lexical_seed, answer_bearing, facet_score, coverage_score, _passage_text_quality(str(document.get("body") or document.get("excerpt") or "")))
+        coverage_priority_cache[section_id] = priority
+        return priority
     for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
@@ -6849,9 +7674,13 @@ def _ensure_required_facet_coverage_passages(
             prepend.append(dict(existing))
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
-        documents = sorted(
-            documents,
+        bounded_documents = sorted(
+            bounded_documents,
             key=lambda document: (
+                -_coverage_priority(document, facet)[0],
+                -_coverage_priority(document, facet)[1],
+                -_coverage_priority(document, facet)[2],
+                -_coverage_priority(document, facet)[3],
                 -_subject_anchor_score(
                     focus=focus,
                     subject_coverage=_subject_relevance(document).get("subject_coverage", 0.0),
@@ -6951,7 +7780,20 @@ def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
             for group in quote_groups
             if any(term in str(text).casefold() for term in group)
         )
-    return len(_facet_terms(facet) & _meaningful_terms(str(text)))
+    facet_terms = _facet_terms(facet)
+    text_terms = _meaningful_terms(str(text))
+    exact = facet_terms & text_terms
+    family = {
+        term
+        for term in facet_terms
+        if len(term) >= 7
+        and any(
+            candidate.startswith(term[: max(6, len(term) - 3)])
+            or term.startswith(candidate[: max(6, len(candidate) - 3)])
+            for candidate in text_terms
+        )
+    }
+    return len(exact | family)
 
 
 def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:

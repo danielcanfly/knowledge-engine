@@ -16,14 +16,13 @@ from .config import Settings
 from .m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     CONTRACT_SCHEMA_VERSION,
+    provider_neutral_downstream_fingerprint,
+    PROVIDER_NEUTRAL_DOWNSTREAM_STAGES,
+    runtime_contract_identity,
     semantic_contract_fingerprint,
     run_owner_arbitrary_query,
 )
-from .m26_cloudflare_provider_router import (
-    CloudflareFallbackRequired,
-    build_provider_routing_client,
-    provider_status_dto,
-)
+from .m26_cloudflare_provider_router import build_provider_routing_client, provider_status_dto
 from .m26_pa5_v8_live import close_minimax_http_client, prepare_minimax_http_client
 from .m26_pa7_arbitrary_query_runtime import (
     MAX_QUERY_CHARS,
@@ -130,6 +129,7 @@ def run_owner_query_for_web(
     public_request: bool = False,
     provider_client: ProviderClient | None = None,
     dense_channel: DenseChannel | None = None,
+    dense_fallback_channel: DenseChannel | None = None,
     require_remote_dense: bool = False,
     max_provider_calls: int = SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS,
     max_cost: Decimal = Decimal("0.10"),
@@ -145,6 +145,7 @@ def run_owner_query_for_web(
             public_request=public_request,
             provider_client=provider_client,
             dense_channel=dense_channel,
+            dense_fallback_channel=dense_fallback_channel,
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
@@ -159,6 +160,7 @@ def run_owner_query_for_web(
             owner_subject_hash=owner_subject_hash,
             public_request=public_request,
             dense_channel=dense_channel,
+            dense_fallback_channel=dense_fallback_channel,
             require_remote_dense=require_remote_dense,
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
@@ -172,6 +174,7 @@ def run_owner_query_for_web(
         public_request=public_request,
         provider_client=provider_client,
         dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
         require_remote_dense=require_remote_dense,
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
@@ -192,6 +195,7 @@ def _run_owner_query_for_web_with_default_provider_routing(
     owner_subject_hash: str,
     public_request: bool,
     dense_channel: DenseChannel | None,
+    dense_fallback_channel: DenseChannel | None,
     require_remote_dense: bool,
     max_provider_calls: int,
     max_cost: Decimal,
@@ -202,34 +206,20 @@ def _run_owner_query_for_web_with_default_provider_routing(
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
     )
-    try:
-        runtime_response = run_owner_arbitrary_query(
-            root=root,
-            gate=gate,
-            question=question,
-            owner_subject_hash=owner_subject_hash,
-            public_request=public_request,
-            provider_client=routing_client,
-            dense_channel=dense_channel,
-            require_remote_dense=require_remote_dense,
-            max_provider_calls=max_provider_calls,
-            max_cost=max_cost,
-            event_sink=event_sink,
-        )
-    except CloudflareFallbackRequired:
-        runtime_response = run_owner_arbitrary_query(
-            root=root,
-            gate=gate,
-            question=question,
-            owner_subject_hash=owner_subject_hash,
-            public_request=public_request,
-            provider_client=routing_client,
-            dense_channel=dense_channel,
-            require_remote_dense=require_remote_dense,
-            max_provider_calls=max_provider_calls,
-            max_cost=max_cost,
-            event_sink=event_sink,
-        )
+    runtime_response = run_owner_arbitrary_query(
+        root=root,
+        gate=gate,
+        question=question,
+        owner_subject_hash=owner_subject_hash,
+        public_request=public_request,
+        provider_client=routing_client,
+        dense_channel=dense_channel,
+        dense_fallback_channel=dense_fallback_channel,
+        require_remote_dense=require_remote_dense,
+        max_provider_calls=max_provider_calls,
+        max_cost=max_cost,
+        event_sink=event_sink,
+    )
     runtime_response = dict(runtime_response)
     runtime_response["provider_routing"] = routing_client.telemetry()
     return build_web_query_dto(runtime_response)
@@ -244,6 +234,18 @@ def _semantic_contract_dto() -> dict[str, str]:
 
 def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
     citations = _web_citations(runtime_response)
+    response_identity = runtime_response.get("canonical_runtime")
+    if isinstance(response_identity, Mapping):
+        if response_identity.get("entrypoint") != RUNTIME_ENTRYPOINT:
+            raise M26AskApiError(
+                "M26_ASK_RUNTIME_AUTHORITY_MISMATCH",
+                "runtime response did not come from the canonical authority",
+            )
+        canonical_runtime = dict(response_identity)
+    else:
+        # Compatibility for isolated DTO fixtures. Live runtime responses always carry
+        # this identity from m26_aq_semantic_contract._response_with_contract.
+        canonical_runtime = runtime_contract_identity()
     semantic_contract = _semantic_contract_dto()
     semantic_closure = dict(
         runtime_response.get("semantic_closure", {})
@@ -254,10 +256,19 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "schema_version": WEB_RESPONSE_SCHEMA,
         "canonical_runtime": {
             "schema_version": runtime_response.get("schema_version"),
-            "entrypoint": RUNTIME_ENTRYPOINT,
             "build_sha": os.environ.get("M26_QUERY_BUILD_SHA", "local_unset"),
             "runtime_response_sha256": canonical_sha256(dict(runtime_response)),
-            **semantic_contract,
+            **canonical_runtime,
+            "semantic_contract_schema": semantic_contract["semantic_contract_schema"],
+            "semantic_contract_fingerprint": canonical_runtime.get(
+                "semantic_contract_fingerprint", semantic_contract["semantic_contract_fingerprint"]
+            ),
+            "downstream_stage_identity": canonical_runtime.get(
+                "downstream_stage_identity", list(PROVIDER_NEUTRAL_DOWNSTREAM_STAGES)
+            ),
+            "downstream_contract_fingerprint": canonical_runtime.get(
+                "downstream_contract_fingerprint", provider_neutral_downstream_fingerprint()
+            ),
         },
         "status": str(runtime_response.get("status", "")),
         "terminal_status": str(runtime_response.get("terminal_status", "")),
@@ -334,9 +345,9 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
         "schema_version": WEB_HEALTH_SCHEMA,
         "status": "ok",
         "canonical_runtime": {
-            "entrypoint": RUNTIME_ENTRYPOINT,
             "build_sha": os.environ.get("M26_QUERY_BUILD_SHA", "local_unset"),
             "root_sha256": sha256_value(str(root.resolve())),
+            **runtime_contract_identity(),
             **_semantic_contract_dto(),
         },
         "route": {

@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 
 from knowledge_engine import m26_ask_api
@@ -23,9 +24,12 @@ from knowledge_engine.m26_cloudflare_provider_router import (
     STATE_SOFT_EXHAUSTED_UNTIL_RESET,
     CloudflareFallbackRequired,
     CloudflareRouterState,
+    CloudflareWorkersAIClient,
+    LiveGateError,
     ProviderRoutingClient,
-    cloudflare_gpt_oss_120b_neurons,
     build_provider_routing_client,
+    classify_cloudflare_http_error,
+    cloudflare_gpt_oss_120b_neurons,
     provider_status_dto,
 )
 
@@ -126,7 +130,7 @@ def test_valid_cloudflare_safe_abstention_does_not_fallback() -> None:
     assert router.telemetry()["fallback_used"] is False
 
 
-def test_3036_sets_hard_exhaustion_and_next_request_skips_cloudflare() -> None:
+def test_3036_uses_minimax_once_in_the_same_closure() -> None:
     state = CloudflareRouterState()
     cloudflare = FakeProvider(failure="CLOUDFLARE_DAILY_QUOTA_EXHAUSTED_3036")
     fallback = FakeProvider()
@@ -137,16 +141,16 @@ def test_3036_sets_hard_exhaustion_and_next_request_skips_cloudflare() -> None:
         state=state,
     )
 
-    with pytest.raises(CloudflareFallbackRequired):
-        router.call(_payload(), "aq_semantic_closure")
     router.call(_payload(), "aq_semantic_closure")
 
     assert state.snapshot()["cloudflare_state"] == STATE_HARD_EXHAUSTED_UNTIL_RESET
     assert len(cloudflare.calls) == 1
     assert len(fallback.calls) == 1
     telemetry = router.telemetry()
-    assert telemetry["fallback_reason"] == FALLBACK_HARD_EXHAUSTED
+    assert telemetry["fallback_reason"] == FALLBACK_CLOUDFLARE_DAILY_QUOTA
     assert telemetry["fallback_evidence_digest_match"] is True
+    assert len(telemetry["provider_attempts"]) == 2
+    assert router.calls == 2
     encoded = json.dumps(telemetry)
     assert "do not persist this prompt" not in encoded
 
@@ -173,7 +177,7 @@ def test_soft_limit_routes_subsequent_requests_to_minimax_until_reset() -> None:
     assert state.route_before_call() == ("minimax-m3", FALLBACK_SOFT_EXHAUSTED)
 
 
-def test_3040_temp_cooldown_skips_cloudflare_then_lazily_recovers() -> None:
+def test_3040_uses_minimax_once_then_lazily_recovers() -> None:
     now = datetime(2026, 8, 15, 12, 0, tzinfo=UTC)
     clock_value = {"now": now}
     state = CloudflareRouterState(clock=lambda: clock_value["now"], cooldown_seconds=30)
@@ -186,10 +190,10 @@ def test_3040_temp_cooldown_skips_cloudflare_then_lazily_recovers() -> None:
         state=state,
     )
 
-    with pytest.raises(CloudflareFallbackRequired):
-        router.call(_payload(), "aq_semantic_closure")
+    router.call(_payload(), "aq_semantic_closure")
     assert state.route_before_call() == ("minimax-m3", FALLBACK_TEMP_COOLDOWN)
     assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT
+    assert len(fallback.calls) == 1
 
     clock_value["now"] = now + timedelta(seconds=31)
     assert state.route_before_call() == ("cloudflare", "NONE")
@@ -246,7 +250,7 @@ def test_web_dto_exposes_sanitized_provider_routing() -> None:
     assert dto["provider_routing"]["fallback_reason"] == FALLBACK_CLOUDFLARE_DAILY_QUOTA
 
 
-def test_web_adapter_cleanly_restarts_on_cloudflare_infra_failure(
+def test_web_adapter_consumes_cloudflare_infra_failure_without_restarting_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("MINIMAX_API_KEY", "test-minimax-key")
@@ -291,11 +295,11 @@ def test_web_adapter_cleanly_restarts_on_cloudflare_infra_failure(
         owner_subject_hash=OWNER_SUBJECT_HASH,
     )
 
-    assert runtime_calls == 2
+    assert runtime_calls == 1
     assert len(cloudflare.calls) == 1
     assert len(fallback.calls) == 1
     assert dto["provider_routing"]["fallback_used"] is True
-    assert dto["provider_routing"]["fallback_reason"] == FALLBACK_HARD_EXHAUSTED
+    assert dto["provider_routing"]["fallback_reason"] == FALLBACK_CLOUDFLARE_DAILY_QUOTA
     assert dto["provider_routing"]["fallback_evidence_digest_match"] is True
 
 
@@ -349,3 +353,172 @@ def test_web_adapter_does_not_fallback_on_valid_cloudflare_safe_abstention(
     assert len(fallback.calls) == 0
     assert dto["safe_abstention"] is True
     assert dto["provider_routing"]["fallback_used"] is False
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "CLOUDFLARE_RATE_LIMIT_OR_CAPACITY_429",
+        "CLOUDFLARE_HTTP_500",
+        "CLOUDFLARE_TIMEOUT_OR_NETWORK_TRANSIENT",
+    ],
+)
+def test_transient_cloudflare_generation_failure_uses_minimax_exactly_once(
+    failure: str,
+) -> None:
+    cloudflare = FakeProvider(failure=failure)
+    fallback = FakeProvider(text='{"status":"answer"}')
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    assert router.call(_payload(), "aq_fast_answer_synthesis")["text"] == '{"status":"answer"}'
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 1
+    assert router.calls == 2
+    assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT
+
+
+def test_cloudflare_http_408_generation_failure_uses_minimax_exactly_once() -> None:
+    cloudflare = FakeProvider(failure="CLOUDFLARE_HTTP_408")
+    fallback = FakeProvider(text='{"status":"answer"}')
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    result = router.call(_payload(), "aq_fast_answer_synthesis")
+
+    assert result["text"] == '{"status":"answer"}'
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 1
+    assert router.calls == 2
+    assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT
+
+
+@pytest.mark.parametrize("failure", ["CLOUDFLARE_AUTH_OR_CONFIG", "CLOUDFLARE_PAID_PLAN_ONLY_5035"])
+def test_cloudflare_authentication_and_configuration_fail_closed(failure: str) -> None:
+    cloudflare = FakeProvider(failure=failure)
+    fallback = FakeProvider()
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    with pytest.raises(LiveGateError, match="failed closed"):
+        router.call(_payload(), "aq_fast_answer_synthesis")
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 0
+    assert router.telemetry()["fallback_used"] is False
+
+
+def test_minimax_fallback_failure_is_terminal_and_not_retried() -> None:
+    cloudflare = FakeProvider(failure="CLOUDFLARE_RATE_LIMIT_OR_CAPACITY_429")
+
+    class FailedMiniMax(FakeProvider):
+        def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
+            self.calls.append((payload, call_class))
+            raise LiveGateError("MINIMAX_HTTP_500")
+
+    fallback = FailedMiniMax()
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+
+    with pytest.raises(LiveGateError, match="MINIMAX_HTTP_500"):
+        router.call(_payload(), "aq_fast_answer_synthesis")
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 1
+    assert router.calls == 2
+    assert router.telemetry()["provider_attempts"][-1]["result"] == "failed"
+
+
+def test_malformed_cloudflare_response_stays_on_parser_validator_path() -> None:
+    class MalformedResponse:
+        status_code = 200
+        text = "not-json"
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            raise ValueError("invalid JSON")
+
+    class MalformedTransport:
+        @staticmethod
+        def post(*args: Any, **kwargs: Any) -> MalformedResponse:
+            del args, kwargs
+            return MalformedResponse()
+
+    client = CloudflareWorkersAIClient(
+        api_key="test-key",
+        account_id="test-account",
+        state=CloudflareRouterState(),
+        max_calls=1,
+    )
+    client.client = MalformedTransport()  # type: ignore[assignment]
+    fallback = FakeProvider()
+    router = ProviderRoutingClient(
+        cloudflare=client,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=client.state,
+    )
+
+    result = router.call(_payload(), "aq_fast_answer_synthesis")
+    assert result["text"] == "not-json"
+    assert len(fallback.calls) == 0
+    assert router.telemetry()["fallback_used"] is False
+
+
+@pytest.mark.parametrize("status_code", [401, 403])
+def test_cloudflare_auth_http_statuses_classify_as_fail_closed(status_code: int) -> None:
+    response = httpx.Response(status_code, json={"errors": []})
+    assert classify_cloudflare_http_error(response) == "CLOUDFLARE_AUTH_OR_CONFIG"
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "F012",
+        "F021",
+        "F035",
+        "F070",
+        "F082",
+        "F094",
+        "F110",
+        "F120",
+        "F132",
+        "F145",
+        "F155",
+        "F167",
+        "F181",
+        "F195",
+    ],
+)
+def test_fcq_429_contract_replay_routes_each_case_to_minimax(case_id: str) -> None:
+    cloudflare = FakeProvider(failure="CLOUDFLARE_RATE_LIMIT_OR_CAPACITY_429")
+    fallback = FakeProvider(text='{"status":"answer"}')
+    router = ProviderRoutingClient(
+        cloudflare=cloudflare,
+        fallback=fallback,  # type: ignore[arg-type]
+        reviewer=FakeProvider(),  # type: ignore[arg-type]
+        state=CloudflareRouterState(),
+    )
+    payload = _payload(secret=f"captured provider-contract replay {case_id}")
+
+    result = router.call(payload, "aq_fast_answer_synthesis")
+
+    assert result["text"] == '{"status":"answer"}'
+    assert len(cloudflare.calls) == 1
+    assert len(fallback.calls) == 1
+    assert router.calls == 2
+    assert router.telemetry()["fallback_reason"] == FALLBACK_CLOUDFLARE_TRANSIENT

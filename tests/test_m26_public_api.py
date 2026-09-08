@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from collections.abc import Iterator
@@ -188,6 +189,52 @@ def _sse_events(response: Any) -> list[dict[str, Any]]:
     return events
 
 
+def test_health_contract_is_browser_compatible_boolean(client: TestClient) -> None:
+    for path in ("/v1/health", "/v1/answers/health"):
+        response = client.get(path)
+        assert response.status_code == 200
+        payload = json.loads(response.content)
+        assert payload["ok"] is True
+        assert payload["status"] == "ok"
+        assert payload["schema_version"] == m26_public_api.PUBLIC_HEALTH_SCHEMA
+        assert isinstance(payload["ok"], bool)
+
+
+def test_health_failure_is_not_masked_as_healthy(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_health(**kwargs: Any) -> dict[str, Any]:
+        del kwargs
+        raise RuntimeError("fixture failure")
+
+    monkeypatch.setattr(m26_public_api, "build_health_dto", fail_health)
+    response = client.get("/v1/answers/health")
+    payload = _problem(response)
+    assert response.status_code == 503
+    assert payload["ok"] is False
+    assert payload["status"] == 503
+
+
+def test_public_health_metadata_redacts_forbidden_legacy_hostname(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        m26_public_api,
+        "build_health_dto",
+        lambda **kwargs: {
+            "canonical_runtime": {
+                "build_sha": "successor",
+                "entrypoint": "https://m24-internal.danielcanfly.com",
+            }
+        },
+    )
+    response = client.get("/v1/answers/health")
+    assert "m24-internal" not in response.text.casefold()
+    assert response.json()["backend"]["entrypoint"] == ""
+
+
 def test_validation_errors_are_problem_details(client: TestClient) -> None:
     cases = [
         (b"{", "INVALID_JSON"),
@@ -232,10 +279,49 @@ def test_language_gate_rejects_chinese_without_consuming_quota(
     )
 
 
+def test_valid_owner_bypass_skips_per_ip_quota_but_invalid_token_does_not(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_answer(monkeypatch)
+    owner_token = "owner-test-token"
+    monkeypatch.setenv(
+        "M26_ASK_OWNER_BYPASS_TOKEN_SHA256",
+        hashlib.sha256(owner_token.encode("utf-8")).hexdigest(),
+    )
+    owner_headers = {
+        "origin": "https://danielcanfly.com",
+        "x-m26-owner-bypass": owner_token,
+        "cf-connecting-ip": "198.51.100.44",
+    }
+    for _ in range(m26_public_api.PER_IP_DAILY_LIMIT + 2):
+        response = client.post(
+            "/v1/answers",
+            headers=owner_headers,
+            json={"question": "What is safe?"},
+        )
+        assert response.status_code == 200
+
+    invalid_headers = {**owner_headers, "x-m26-owner-bypass": "wrong-token"}
+    for _ in range(m26_public_api.PER_IP_DAILY_LIMIT):
+        assert client.post(
+            "/v1/answers",
+            headers=invalid_headers,
+            json={"question": "What is safe?"},
+        ).status_code == 200
+    blocked = client.post(
+        "/v1/answers",
+        headers=invalid_headers,
+        json={"question": "What is safe?"},
+    )
+    assert _problem(blocked)["code"] == "DAILY_IP_LIMIT_EXCEEDED"
+
+
 def test_sse_contract_has_monotonic_seq_single_terminal_and_no_early_answer_text(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("M26_QUERY_BUILD_SHA", "successor-sha")
     _patch_answer(monkeypatch)
     response = client.post(
         "/v1/answers",
@@ -254,6 +340,8 @@ def test_sse_contract_has_monotonic_seq_single_terminal_and_no_early_answer_text
     )
     assert any(event["type"] == "model.completed" for event in events)
     assert all(event["request_id"] == events[0]["request_id"] for event in events)
+    assert events[0]["runtime"]["build_sha"] == "successor-sha"
+    assert "m24-internal" not in response.text.casefold()
 
 
 def test_safe_abstention_terminal(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,9 +363,21 @@ def test_safe_abstention_terminal(client: TestClient, monkeypatch: pytest.Monkey
 
 
 def test_cors_allows_configured_origin_and_rejects_invalid_origin(client: TestClient) -> None:
-    allowed = client.options("/v1/answers", headers={"origin": "https://danielcanfly.com"})
+    allowed = client.options(
+        "/v1/answers",
+        headers={
+            "origin": "https://danielcanfly.com",
+            "access-control-request-method": "POST",
+            "access-control-request-headers": "content-type,x-m26-owner-bypass",
+        },
+    )
     assert allowed.status_code == 204
     assert allowed.headers["access-control-allow-origin"] == "https://danielcanfly.com"
+    allowed_headers = {
+        item.strip().casefold()
+        for item in allowed.headers["access-control-allow-headers"].split(",")
+    }
+    assert {"content-type", "x-m26-owner-bypass"} <= allowed_headers
     rejected = client.post(
         "/v1/answers",
         headers={"origin": "https://evil.example"},

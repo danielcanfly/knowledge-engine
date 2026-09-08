@@ -49,6 +49,27 @@ class CloudflareFallbackRequired(RuntimeError):
         self.reason = reason
 
 
+def _cloudflare_fallback_eligible(reason: str) -> bool:
+    """Keep fallback limited to provider availability, not authority/config errors."""
+    normalized = str(reason).upper()
+    if normalized in {
+        "CLOUDFLARE_AUTH_OR_CONFIG",
+        "CLOUDFLARE_PAID_PLAN_ONLY_5035",
+        "CLOUDFLARE_CONFIGURATION_MISSING",
+    }:
+        return False
+    if normalized == "CLOUDFLARE_HTTP_408":
+        return True
+    if normalized.startswith("CLOUDFLARE_HTTP_4"):
+        return False
+    return normalized in {
+        "CLOUDFLARE_DAILY_QUOTA_EXHAUSTED_3036",
+        "CLOUDFLARE_TRANSIENT_CAPACITY_3040",
+        "CLOUDFLARE_RATE_LIMIT_OR_CAPACITY_429",
+        "CLOUDFLARE_TIMEOUT_OR_NETWORK_TRANSIENT",
+    } or normalized.startswith("CLOUDFLARE_HTTP_5")
+
+
 def next_utc_midnight(now: datetime | None = None) -> datetime:
     current = now or datetime.now(UTC)
     if current.tzinfo is None:
@@ -282,14 +303,18 @@ class CloudflareWorkersAIClient:
                 json=self._openai_payload(payload),
             )
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
-            raise CloudflareFallbackRequired(type(exc).__name__) from exc
+            raise CloudflareFallbackRequired(
+                "CLOUDFLARE_TIMEOUT_OR_NETWORK_TRANSIENT"
+            ) from exc
         if response.status_code >= 400:
             error_class = classify_cloudflare_http_error(response)
             raise CloudflareFallbackRequired(error_class)
         try:
             body = response.json()
-        except ValueError as exc:
-            raise CloudflareFallbackRequired("CLOUDFLARE_NON_JSON_RESPONSE") from exc
+        except ValueError:
+            # Preserve malformed provider output for the existing parser/validator
+            # contract; malformed content is not evidence of provider capacity.
+            body = {"choices": [{"message": {"content": response.text}}]}
         choices = body.get("choices")
         first = choices[0] if isinstance(choices, list) and choices else {}
         message = _mapping(_mapping(first).get("message"))
@@ -366,7 +391,13 @@ class ProviderRoutingClient:
             self.fallback_reason = reason
             self.closure_provider_final = MINIMAX_PROVIDER
             self.fallback_selected_evidence_digest = _selected_evidence_digest(payload)
-            result = self.fallback.call(payload, call_class)
+            try:
+                result = self.fallback.call(payload, call_class)
+            except LiveGateError as exc:
+                self._record_failed_attempt(
+                    call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, exc
+                )
+                raise
             self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
             return result
 
@@ -374,7 +405,13 @@ class ProviderRoutingClient:
             self.fallback_used = True
             self.fallback_reason = FALLBACK_DISABLED_CONFIGURATION
             self.closure_provider_final = MINIMAX_PROVIDER
-            result = self.fallback.call(payload, call_class)
+            try:
+                result = self.fallback.call(payload, call_class)
+            except LiveGateError as exc:
+                self._record_failed_attempt(
+                    call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, exc
+                )
+                raise
             self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
             return result
 
@@ -382,8 +419,20 @@ class ProviderRoutingClient:
             result = self.cloudflare.call(payload, call_class)
         except CloudflareFallbackRequired as exc:
             self.failed_cloudflare_selected_evidence_digest = _selected_evidence_digest(payload)
+            if not _cloudflare_fallback_eligible(exc.reason):
+                self._record_cloudflare_failure(exc.reason, fallback_eligible=False)
+                raise LiveGateError(f"Cloudflare generation failed closed: {exc.reason}") from exc
             self._record_cloudflare_failure(exc.reason)
-            raise
+            self.fallback_selected_evidence_digest = _selected_evidence_digest(payload)
+            try:
+                result = self.fallback.call(payload, call_class)
+            except LiveGateError as fallback_exc:
+                self._record_failed_attempt(
+                    call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, fallback_exc
+                )
+                raise
+            self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
+            return result
         self.closure_provider_final = CLOUDFLARE_PROVIDER
         self._record_attempt(call_class, CLOUDFLARE_PROVIDER, CLOUDFLARE_MODEL, result)
         return result
@@ -419,18 +468,26 @@ class ProviderRoutingClient:
             "state_scope": snapshot["state_scope"],
         }
 
-    def _record_cloudflare_failure(self, error_class: str) -> None:
-        self.fallback_used = True
-        self.closure_provider_final = MINIMAX_PROVIDER
+    def _record_cloudflare_failure(
+        self, error_class: str, *, fallback_eligible: bool = True
+    ) -> None:
+        self.fallback_used = fallback_eligible
+        self.closure_provider_final = (
+            MINIMAX_PROVIDER if fallback_eligible else CLOUDFLARE_PROVIDER
+        )
+        self.calls += 1
         if error_class == "CLOUDFLARE_DAILY_QUOTA_EXHAUSTED_3036":
             self.fallback_reason = FALLBACK_CLOUDFLARE_DAILY_QUOTA
             self.state.record_daily_quota_exhausted(error_class)
         elif error_class in {"CLOUDFLARE_PAID_PLAN_ONLY_5035", "CLOUDFLARE_AUTH_OR_CONFIG"}:
             self.fallback_reason = FALLBACK_CLOUDFLARE_CONFIGURATION
             self.state.record_disabled_configuration(error_class)
-        else:
+        elif fallback_eligible:
             self.fallback_reason = FALLBACK_CLOUDFLARE_TRANSIENT
             self.state.record_transient(error_class)
+        else:
+            self.fallback_reason = FALLBACK_CLOUDFLARE_CONFIGURATION
+            self.state.record_disabled_configuration(error_class)
         self.attempts.append(
             {
                 "call_class": "closure",
@@ -467,6 +524,24 @@ class ProviderRoutingClient:
                 ),
                 "stop_reason": str(result.get("stop_reason", "")),
                 "network_attempt": _safe_int(result.get("network_attempt"), 1),
+            }
+        )
+
+    def _record_failed_attempt(
+        self,
+        call_class: str,
+        provider: str,
+        model: str,
+        error: Exception,
+    ) -> None:
+        self.calls += 1
+        self.attempts.append(
+            {
+                "call_class": call_class,
+                "provider": provider,
+                "model": model,
+                "result": "failed",
+                "error_class": type(error).__name__,
             }
         )
 

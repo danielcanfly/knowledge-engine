@@ -14,6 +14,9 @@ from typing import Any
 
 from knowledge_engine.m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
+    provider_neutral_downstream_fingerprint,
+    PROVIDER_NEUTRAL_DOWNSTREAM_STAGES,
+    runtime_contract_identity,
     derive_semantic_requirements,
     evaluate_visible_semantics,
     semantic_contract_fingerprint,
@@ -516,6 +519,15 @@ def _validate_canonical_identity(row: dict[str, Any], expected_sha: str) -> list
         failures.append("runtime_entrypoint_mismatch")
     if canonical.get("semantic_contract_fingerprint") != expected_fingerprint:
         failures.append("runtime_fingerprint_mismatch")
+    expected_runtime = runtime_contract_identity()
+    if canonical.get("runtime_contract_fingerprint") != expected_runtime[
+        "runtime_contract_fingerprint"
+    ]:
+        failures.append("runtime_contract_fingerprint_mismatch")
+    if canonical.get("downstream_contract_fingerprint") != provider_neutral_downstream_fingerprint():
+        failures.append("downstream_contract_fingerprint_mismatch")
+    if canonical.get("downstream_stage_identity") != list(PROVIDER_NEUTRAL_DOWNSTREAM_STAGES):
+        failures.append("downstream_stage_identity_mismatch")
     closure_fp = _closure_fingerprint(row)
     if closure_fp and closure_fp != expected_fingerprint:
         failures.append("semantic_closure_fingerprint_mismatch")

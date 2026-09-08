@@ -1065,7 +1065,7 @@ def build_corrective_formal_test_manifest(
             "answerable": bool(spec["answerable"]),
             "class": str(spec["class"]),
             "expected_runtime_path": (
-                "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+                "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
             ),
             "generated_after_implementation_merge": True,
             "non_sensitive_operator_demo": bool(spec["non_sensitive_operator_demo"]),
@@ -1423,7 +1423,7 @@ def _run_corrective_formal_row(
     dense_channel: Any,
     phase: str,
 ) -> dict[str, Any]:
-    from .m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
+    from .m26_aq_semantic_contract import run_owner_arbitrary_query
 
     response = run_owner_arbitrary_query(
         root=root,
@@ -1446,6 +1446,16 @@ def _formal_row_from_response(
     response: Mapping[str, Any],
     phase: str,
 ) -> dict[str, Any]:
+    from .m26_aq_semantic_contract import CANONICAL_RUNTIME_ENTRYPOINT
+
+    runtime_identity = response.get("canonical_runtime")
+    if not isinstance(runtime_identity, Mapping) or runtime_identity.get(
+        "entrypoint"
+    ) != CANONICAL_RUNTIME_ENTRYPOINT:
+        raise ProductionPromotionClosureError(
+            "PA7_RUNTIME_AUTHORITY_MISMATCH",
+            "formal response lacks canonical runtime identity",
+        )
     answerable = bool(spec["answerable"])
     provider_invoked = bool(response.get("provider_invoked"))
     cited_answer = response.get("status") == "owner_only_cited_answer"
@@ -1506,8 +1516,15 @@ def _formal_row_from_response(
             "parent_expansion": bool(retrieval_summary.get("parent_expansion")),
             "provenance": bool(retrieval_summary.get("provenance")),
         },
-        "runtime_path": (
-            "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+        "runtime_path": str(runtime_identity["entrypoint"]),
+        "runtime_contract_fingerprint": str(
+            runtime_identity.get("runtime_contract_fingerprint", "")
+        ),
+        "downstream_contract_fingerprint": str(
+            runtime_identity.get("downstream_contract_fingerprint", "")
+        ),
+        "downstream_stage_identity": list(
+            runtime_identity.get("downstream_stage_identity", [])
         ),
         "safe_terminal": cited_answer or safe_abstention,
         "selected_evidence_count": len(response.get("selected_evidence_ids", [])),
@@ -1603,7 +1620,7 @@ def _compile_corrective_formal_receipt(
                     "--question <arbitrary natural-language question>"
                 ),
                 "runtime_path": (
-                    "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+                    "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
                 ),
             },
             "calibration": {

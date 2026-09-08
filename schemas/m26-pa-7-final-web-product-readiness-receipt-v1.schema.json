@@ -7,7 +7,7 @@
       "additionalProperties": true,
       "properties": {
         "entrypoint": {
-          "const": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+          "const": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
         }
       },
       "required": [

@@ -68,6 +68,7 @@ FALLBACK_DAILY_LIMIT = 10
 PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS = 2
 PUBLIC_REQUEST_SCHEMA = "danielcanfly-answers-request/v1"
 PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"
+OWNER_BYPASS_HEADER = "x-m26-owner-bypass"
 
 ALLOWED_FIELDS = {"question"}
 FORBIDDEN_SELECTION_FIELDS = {"provider", "model"}
@@ -144,7 +145,13 @@ class PublicQuotaLedger:
                 """
             )
 
-    def admit(self, *, ip_key: str, now: datetime | None = None) -> Problem | None:
+    def admit(
+        self,
+        *,
+        ip_key: str,
+        now: datetime | None = None,
+        owner_bypass: bool = False,
+    ) -> Problem | None:
         current = now or datetime.now(UTC)
         day = current.strftime("%Y-%m-%d")
         minute = current.strftime("%Y-%m-%dT%H:%M")
@@ -183,6 +190,8 @@ class PublicQuotaLedger:
                     ),
                 )
                 for scope, key, window, limit, code, limit_reset, retry in checks:
+                    if owner_bypass and scope in {"ip_daily", "ip_burst"}:
+                        continue
                     if self._count(db, scope, key, window) >= limit:
                         db.execute("ROLLBACK")
                         return Problem(
@@ -215,6 +224,8 @@ class PublicQuotaLedger:
                         retry_after_seconds=1,
                     )
                 for scope, key, window, *_ in checks:
+                    if owner_bypass and scope in {"ip_daily", "ip_burst"}:
+                        continue
                     self._increment_count(db, scope, key, window)
                 self._increment_active(db, "ip_active", ip_key)
                 self._increment_active(db, "global_active", "global")
@@ -333,12 +344,16 @@ def create_app(
     app.state.public_quota_ledger = ledger
 
     @app.get("/v1/health")
+    @app.get("/v1/answers/health")
     async def health(request: Request) -> JSONResponse:
         request_id = _request_id()
         problem = _readiness_problem(request_id, require_owner=False)
         if problem is not None:
             return _problem_response(
-                problem, request_id=request_id, origin=_request_origin(request)
+                problem,
+                request_id=request_id,
+                origin=_request_origin(request),
+                health=True,
             )
         try:
             internal = build_health_dto(root=app_root, gate_path=resolved_gate_path)
@@ -351,17 +366,25 @@ def create_app(
                 retryable=True,
             )
             return _problem_response(
-                problem, request_id=request_id, origin=_request_origin(request)
+                problem,
+                request_id=request_id,
+                origin=_request_origin(request),
+                health=True,
             )
         return JSONResponse(
             {
                 "schema_version": PUBLIC_HEALTH_SCHEMA,
+                "ok": True,
                 "status": "ok",
                 "request_id": request_id,
                 "answers_url": "/v1/answers",
                 "backend": {
-                    "build_sha": internal.get("canonical_runtime", {}).get("build_sha", ""),
-                    "entrypoint": internal.get("canonical_runtime", {}).get("entrypoint", ""),
+                    "build_sha": _public_metadata_value(
+                        internal.get("canonical_runtime", {}).get("build_sha", "")
+                    ),
+                    "entrypoint": _public_metadata_value(
+                        internal.get("canonical_runtime", {}).get("entrypoint", "")
+                    ),
                 },
                 "limits": _limits_dto(),
             },
@@ -417,7 +440,10 @@ def create_app(
         fallback_problem = ledger.fallback_budget_available()
         if fallback_problem is not None and _fallback_expected():
             return _problem_response(fallback_problem, request_id=request_id, origin=origin)
-        admission_problem = ledger.admit(ip_key=ip_key)
+        admission_problem = ledger.admit(
+            ip_key=ip_key,
+            owner_bypass=_owner_bypass_matches(request),
+        )
         if admission_problem is not None:
             return _problem_response(admission_problem, request_id=request_id, origin=origin)
         admission = Admission(
@@ -595,7 +621,12 @@ async def _answer_event_stream(
 
     task = asyncio.create_task(worker())
     next_heartbeat = time.monotonic() + HEARTBEAT_SECONDS
-    yield emit("request.accepted", accepted_at=admission.accepted_at, limits=_limits_dto())
+    yield emit(
+        "request.accepted",
+        accepted_at=admission.accepted_at,
+        limits=_limits_dto(),
+        runtime={"build_sha": _public_metadata_value(os.environ.get("M26_QUERY_BUILD_SHA", ""))},
+    )
     try:
         while True:
             if await request.is_disconnected():
@@ -895,7 +926,13 @@ def _uses_fallback(dto: Mapping[str, Any]) -> bool:
     return bool(_mapping(dto.get("provider_routing")).get("fallback_used"))
 
 
-def _problem_response(problem: Problem, *, request_id: str, origin: str | None) -> JSONResponse:
+def _problem_response(
+    problem: Problem,
+    *,
+    request_id: str,
+    origin: str | None,
+    health: bool = False,
+) -> JSONResponse:
     body = {
         "type": PROBLEM_TYPE_BASE + problem.code,
         "title": problem.title,
@@ -905,6 +942,8 @@ def _problem_response(problem: Problem, *, request_id: str, origin: str | None) 
         "request_id": request_id,
         "retryable": problem.retryable,
     }
+    if health:
+        body["ok"] = False
     if problem.retry_after_seconds is not None:
         body["retry_after_seconds"] = problem.retry_after_seconds
     if problem.reset_at is not None:
@@ -918,6 +957,11 @@ def _problem_response(problem: Problem, *, request_id: str, origin: str | None) 
         media_type="application/problem+json",
         headers=headers,
     )
+
+
+def _public_metadata_value(value: Any) -> str:
+    text = str(value or "")
+    return "" if "m24-internal" in text.casefold() else text
 
 
 def _request_origin(request: Request) -> str | None:
@@ -955,7 +999,7 @@ def _preflight_headers(*, origin: str | None) -> dict[str, str]:
     headers.update(
         {
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "content-type",
+            "Access-Control-Allow-Headers": f"content-type, {OWNER_BYPASS_HEADER}",
             "Access-Control-Max-Age": "300",
         }
     )
@@ -980,6 +1024,18 @@ def _pseudonymous_ip_key(request: Request, *, now: datetime) -> str:
     secret = os.environ["M26_PUBLIC_IP_HMAC_SECRET"].encode("utf-8")
     digest = hmac.new(secret, f"{day}:{raw_ip}".encode(), hashlib.sha256).hexdigest()
     return f"ipday_{day}_{digest}"
+
+
+def _owner_bypass_matches(request: Request) -> bool:
+    """Accept only the provisioned owner token for per-IP quota bypass."""
+    expected_digest = os.environ.get("M26_ASK_OWNER_BYPASS_TOKEN_SHA256", "").strip().lower()
+    supplied = request.headers.get(OWNER_BYPASS_HEADER, "")
+    if not expected_digest or not supplied:
+        return False
+    if len(expected_digest) != 64 or any(char not in "0123456789abcdef" for char in expected_digest):
+        return False
+    supplied_digest = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(supplied_digest, expected_digest)
 
 
 def _authoritative_client_ip(request: Request) -> str:

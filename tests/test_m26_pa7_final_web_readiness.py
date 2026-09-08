@@ -21,6 +21,7 @@ from scripts.m26_pa7_evidence_privacy_hygiene import (
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as runtime_module
+from knowledge_engine.m26_aq_semantic_contract import runtime_contract_identity
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
 from knowledge_engine.m26_pa7_final_web_readiness import (
     ASK_URL,
@@ -49,7 +50,7 @@ PILOT = ROOT / "pilot" / "m26"
 SCHEMAS = ROOT / "schemas"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 FINAL_MANIFEST_SELF_SHA256 = (
-    "fbedacb25b7bc9a28833d58658e6425637d990b064ea67a31451f94e7f36e91e"
+    "8929fbf98db8faae848bc72c4da28bc7d0ad30d56396a2821df1500e1c1a994e"
 )
 
 
@@ -278,6 +279,7 @@ def test_final_web_formal_manifest_rebuild_matches_committed_artifact() -> None:
 def test_final_web_formal_bank_intent_compat_preserves_runtime_telemetry() -> None:
     spec = final_formal_query_specs()[2]
     response = {
+        "canonical_runtime": runtime_contract_identity(),
         "citations": [
             {"evidence_type": "passage", "source_identity": "source-a"},
             {"evidence_type": "passage", "source_identity": "source-b"},
@@ -320,6 +322,7 @@ def test_final_web_formal_bank_intent_compat_preserves_runtime_telemetry() -> No
 def test_historical_formal_bank_failure_is_diagnostic_without_rewriting_row() -> None:
     spec = final_formal_query_specs()[2]
     response = {
+        "canonical_runtime": runtime_contract_identity(),
         "citations": [
             {"evidence_type": "passage", "source_identity": "source-a"},
         ],
@@ -362,6 +365,7 @@ def test_historical_formal_bank_failure_is_diagnostic_without_rewriting_row() ->
 def test_row5_verified_corpus_scope_mismatch_is_diagnostic_without_passing_row() -> None:
     spec = final_formal_query_specs()[4]
     response = {
+        "canonical_runtime": runtime_contract_identity(),
         "citation_locator_valid": True,
         "citations": [],
         "distinct_source_count": 8,

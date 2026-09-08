@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from .m26_pa7_arbitrary_query_runtime import run_owner_arbitrary_query
+from .m26_aq_semantic_contract import run_owner_arbitrary_query
 from .m26_production_promotion_closure import (
     compile_owner_query_response,
     load_json,

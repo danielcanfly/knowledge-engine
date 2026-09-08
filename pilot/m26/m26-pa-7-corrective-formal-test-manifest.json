@@ -34,7 +34,7 @@
     {
       "answerable": true,
       "class": "direct_grounded_knowledge",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": true,
       "ordinal": 1,
@@ -44,7 +44,7 @@
     {
       "answerable": true,
       "class": "direct_grounded_knowledge",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 2,
@@ -53,7 +53,7 @@
     {
       "answerable": true,
       "class": "cross_document_comparison",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 3,
@@ -62,7 +62,7 @@
     {
       "answerable": true,
       "class": "graph_relationship_navigation",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 4,
@@ -71,7 +71,7 @@
     {
       "answerable": true,
       "class": "provenance_source_trace",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 5,
@@ -80,7 +80,7 @@
     {
       "answerable": true,
       "class": "conflict_temporal_freshness",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 6,
@@ -89,7 +89,7 @@
     {
       "answerable": false,
       "class": "no_answer",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 7,
@@ -98,7 +98,7 @@
     {
       "answerable": false,
       "class": "prompt_injection_privacy",
-      "expected_runtime_path": "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query",
+      "expected_runtime_path": "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query",
       "generated_after_implementation_merge": true,
       "non_sensitive_operator_demo": false,
       "ordinal": 8,
@@ -107,7 +107,7 @@
   ],
   "query_set_sha256": "f3d813d6aa77090224dbfdc76d5a948ab686ad1a9d5fc4dd974e95ff29b80087",
   "schema_version": "knowledge-engine-m26-pa-7-corrective-formal-test-manifest/v1",
-  "self_sha256": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9",
+  "self_sha256": "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396",
   "stage_id": "M26.PA.7-CORRECTIVE",
   "status": "corrective_formal_test_manifest_frozen",
   "trigger_issue": 1259

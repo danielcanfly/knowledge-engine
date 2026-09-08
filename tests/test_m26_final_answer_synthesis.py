@@ -204,7 +204,12 @@ def test_typed_compact_provider_contract_is_accepted() -> None:
                         "claim_type": "EVIDENCE_SYNTHESIS",
                         "text": "Durable state and verification solve different problems.",
                         "evidence_labels": ["e1", "e2"],
-                        "covers": ["durable_state", "verification_completion"],
+                        "covers": [
+                            "durable_state",
+                            "completion_verification",
+                            "explanatory_answer",
+                            "comparison_or_distinction",
+                        ],
                     }
                 ],
                 "unanswered_dimensions": [],
@@ -246,7 +251,12 @@ def test_typed_synthesis_preserves_plain_answer_and_supports_synthesis() -> None
                 "claim_type": "EVIDENCE_SYNTHESIS",
                 "surface_text": answer_text,
                 "evidence_labels": ["e1", "e2"],
-                "covers": ["durable_state", "verification_completion"],
+                "covers": [
+                    "durable_state",
+                    "completion_verification",
+                    "explanatory_answer",
+                    "comparison_or_distinction",
+                ],
             }
         ],
     )
@@ -263,7 +273,7 @@ def test_typed_synthesis_preserves_plain_answer_and_supports_synthesis() -> None
     assert closure["failures"] == []
 
 
-def test_model_explanation_claim_type_survives_verification() -> None:
+def test_model_explanation_cannot_close_supported_material_facets() -> None:
     question = "Why is an explanation different from a direct factual claim?"
     evidence = [
         _passage(
@@ -292,11 +302,9 @@ def test_model_explanation_claim_type_survives_verification() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert answer["status"] == "owner_only_cited_answer"
-    assert answer["answer_claims"][0]["claim_type"] == "MODEL_EXPLANATION"
-    assert answer["answer_text"] == answer_text
-    assert "[claim_" not in answer["answer_text"]
-    assert closure["failures"] == []
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["unsupported_accepted_claims"] == 0
+    assert "NO_SUPPORTED_REQUIRED_FACETS" in closure["failures"]
 
 
 def test_numbered_corpus_statement_miscast_as_model_explanation_still_fails_closed() -> None:
@@ -326,8 +334,8 @@ def test_numbered_corpus_statement_miscast_as_model_explanation_still_fails_clos
 
     assert answer["status"] == "owner_only_safe_abstention"
     assert answer["unsupported_accepted_claims"] == 0
-    assert "M26-PA7-ME-033" in answer["reason_codes"]
-    assert "M26-PA7-ME-033" in closure["failures"]
+    assert "UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL" in answer["reason_codes"]
+    assert "UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL" in closure["failures"]
 
 
 def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
@@ -359,7 +367,12 @@ def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
                     "checks the final result before acceptance."
                 ),
                 "evidence_labels": ["e1", "e2"],
-                "covers": ["durable_state", "verification_completion"],
+                "covers": [
+                    "durable_state",
+                    "completion_verification",
+                    "explanatory_answer",
+                    "comparison_or_distinction",
+                ],
             }
         ],
     )
@@ -479,7 +492,12 @@ def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
                 "claim_type": "EVIDENCE_SYNTHESIS",
                 "surface_text": answer_text,
                 "evidence_labels": ["e1", "e2"],
-                "covers": ["explanatory_answer", "comparison_or_distinction"],
+                "covers": [
+                    "durable_state",
+                    "completion_verification",
+                    "explanatory_answer",
+                    "comparison_or_distinction",
+                ],
             }
         ],
     )
@@ -535,7 +553,12 @@ def test_long_multi_dimension_answer_publishes_directly_without_512_ceiling() ->
                 "claim_type": "EVIDENCE_SYNTHESIS",
                 "surface_text": claim_surface,
                 "evidence_labels": ["e1", "e2"],
-                "covers": ["explanatory_answer", "comparison_or_distinction"],
+                "covers": [
+                    "durable_state",
+                    "completion_verification",
+                    "explanatory_answer",
+                    "comparison_or_distinction",
+                ],
             }
         ],
     )
@@ -593,6 +616,8 @@ def test_incomplete_answer_gets_one_bounded_repair() -> None:
                         "surface_text": complete,
                         "evidence_labels": ["e1", "e2"],
                         "covers": [
+                            "durable_state",
+                            "completion_verification",
                             "explanatory_answer",
                             "comparison_or_distinction",
                         ],
@@ -612,7 +637,7 @@ def test_incomplete_answer_gets_one_bounded_repair() -> None:
     assert closure["failures"] == []
 
 
-def test_fast_answer_contract_does_not_semantic_retry_incomplete_answer() -> None:
+def test_fast_answer_contract_fails_closed_on_incomplete_supported_facets() -> None:
     question = "Why do durable state and verification solve different reliability problems?"
     evidence = [
         _passage(
@@ -660,15 +685,12 @@ def test_fast_answer_contract_does_not_semantic_retry_incomplete_answer() -> Non
         endpoint_proof={"required": False, "matched": False},
     )
 
-    assert [call["call_class"] for call in provider.calls] == [
-        "aq_semantic_closure",
-        "aq_claim_semantic_entailment",
-    ]
+    assert [call["call_class"] for call in provider.calls] == ["aq_semantic_closure"]
     assert len(_synthesis_calls(provider)) == 1
-    assert answer["answer_source"] == "provider_verified_runtime_bound_partial_semantic_closure"
+    assert answer["answer_source"] == "safe_abstention"
     assert answer["repair_attempted"] is False
-    assert answer["multi_evidence_verification"]["partial_answer"] is True
-    assert closure["partial_answer"] is True
+    assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
 
 
 def test_repeated_incomplete_answer_does_not_recursive_repair() -> None:
@@ -730,11 +752,17 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
                         "claim_type": "EVIDENCE_FACT",
                         "surface_text": partial,
                         "evidence_labels": ["e1"],
-                        "covers": ["explanatory_answer"],
-                        "unanswered_dimensions": ["verification side"],
+                        "covers": ["durable_state", "explanatory_answer"],
+                        "unanswered_dimensions": [
+                            "completion_verification",
+                            "comparison_or_distinction",
+                        ],
                     }
                 ],
-                unanswered_dimensions=["verification side"],
+                unanswered_dimensions=[
+                    "completion_verification",
+                    "comparison_or_distinction",
+                ],
             )
         ]
     )
@@ -767,7 +795,7 @@ def test_unsupported_core_query_fully_abstains() -> None:
 
     assert answer["status"] == "owner_only_safe_abstention"
     assert answer["safe_abstention"] is True
-    assert "SEMANTIC_CLOSURE_FAILED" in answer["reason_codes"]
+    assert "NO_R1_SELECTED_EVIDENCE" in answer["reason_codes"]
     assert closure["failures"]
 
 
@@ -799,6 +827,8 @@ def test_paraphrased_completeness_behavior_is_equivalent() -> None:
                 "surface_text": answer_text,
                 "evidence_labels": ["e1", "e2"],
                 "covers": [
+                    "durable_state",
+                    "completion_verification",
                     "explanatory_answer",
                     "comparison_or_distinction",
                 ],

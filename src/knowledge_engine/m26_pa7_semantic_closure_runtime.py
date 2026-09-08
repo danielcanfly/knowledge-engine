@@ -52,6 +52,7 @@ SEMANTIC_SEGMENT_ROLES = {"material_claim", "model_explanation"}
 PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
     "provider_verified_runtime_bound_partial_semantic_closure"
 )
+FACET_CLOSURE_SCHEMA_VERSION = "m26-aqv2-r2-facet-closure/v1"
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ class SemanticRequirement:
     exact_phrase: str = ""
 
 
-def run_owner_arbitrary_query(
+def _run_semantic_closure_internal(
     *,
     root: Path,
     gate: Mapping[str, Any],
@@ -454,6 +455,55 @@ def _synthesize_and_verify(
     calls: list[dict[str, Any]] = []
     repair_attempted = False
     final_support_proof: list[dict[str, Any]] = []
+    requirements = _compose_selected_evidence_requirements(
+        question=question,
+        requirements=requirements,
+        evidence=evidence,
+    )
+    support_classification = _facet_support_classification(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    support_by_id = {
+        str(item.get("facet_id", "")): str(item.get("support_state", ""))
+        for item in support_classification
+    }
+    supported_requirements = [
+        item
+        for item in requirements
+        if support_by_id.get(item.requirement_id) == "SUPPORTED"
+    ]
+    unresolved_required_ids = {
+        facet_id
+        for facet_id, state in support_by_id.items()
+        if state in {"UNSUPPORTED", "UNKNOWN"}
+    }
+
+    if not evidence or (requirements and not supported_requirements):
+        final_failures = [
+            "NO_R1_SELECTED_EVIDENCE"
+            if not evidence
+            else "NO_SUPPORTED_REQUIRED_FACETS"
+        ]
+        abstention = legacy._verified_abstention(
+            reason_codes=final_failures,
+            calls=[],
+            repair_attempted=False,
+        )
+        abstention["answer_source"] = "safe_abstention"
+        return abstention, {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [_requirement_public(item) for item in requirements],
+            "support_proof": [],
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": final_failures,
+            "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+            "facet_closure": {
+                "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+                **_facet_closure_trace(classification=support_classification),
+            },
+            "broad_deterministic_fallback_used": False,
+        }
 
     max_attempts = max(1, min(int(max_attempts), 2))
 
@@ -466,6 +516,7 @@ def _synthesize_and_verify(
             intent_class=intent_class,
             evidence=evidence,
             requirements=requirements,
+            support_classification=support_classification,
             repair=attempt == 2,
             previous_failures=failures,
         )
@@ -509,6 +560,26 @@ def _synthesize_and_verify(
             unanswered_dimensions = _parsed_provider_unanswered_dimensions(
                 parsed, segments
             )
+            unanswered_ids = {
+                str(item).strip()
+                for item in unanswered_dimensions
+                if str(item).strip()
+            }
+            if unresolved_required_ids and provider_status not in {
+                "partial",
+                "partial_candidate",
+            }:
+                failures.append("UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL")
+                if can_retry(attempt):
+                    repair_attempted = True
+                    continue
+                break
+            if not unresolved_required_ids.issubset(unanswered_ids):
+                failures.append("UNRESOLVED_REQUIRED_FACETS_NOT_DECLARED")
+                if can_retry(attempt):
+                    repair_attempted = True
+                    continue
+                break
             candidate = _runtime_bound_candidate(
                 answer=answer,
                 question=question,
@@ -526,9 +597,16 @@ def _synthesize_and_verify(
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
+            material_coverage = _material_claim_requirement_coverage(
+                candidate,
+                requirements=supported_requirements,
+            )
             if _candidate_lacks_material_requirement_coverage(
                 candidate,
-                requirements=requirements,
+                requirements=supported_requirements,
+            ) and not (
+                provider_status in {"partial", "partial_candidate"}
+                and material_coverage
             ):
                 failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
                 if can_retry(attempt):
@@ -669,6 +747,13 @@ def _synthesize_and_verify(
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
                 "semantic_review": dict(verified.get("semantic_review", {})),
                 "bounded_publication_support_ref_limit": bounded_support_ref_limit,
+                "facet_closure": {
+                    "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+                    **_facet_closure_trace(
+                        classification=support_classification,
+                        candidate=candidate,
+                    ),
+                },
                 "broad_deterministic_fallback_used": False,
             }
             if partial_answer:
@@ -686,7 +771,7 @@ def _synthesize_and_verify(
             failures.append(type(exc).__name__)
             break
 
-    if allow_deterministic_recovery:
+    if allow_deterministic_recovery and not unresolved_required_ids:
         deterministic = legacy._deterministic_evidence_synthesis(
             trace_id=trace_id,
             question=question,
@@ -701,6 +786,10 @@ def _synthesize_and_verify(
             deterministic["multi_evidence_verification"] = {
                 **dict(deterministic.get("multi_evidence_verification", {})),
                 "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+                "facet_closure": {
+                    "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+                    **_facet_closure_trace(classification=support_classification),
+                },
             }
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
@@ -732,6 +821,10 @@ def _synthesize_and_verify(
         "endpoint_proof": dict(endpoint_proof),
         "failures": final_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
+        "facet_closure": {
+            "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+            **_facet_closure_trace(classification=support_classification),
+        },
         "broad_deterministic_fallback_used": False,
     }
     return abstention, closure
@@ -756,6 +849,22 @@ def _verified_supported_review_partial(
         _supported_review_partial_candidate(candidate, semantic_review)
     )
     if partial_candidate is None:
+        return None
+    support_classification = _facet_support_classification(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    supported_requirements = [
+        requirement
+        for requirement, support in zip(
+            requirements, support_classification, strict=True
+        )
+        if support.get("support_state") == "SUPPORTED"
+    ]
+    if _candidate_lacks_material_requirement_coverage(
+        partial_candidate,
+        requirements=supported_requirements,
+    ):
         return None
     try:
         verified = legacy._verify_multi_evidence_provider_output(
@@ -803,6 +912,13 @@ def _verified_supported_review_partial(
         "pre_partial_failures": pre_partial_failures,
         "provider_contract": "compact_runtime_bound_semantic_closure/v1",
         "semantic_review": dict(verified.get("semantic_review", {})),
+        "facet_closure": {
+            "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+            **_facet_closure_trace(
+                classification=support_classification,
+                candidate=partial_candidate,
+            ),
+        },
         "broad_deterministic_fallback_used": False,
         "partial_answer": True,
         "dropped_claim_count": len(dropped_claim_ids),
@@ -841,12 +957,10 @@ def _candidate_lacks_material_requirement_coverage(
     if not requirements:
         return False
     requirement_ids = {item.requirement_id for item in requirements}
-    return not bool(
+    return not requirement_ids.issubset(
         _material_claim_requirement_coverage(
-            candidate,
-            requirements=requirements,
+            candidate, requirements=requirements
         )
-        & requirement_ids
     )
 
 
@@ -859,23 +973,257 @@ def _material_claim_requirement_coverage(
     for raw_claim in legacy._list(candidate.get("claims"), "partial material claims"):
         claim = legacy._object(raw_claim, "partial material claim")
         claim_type = str(claim.get("claim_type", ""))
-        if claim_type != "MODEL_EXPLANATION" and not claim.get("support_refs"):
+        if claim_type == "MODEL_EXPLANATION" or not claim.get("support_refs"):
             continue
-        claim_text = str(claim.get("surface_text", "")).strip()
         covered_ids.update(
             str(item)
-            for item in legacy._list(claim.get("facet_ids"), "partial claim facets")
+            for item in legacy._list(
+                claim.get("facet_ids", []), "partial claim facets"
+            )
             if str(item)
         )
         covered_ids.update(
             str(item)
-            for item in legacy._list(claim.get("covers"), "partial claim covers")
+            for item in legacy._list(
+                claim.get("covers", []), "partial claim covers"
+            )
             if str(item)
         )
-        for requirement in requirements:
-            if _claim_text_covers_requirement(claim_text, requirement):
-                covered_ids.add(requirement.requirement_id)
-    return covered_ids
+    requirement_ids = {item.requirement_id for item in requirements}
+    return covered_ids & requirement_ids
+
+
+def _facet_support_classification(
+    *,
+    requirements: Sequence[SemanticRequirement],
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    selected_ids = [
+        str(item.get("evidence_id", ""))
+        for item in evidence
+        if str(item.get("evidence_id", ""))
+    ]
+    inspectable = [item for item in evidence if _selected_evidence_is_inspectable(item)]
+    classification: list[dict[str, Any]] = []
+    for requirement in requirements:
+        scored = [
+            (_requirement_evidence_score(requirement, item), item)
+            for item in inspectable
+        ]
+        supporting = [
+            item
+            for _score, item in scored
+            if _selected_evidence_supports_requirement(requirement, item)
+        ]
+        if not supporting and _selected_evidence_set_supports_requirement(
+            requirement, inspectable
+        ):
+            supporting = [
+                item
+                for score, item in scored
+                if score > 0
+            ] or list(inspectable)
+        best_score = max((score for score, _item in scored), default=0.0)
+        if supporting:
+            state = "SUPPORTED"
+        elif inspectable:
+            state = "UNSUPPORTED"
+        else:
+            state = "UNKNOWN"
+        classification.append(
+            {
+                "facet_id": requirement.requirement_id,
+                "support_state": state,
+                "selected_evidence_ids_considered": list(selected_ids),
+                "supporting_evidence_ids": list(
+                    dict.fromkeys(
+                        str(item.get("evidence_id", ""))
+                        for item in supporting
+                        if str(item.get("evidence_id", ""))
+                    )
+                ),
+                "best_support_score": round(best_score, 4),
+            }
+        )
+    return classification
+
+
+def _selected_evidence_is_inspectable(item: Mapping[str, Any]) -> bool:
+    if not str(item.get("evidence_id", "")):
+        return False
+    if item.get("evidence_type") == "graph_edge":
+        return bool(
+            item.get("relation_type")
+            and (item.get("edge_source") or item.get("source"))
+            and (item.get("edge_target") or item.get("target"))
+        )
+    return bool(_selected_evidence_text(item).strip())
+
+
+def _selected_evidence_supports_requirement(
+    requirement: SemanticRequirement,
+    item: Mapping[str, Any],
+) -> bool:
+    text = _selected_evidence_text(item)
+    folded = text.casefold()
+    if requirement.exact_phrase:
+        return requirement.exact_phrase.casefold() in folded
+    structural_cues = {
+        "explanatory_answer": r"\b(?:because|therefore|reason|mechanism|means|allows|prevents|rather than)\b",
+        "comparison_or_distinction": r"\b(?:while|whereas|different|distinguish|contrast|rather than|instead)\b",
+        "multi_dimension_structure": r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+|\b(?:first|second|another|parts?|cases?|tradeoffs?)\b",
+        "process_sequence": r"\b(?:first|then|next|after|before|step|process|workflow|sequence)\b",
+        "composition_relationship": r"\b(?:combine|together|workflow|compose|composition|integrate)\b",
+        "decision_criteria": r"\b(?:criteria|criterion|evaluate|decide|choose|if|when|tradeoff|authority|date)\b",
+        "process_boundary": r"\b(?:stop|verify|verification|boundary|complete|finish|until|before|after)\b",
+    }
+    cue = structural_cues.get(requirement.requirement_id)
+    if cue is not None:
+        return bool(re.search(cue, text, flags=re.I))
+    required_terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+    evidence_terms = legacy._meaningful_terms(text)
+    return len(required_terms & evidence_terms) >= min(2, len(required_terms))
+
+
+def _selected_evidence_set_supports_requirement(
+    requirement: SemanticRequirement,
+    evidence: Sequence[Mapping[str, Any]],
+) -> bool:
+    if not evidence:
+        return False
+    combined = "\n".join(_selected_evidence_text(item) for item in evidence)
+    if requirement.exact_phrase:
+        return requirement.exact_phrase.casefold() in combined.casefold()
+    requirement_id = requirement.requirement_id
+    if requirement_id == "comparison_or_distinction":
+        contributing = sum(
+            _requirement_evidence_score(requirement, item) > 0 for item in evidence
+        )
+        return contributing >= 2
+    if requirement_id == "explanatory_answer":
+        return bool(
+            re.search(
+                r"\b(?:because|therefore|reason|mechanism|means|allows|prevents|"
+                r"preserves?|checks?|ensures?|solves?|causes?|uses?|leads? to|"
+                r"while|whereas|rather than)\b",
+                combined,
+                flags=re.I,
+            )
+        )
+    if requirement_id == "multi_dimension_structure":
+        bullet_count = len(
+            re.findall(r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+", combined)
+        )
+        return bullet_count >= 2 or combined.count(",") >= 2
+    if requirement_id == "non_entailment":
+        return any(
+            item.get("evidence_type") == "graph_edge"
+            and str(item.get("relation_type", "")).casefold() == "precedes"
+            for item in evidence
+        )
+    return any(
+        _selected_evidence_supports_requirement(requirement, item)
+        for item in evidence
+    )
+
+
+def _selected_evidence_text(item: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key, ""))
+        for key in ("title", "section_title", "passage_text", "body", "excerpt")
+    )
+
+
+def _facet_closure_trace(
+    *,
+    classification: Sequence[Mapping[str, Any]],
+    candidate: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    required_ids = [str(item.get("facet_id", "")) for item in classification]
+    supported_ids = [
+        str(item.get("facet_id", ""))
+        for item in classification
+        if item.get("support_state") == "SUPPORTED"
+    ]
+    unresolved_ids = [
+        str(item.get("facet_id", ""))
+        for item in classification
+        if item.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
+    ]
+    covered_ids = (
+        sorted(
+            _material_claim_requirement_coverage(
+                candidate,
+                requirements=[
+                    SemanticRequirement(
+                        requirement_id=facet_id,
+                        instruction="",
+                        evidence_terms=(),
+                        visible_patterns=(),
+                    )
+                    for facet_id in supported_ids
+                ],
+            )
+        )
+        if candidate is not None
+        else []
+    )
+    material_claim_ids_by_facet: dict[str, list[str]] = {
+        facet_id: [] for facet_id in supported_ids
+    }
+    claim_local_evidence_ids_by_facet: dict[str, list[str]] = {
+        facet_id: [] for facet_id in supported_ids
+    }
+    if candidate is not None:
+        for raw_claim in legacy._list(candidate.get("claims"), "candidate claims"):
+            claim = legacy._object(raw_claim, "candidate claim")
+            if (
+                str(claim.get("claim_kind", "material")).casefold()
+                == "model_explanation"
+                or str(claim.get("claim_type", "")).upper()
+                == "MODEL_EXPLANATION"
+            ):
+                continue
+            local_evidence_ids = _claim_local_evidence_ids(claim)
+            if not local_evidence_ids:
+                continue
+            claim_id = str(claim.get("claim_id", ""))
+            declared_facets = {
+                str(facet_id)
+                for key in ("covers", "facet_ids")
+                for facet_id in legacy._list(claim.get(key, []), f"claim {key}")
+                if str(facet_id)
+            }
+            for facet_id in declared_facets.intersection(supported_ids):
+                if claim_id:
+                    material_claim_ids_by_facet[facet_id].append(claim_id)
+                claim_local_evidence_ids_by_facet[facet_id].extend(
+                    local_evidence_ids
+                )
+    material_claim_ids_by_facet = {
+        facet_id: list(dict.fromkeys(claim_ids))
+        for facet_id, claim_ids in material_claim_ids_by_facet.items()
+    }
+    claim_local_evidence_ids_by_facet = {
+        facet_id: list(dict.fromkeys(evidence_ids))
+        for facet_id, evidence_ids in claim_local_evidence_ids_by_facet.items()
+    }
+    return {
+        "selected_evidence_only": True,
+        "post_r1_corpus_reachback": False,
+        "required_facet_ids": required_ids,
+        "supported_required_facet_ids": supported_ids,
+        "unresolved_required_facet_ids": unresolved_ids,
+        "grounded_material_claim_coverage": covered_ids,
+        "material_claim_ids_by_facet": material_claim_ids_by_facet,
+        "claim_local_evidence_ids_by_facet": (
+            claim_local_evidence_ids_by_facet
+        ),
+        "supported_subset_of_grounded_coverage": set(supported_ids).issubset(
+            covered_ids
+        ),
+        "support_classification": [dict(item) for item in classification],
+    }
 
 
 def _claim_text_covers_requirement(
@@ -1266,6 +1614,7 @@ def _compact_provider_payload(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
     requirements: Sequence[SemanticRequirement],
+    support_classification: Sequence[Mapping[str, Any]] | None = None,
     repair: bool,
     previous_failures: Sequence[str],
 ) -> tuple[
@@ -1273,7 +1622,31 @@ def _compact_provider_payload(
     dict[str, Mapping[str, Any]],
     dict[str, str],
 ]:
-    ranked = _provider_evidence_order(evidence, requirements, question)[
+    classification = list(
+        support_classification
+        if support_classification is not None
+        else _facet_support_classification(
+            requirements=requirements,
+            evidence=evidence,
+        )
+    )
+    support_by_id = {
+        str(item.get("facet_id", "")): dict(item) for item in classification
+    }
+    supported_requirements = [
+        item
+        for item in requirements
+        if support_by_id.get(item.requirement_id, {}).get("support_state")
+        == "SUPPORTED"
+    ]
+    unresolved_ids = [
+        str(item.get("facet_id", ""))
+        for item in classification
+        if item.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
+    ]
+    ranked = _provider_evidence_order(
+        evidence, supported_requirements, question
+    )[
         :MAX_PROVIDER_EVIDENCE
     ]
     label_map: dict[str, Mapping[str, Any]] = {}
@@ -1303,10 +1676,34 @@ def _compact_provider_payload(
                 "text": snippet,
             }
         )
+    supporting_labels_by_facet = {
+        facet_id: [
+            label
+            for label, item in label_map.items()
+            if str(item.get("evidence_id", ""))
+            in set(support.get("supporting_evidence_ids", []))
+        ]
+        for facet_id, support in support_by_id.items()
+    }
     task = {
         "question": question,
         "intent": intent_class,
-        "must_state": [item.instruction for item in requirements],
+        "must_state": [item.instruction for item in supported_requirements],
+        "required_facets": [
+            {
+                "facet_id": item.requirement_id,
+                "instruction": item.instruction,
+                "support_state": support_by_id.get(item.requirement_id, {}).get(
+                    "support_state", "UNKNOWN"
+                ),
+                "supporting_evidence_labels": supporting_labels_by_facet.get(
+                    item.requirement_id, []
+                ),
+            }
+            for item in requirements
+        ],
+        "required_answer_status": "partial" if unresolved_ids else "answer",
+        "unresolved_facet_ids": unresolved_ids,
         "evidence": packed,
         "repair": list(previous_failures)[-8:] if repair else [],
         "output": {
@@ -1346,8 +1743,12 @@ def _compact_provider_payload(
         "value EVIDENCE_FACT or EVIDENCE_SYNTHESIS, evidence_labels, and covers. For "
         "model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
         "evidence_labels [], and covers. Evidence labels such as e1 or e2 belong only in "
-        "evidence_labels and must not appear in visible text. Address every must_state item "
-        "explicitly. If support is insufficient, abstain."
+        "evidence_labels and must not appear in visible text. covers must contain only "
+        "stable facet_id values from required_facets and material claims must cite the "
+        "claim-local evidence that supports each covered facet. Address every SUPPORTED "
+        "must_state item explicitly. Do not state UNSUPPORTED or UNKNOWN facets as facts. "
+        "When unresolved_facet_ids is non-empty, return partial and repeat every unresolved "
+        "facet ID in unanswered_dimensions. If no core facet is supportable, abstain."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
@@ -1926,33 +2327,31 @@ def _runtime_bound_candidate(
             claim.get("claim_role")
             or _infer_claim_role(intent_class=intent_class, claim_type=claim_type)
         )
-        facet_ids = list(
-            claim.get("covers")
-            or claim.get("facet_ids")
-            or legacy._required_facet_ids(
-                question=question,
-                intent_class=intent_class,
+        declared_covers = [
+            str(item)
+            for item in legacy._list(claim.get("covers", []), "claim covers")
+            if str(item)
+        ]
+        allowed_facet_ids = {item.requirement_id for item in requirements}
+        if allowed_facet_ids and set(declared_covers) - allowed_facet_ids:
+            raise ValueError(f"provider claim {claim_id} covers unknown facet IDs")
+        if claim_type == "MODEL_EXPLANATION" and declared_covers:
+            raise ValueError(
+                f"provider claim {claim_id} model explanation cannot cover material facets"
             )
-        )
-        required_facet_ids = legacy._required_facet_ids(
-            question=question,
-            intent_class=intent_class,
-        )
-        if claim_type == "MODEL_EXPLANATION" and not (set(facet_ids) & set(required_facet_ids)):
-            facet_ids = required_facet_ids
         claim_records.append(
             {
                 "claim_id": claim_id,
                 "claim_type": claim_type,
                 "claim_role": claim_role,
                 "surface_text": surface_text,
-                "facet_ids": facet_ids,
+                "facet_ids": declared_covers,
                 "support_mode": str(
                     claim.get("support_mode")
                     or ("model_explanation" if claim_type == "MODEL_EXPLANATION" else "exact_quote")
                 ),
                 "evidence_labels": evidence_labels,
-                "covers": list(claim.get("covers", [])),
+                "covers": declared_covers,
                 "unanswered_dimensions": list(claim.get("unanswered_dimensions", [])),
                 "support_refs": refs,
             }
@@ -2147,7 +2546,10 @@ def _semantic_requirements(
             )
         )
 
-    for entity in legacy._named_question_entities(question):
+    for entity in [
+        *legacy._named_question_entities(question),
+        *_coordinated_question_subjects(question),
+    ]:
         entity_id = legacy._facet_id_for_term(entity)
         add(
             f"entity_{entity_id}",
@@ -2757,14 +3159,49 @@ def _semantic_requirements(
             ],
         )
 
-    if not requirements:
-        _add_generic_answer_dimension_requirements(
-            add=add,
-            question=question,
-            intent_class=intent_class,
-        )
+    _add_generic_answer_dimension_requirements(
+        add=add,
+        question=question,
+        intent_class=intent_class,
+    )
 
     return requirements
+
+
+def _coordinated_question_subjects(question: str) -> list[str]:
+    text = re.sub(r"\s+", " ", str(question)).strip(" ?.:")
+    if " combine " in text.casefold():
+        text = re.split(r"\bcombine\b", text, maxsplit=1, flags=re.I)[1]
+    else:
+        text = re.sub(
+            r"^(?:how|why)\s+(?:are|do|does|can|should)\s+|"
+            r"^what\s+(?:do|does|are|is)\s+",
+            "",
+            text,
+            flags=re.I,
+        )
+    text = re.sub(
+        r"\s+(?:different|differ|each\s+change|not\s+interchangeable).*$",
+        "",
+        text,
+        flags=re.I,
+    )
+    if "," not in text or not re.search(r"\band\b", text, flags=re.I):
+        return []
+    parts = re.split(r"\s*,\s*|\s*,?\s+and\s+", text, flags=re.I)
+    subjects: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        subject = re.sub(
+            r"^(?:a|an|the|and)\s+", "", part.strip(), flags=re.I
+        )
+        if not subject or len(subject.split()) > 6:
+            continue
+        key = subject.casefold()
+        if key not in seen:
+            seen.add(key)
+            subjects.append(subject)
+    return subjects if len(subjects) >= 3 else []
 
 
 def _add_generic_answer_dimension_requirements(
@@ -2774,6 +3211,13 @@ def _add_generic_answer_dimension_requirements(
     intent_class: str,
 ) -> None:
     q = question.casefold()
+    asks_comparison = bool(
+        intent_class in {"cross_document_comparison", "complementary_synthesis"}
+        or re.search(
+            r"\b(?:compare|contrast|differ|different|distinguish|versus|vs|interchangeable)\b",
+            q,
+        )
+    )
     if re.search(r"\b(?:why|explain|how)\b", q):
         add(
             "explanatory_answer",
@@ -2785,10 +3229,7 @@ def _add_generic_answer_dimension_requirements(
             ],
         )
 
-    if (
-        intent_class in {"cross_document_comparison", "complementary_synthesis"}
-        or re.search(r"\b(?:compare|contrast|different|distinguish|versus|vs)\b", q)
-    ):
+    if asks_comparison:
         add(
             "comparison_or_distinction",
             "Distinguish the compared items and state their relationship.",
@@ -2802,7 +3243,11 @@ def _add_generic_answer_dimension_requirements(
             ],
         )
 
-    if re.search(r"\b(?:list|mechanisms?|parts?|cases?|tradeoffs?|architecture|describe)\b", q):
+    if re.search(
+        r"\b(?:list|each|all|several|members?|mechanisms?|parts|cases?|"
+        r"tradeoffs?|architecture|describe)\b",
+        q,
+    ):
         add(
             "multi_dimension_structure",
             "Cover the requested mechanisms, cases, tradeoffs, or architecture parts.",
@@ -2814,6 +3259,59 @@ def _add_generic_answer_dimension_requirements(
                 r"\b(?:first|second|also|another|mechanism|case|tradeoff|architecture|part)\b",
                 r"(?:[.;:]|\band\b).{0,120}(?:[.;:]|\band\b)",
             ],
+        )
+
+    asks_process = bool(
+        re.search(r"\b(?:process|steps?|workflow|sequence)\b", q)
+        or (
+            re.search(r"\bhow\s+(?:can|should|do|does)\b", q)
+            and not asks_comparison
+        )
+    )
+    if asks_process:
+        add(
+            "process_sequence",
+            "State the supported sequence or operating process requested by the question.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("process", "sequence", "step", "workflow"),
+            ),
+            [r"\b(?:first|then|next|after|before|step|process|workflow|sequence)\b"],
+        )
+
+    if re.search(r"\b(?:combine|combined|together|work together|fit together)\b", q):
+        add(
+            "composition_relationship",
+            "Explain how the named parts compose and what the combined workflow does.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("combine", "together", "workflow", "composition"),
+            ),
+            [r"\b(?:combine|together|workflow|compose|composition|integrate)\b"],
+        )
+
+    if re.search(r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b", q) or re.match(
+        r"\s*how\s+should\b", q
+    ):
+        add(
+            "decision_criteria",
+            "State the supported criteria used to decide or evaluate the choice.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("decision", "criteria", "evaluate", "choose"),
+            ),
+            [r"\b(?:criteria|criterion|evaluate|decide|choose|if|when|tradeoff)\b"],
+        )
+
+    if re.search(r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b", q):
+        add(
+            "process_boundary",
+            "State the supported stop, verification, or operating boundary.",
+            _dimension_evidence_terms(
+                question,
+                fallback=("stop", "verify", "boundary", "complete"),
+            ),
+            [r"\b(?:stop|verify|verification|boundary|complete|finish|until|before|after)\b"],
         )
 
 
@@ -2838,6 +3336,45 @@ def _dimension_evidence_terms(
         }
     ]
     return tuple([*terms[:8], *fallback])
+
+
+def _compose_selected_evidence_requirements(
+    *,
+    question: str,
+    requirements: Sequence[SemanticRequirement],
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[SemanticRequirement]:
+    composed = list(requirements)
+    seen = {item.requirement_id for item in composed}
+    question_terms = legacy._meaningful_terms(question)
+    list_entries: list[str] = []
+    for item in evidence:
+        passage = str(item.get("passage_text") or item.get("body") or "")
+        if not (question_terms & legacy._meaningful_terms(passage)):
+            continue
+        for line in passage.splitlines():
+            match = re.match(r"\s*(?:[-*]|\d+[.)])\s+(.+?)\s*$", line)
+            if match is None:
+                continue
+            entry = re.sub(r"\s+", " ", match.group(1)).strip()[:160]
+            if len(legacy._meaningful_terms(entry)) < 2:
+                continue
+            list_entries.append(entry)
+    for entry in list(dict.fromkeys(list_entries))[:8]:
+        requirement_id = "enumeration_member_" + legacy._facet_id_for_term(entry)
+        if requirement_id in seen:
+            continue
+        seen.add(requirement_id)
+        entry_terms = tuple(sorted(legacy._meaningful_terms(entry)))
+        composed.append(
+            SemanticRequirement(
+                requirement_id=requirement_id,
+                instruction=f"Include the selected-evidence list member: {entry}",
+                evidence_terms=(entry, *entry_terms),
+                visible_patterns=(),
+            )
+        )
+    return composed
 
 
 def _visible_semantic_failures(
@@ -2930,59 +3467,8 @@ def _strengthen_evidence(
     intent_class: str,
     requirements: Sequence[SemanticRequirement],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    del lexical_result
-    selected = [dict(item) for item in evidence]
-    selected_sections = {str(item.get("section_id", "")) for item in selected}
-    ordinal = len(selected) + 1
-    documents = legacy._release_documents(bundle)
-
-    for requirement in requirements:
-        if any(
-            _requirement_evidence_score(requirement, item) >= 1.0
-            for item in selected
-        ):
-            continue
-        ranked = sorted(
-            documents,
-            key=lambda document: (
-                -_requirement_document_score(requirement, document),
-                legacy._is_article_root_document(document),
-                -legacy._passage_text_quality(
-                    str(document.get("body") or document.get("excerpt") or "")
-                ),
-                str(document.get("section_id", "")),
-            ),
-        )
-        document = next(
-            (
-                item
-                for item in ranked
-                if str(item.get("section_id", "")) not in selected_sections
-                and _requirement_document_score(requirement, item) >= 1.0
-            ),
-            None,
-        )
-        if document is None:
-            continue
-        selected.append(
-            legacy._evidence_item(
-                bundle=bundle,
-                document=document,
-                lexical_result={},
-                trace_id=trace_id,
-                ordinal=ordinal,
-                channels=["semantic_requirement_recovery"],
-                retrieval_metadata={
-                    "semantic_requirement_id": requirement.requirement_id,
-                    "semantic_requirement_score": _requirement_document_score(
-                        requirement, document
-                    ),
-                },
-            )
-        )
-        selected_sections.add(str(document.get("section_id", "")))
-        ordinal += 1
-
+    del bundle, lexical_result, trace_id, requirements
+    selected = legacy._dedupe_evidence([dict(item) for item in evidence])
     endpoint_proof: dict[str, Any] = {
         "required": False,
         "matched": False,
@@ -2993,53 +3479,32 @@ def _strengthen_evidence(
         "relation_type": "",
     }
     if intent_class == "graph_relationship":
-        edge = _exact_named_graph_edge(bundle, question)
         entities = legacy._named_question_entities(question)
         if len(entities) >= 2:
             endpoint_proof["required"] = True
+        edge = next(
+            (
+                item
+                for item in selected
+                if item.get("evidence_type") == "graph_edge"
+            ),
+            None,
+        )
         if edge is not None:
-            endpoint_items = legacy._endpoint_passages(
-                bundle=bundle,
-                existing=selected,
-                edge=edge,
-                trace_id=trace_id,
-                question=question,
-                start_ordinal=len(selected) + 1,
-            )
-            graph_item = legacy._graph_edge_evidence_item(
-                bundle=bundle,
-                edge=edge,
-                trace_id=trace_id,
-                ordinal=len(selected) + len(endpoint_items) + 1,
-            )
-            edge_endpoint_concepts = {
-                str(edge.get("source", "")),
-                str(edge.get("target", "")),
-            }
-            selected = [
-                graph_item,
-                *endpoint_items,
-                *[
-                    item
-                    for item in selected
-                    if item.get("evidence_type") != "graph_edge"
-                    and str(item.get("concept_id", ""))
-                    not in edge_endpoint_concepts
-                ],
-            ]
             endpoint_proof.update(
                 {
                     "matched": True,
                     "edge_id": str(edge.get("edge_id", "")),
-                    "edge_source": str(edge.get("source", "")),
-                    "edge_target": str(edge.get("target", "")),
+                    "edge_source": str(
+                        edge.get("edge_source") or edge.get("source") or ""
+                    ),
+                    "edge_target": str(
+                        edge.get("edge_target") or edge.get("target") or ""
+                    ),
                     "relation_type": str(edge.get("relation_type", "")),
                 }
             )
-    return (
-        legacy._dedupe_evidence(selected)[: legacy.MAX_DYNAMIC_EVIDENCE_ITEMS],
-        endpoint_proof,
-    )
+    return selected, endpoint_proof
 
 
 def _exact_named_graph_edge(
