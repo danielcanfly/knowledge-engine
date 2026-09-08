@@ -229,8 +229,7 @@ def install_jobs_rollback_routes(
         router.routes[:] = [
             route
             for route in router.routes
-            if getattr(route, "operation_id", None)
-            not in {"listIngestionJobs", "getIngestionJob"}
+            if getattr(route, "operation_id", None) not in {"listIngestionJobs", "getIngestionJob"}
         ]
     app.include_router(router)
     app.state.m26_jobs_rollback_installed = True

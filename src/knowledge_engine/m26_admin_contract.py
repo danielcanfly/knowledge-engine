@@ -203,9 +203,7 @@ class InMemoryIdempotencyStore:
         with self._lock:
             return self.records.setdefault((record.scope, record.key_fingerprint), record)
 
-    def get_stateful(
-        self, scope: str, fingerprint: str
-    ) -> StatefulIdempotencyRecord | None:
+    def get_stateful(self, scope: str, fingerprint: str) -> StatefulIdempotencyRecord | None:
         with self._lock:
             return self.stateful_records.get((scope, fingerprint))
 
@@ -213,9 +211,7 @@ class InMemoryIdempotencyStore:
         self, record: StatefulIdempotencyRecord
     ) -> StatefulIdempotencyRecord:
         with self._lock:
-            return self.stateful_records.setdefault(
-                (record.scope, record.key_fingerprint), record
-            )
+            return self.stateful_records.setdefault((record.scope, record.key_fingerprint), record)
 
     def restart_stateful_failed(
         self,
@@ -289,9 +285,7 @@ class UnavailableIdempotencyStore:
         self._unavailable()
         return record
 
-    def get_stateful(
-        self, scope: str, fingerprint: str
-    ) -> StatefulIdempotencyRecord | None:
+    def get_stateful(self, scope: str, fingerprint: str) -> StatefulIdempotencyRecord | None:
         self._unavailable()
         return None
 
@@ -365,9 +359,7 @@ class IdempotencyCoordinator:
                     message="Idempotency key was already used with a different request",
                 )
             return existing.operation_id, True
-        record = IdempotencyRecord(
-            scope, fingerprint, request_hash, new_operation_id(), utc_now()
-        )
+        record = IdempotencyRecord(scope, fingerprint, request_hash, new_operation_id(), utc_now())
         winner = self.store.put_if_absent(record)
         if winner.request_hash != request_hash:
             raise AdminAPIError(
@@ -388,9 +380,7 @@ class IdempotencyCoordinator:
         return method
 
     @staticmethod
-    def _lease(
-        record: StatefulIdempotencyRecord, *, replayed: bool
-    ) -> StatefulIdempotencyLease:
+    def _lease(record: StatefulIdempotencyRecord, *, replayed: bool) -> StatefulIdempotencyLease:
         return StatefulIdempotencyLease(
             scope=record.scope,
             key_fingerprint=record.key_fingerprint,
@@ -455,9 +445,7 @@ class IdempotencyCoordinator:
         existing = get_stateful(scope, fingerprint)
         if existing is not None:
             if existing.request_hash != request_hash:
-                return self._classify_existing_stateful(
-                    existing, request_hash=request_hash
-                )
+                return self._classify_existing_stateful(existing, request_hash=request_hash)
             if existing.state == "FAILED":
                 restarted, won_restart = restart_failed(
                     scope=scope,
@@ -466,9 +454,7 @@ class IdempotencyCoordinator:
                 )
                 if won_restart:
                     return self._lease(restarted, replayed=False)
-                return self._classify_existing_stateful(
-                    restarted, request_hash=request_hash
-                )
+                return self._classify_existing_stateful(restarted, request_hash=request_hash)
             return self._classify_existing_stateful(existing, request_hash=request_hash)
 
         observed_at = utc_now()
