@@ -108,12 +108,14 @@ jobs:
           R2_BUCKET=$R2_BUCKET
           R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
           R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
-          M26_ASK_OWNER_BYPASS_TOKEN_SHA256=$OWNER_BYPASS_SHA
           R2_REGION=auto
           KNOWLEDGE_CHANNEL=production
           CACHE_DIR=/var/lib/knowledge-engine/cache
           LOG_LEVEL=INFO
           EOF_ENV
+          if [ -n "${OWNER_BYPASS_SHA:-}" ]; then
+            printf 'M26_ASK_OWNER_BYPASS_TOKEN_SHA256=%s\n' "$OWNER_BYPASS_SHA" >> /tmp/knowledge-engine.env
+          fi
           scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
