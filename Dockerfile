@@ -12,14 +12,14 @@ COPY src ./src
 COPY pilot ./pilot
 RUN python -m pip install --upgrade pip && python -m pip install .
 
-RUN mkdir -p /var/lib/knowledge-engine/cache && \
+RUN mkdir -p /var/lib/knowledge-engine/cache /var/lib/knowledge-engine/rate-limit && \
     chown -R knowledge:knowledge /var/lib/knowledge-engine /app
 USER knowledge
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/health', timeout=3)"
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/answers/health', timeout=3)"
 
-# Canonical application remains knowledge_engine.api:app; the production wrapper patches
-# only the owner-only M26 answer path before importing that same app.
-CMD ["uvicorn", "knowledge_engine.m26_production_api:app", "--host", "0.0.0.0", "--port", "8080"]
+# The standard compose runtime and the public API use the same canonical app.
+# Deploy workflow identity gates still bind the immutable release SHA.
+CMD ["uvicorn", "knowledge_engine.m26_public_api:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -4,6 +4,11 @@ set -euo pipefail
 : "${DEPLOY_PATH:?DEPLOY_PATH is required}"
 : "${RELEASE_SHA:?RELEASE_SHA is required}"
 
+if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "RELEASE_SHA must be an exact 40-character lowercase commit SHA" >&2
+  exit 2
+fi
+
 CANONICAL_M26_QDRANT_COLLECTION="m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"
 
 # Production deployment is sometimes invoked from `ssh ... bash -s`. Isolate the
@@ -93,10 +98,18 @@ PY
   docker compose up -d --remove-orphans
 
   for attempt in $(seq 1 90); do
-    # Deployment only needs HTTP liveness plus immutable runtime identity; the
-    # owner-only closure workflow performs the heavier semantic health/readiness
-    # checks immediately afterwards.
-    if curl --fail --silent --max-time 5 http://127.0.0.1:8080/openapi.json >/dev/null; then
+    # Deployment requires the canonical public contract plus immutable runtime
+    # identity before reporting success. Public cutover remains a separate gate.
+    health_probe="$(mktemp)"
+    if curl --fail --silent --max-time 5 http://127.0.0.1:8080/v1/answers/health >"$health_probe"; then
+      health_ok="$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); print(str(p.get("ok")).lower())' "$health_probe")"
+      health_sha="$(python3 -c 'import json,sys; p=json.load(open(sys.argv[1])); print((p.get("backend") or p.get("runtime") or {}).get("build_sha", ""))' "$health_probe")"
+      rm -f "$health_probe"
+      if [[ "$health_ok" != "true" || "$health_sha" != "$RELEASE_SHA" ]]; then
+        echo "DEPLOYMENT_HEALTH_CONTRACT_MISMATCH ok=$health_ok expected_sha=$RELEASE_SHA actual_sha=$health_sha" >&2
+        docker compose logs --tail=200 knowledge-engine >&2
+        return 1
+      fi
       container_build_sha="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
       if [[ "$container_build_sha" != "$RELEASE_SHA" ]]; then
         echo "DEPLOYMENT_RUNTIME_SHA_MISMATCH expected=$RELEASE_SHA actual=$container_build_sha" >&2
@@ -121,6 +134,7 @@ PY
       echo "DEPLOYMENT_HEALTH_PASSED"
       return 0
     fi
+    rm -f "$health_probe"
     sleep 2
   done
 
