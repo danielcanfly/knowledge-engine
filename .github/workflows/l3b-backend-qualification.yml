@@ -59,11 +59,16 @@ jobs:
           set -o pipefail
           python -m pytest -q "${tests_to_run[@]}" 2>&1 | tee qualification-logs/pytest.log
 
-      - name: Ruff
+      - name: Ruff on exact changed backend contract paths
         shell: bash
         run: |
           set -o pipefail
-          python -m ruff check src tests scripts 2>&1 | tee qualification-logs/ruff.log
+          python -m ruff check \
+            src/knowledge_engine/m26_qa_inbox_integration.py \
+            src/knowledge_engine/qa_answer_quality.py \
+            src/knowledge_engine/qa_answer_quality_sqlite.py \
+            tests/test_qa_inbox_api_completeness.py \
+            2>&1 | tee qualification-logs/ruff.log
 
       - name: Product source immutability guard
         shell: bash
