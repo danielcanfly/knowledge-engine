@@ -9,6 +9,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - knowledge-engine-cache:/var/lib/knowledge-engine/cache
+      - m26-ingestion-state:/var/lib/knowledge-engine/ingestion
     read_only: true
     tmpfs:
       - /tmp
@@ -17,3 +18,4 @@ services:
 
 volumes:
   knowledge-engine-cache:
+  m26-ingestion-state:

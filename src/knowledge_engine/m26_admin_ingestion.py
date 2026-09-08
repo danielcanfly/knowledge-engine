@@ -218,11 +218,23 @@ def _router() -> APIRouter:
                 lease.operation_id,
                 "ADMIN_INGESTION_SYNC_ACCEPTED",
             )
-            result = sync(lease.operation_id, body)
+            sync_with_lease = getattr(adapter, "sync_blog_with_lease", None)
+            result = (
+                sync_with_lease(lease.operation_id, body, lease)
+                if callable(sync_with_lease)
+                else sync(lease.operation_id, body)
+            )
         except Exception:
-            coordinator.fail_stateful(lease)
+            durable = _adapter(request)
+            if callable(getattr(durable, "sync_blog_with_lease", None)):
+                fail_lease = getattr(getattr(durable, "ledger", None), "fail_lease", None)
+                if callable(fail_lease):
+                    fail_lease(lease, detail="Ingestion execution failed")
+            else:
+                coordinator.fail_stateful(lease)
             raise
-        coordinator.succeed_stateful(lease)
+        if not callable(getattr(_adapter(request), "sync_blog_with_lease", None)):
+            coordinator.succeed_stateful(lease)
         return _accepted(
             request,
             lease.operation_id,
@@ -247,6 +259,26 @@ def _router() -> APIRouter:
     @router.get("/ingestion/jobs/{job_id}", operation_id="getIngestionJob")
     async def get_ingestion_job(request: Request, job_id: str) -> dict[str, Any]:
         return _read_envelope(request, _adapter(request).get_job(job_id))
+
+    @router.post(
+        "/ingestion/jobs/{job_id}/retry", status_code=202, operation_id="retryIngestionJob"
+    )
+    async def retry_ingestion_job(request: Request, job_id: str) -> dict[str, Any]:
+        _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
+        operation_id, replayed = _begin_operation(request, {"job_id": job_id})
+        if replayed:
+            return _accepted(request, operation_id, True)
+        adapter = _adapter(request)
+        retry = getattr(adapter, "retry_job", None)
+        if not callable(retry):
+            raise AdminAPIError(
+                status_code=503,
+                code="ADMIN_INGESTION_RETRY_ADAPTER_UNQUALIFIED",
+                message="The durable ingestion retry adapter is not qualified",
+            )
+        _audit(request, "ingestion.job.retry", operation_id, "ADMIN_INGESTION_RETRY_ACCEPTED")
+        result = retry(job_id, owner=operation_id)
+        return _accepted(request, operation_id, False, result=result)
 
     return router
 

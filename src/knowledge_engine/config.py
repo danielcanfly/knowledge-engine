@@ -125,6 +125,10 @@ class Settings:
     public_max_body_bytes: int = 16384
     public_request_timeout_seconds: float = 15.0
     public_max_concurrent_requests: int = 8
+    m26_ingestion_enabled: bool = False
+    m26_ingestion_state_db: Path = Path(
+        "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3"
+    )
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -181,6 +185,14 @@ class Settings:
                 "PUBLIC_MAX_CONCURRENT_REQUESTS",
                 8,
             ),
+            m26_ingestion_enabled=_bool("M26_INGESTION_ENABLED", False),
+            m26_ingestion_state_db=Path(
+                _env(
+                    "M26_INGESTION_STATE_DB",
+                    "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3",
+                )
+                or "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3"
+            ).expanduser(),
         )
         settings.validate()
         return settings

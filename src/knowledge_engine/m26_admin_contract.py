@@ -19,6 +19,7 @@ DEFAULT_STATE_CHANGING_ROUTES = (
     ("POST", "/v1/admin/ingestion/dry-runs"),
     ("POST", "/v1/admin/ingestion/sync"),
     ("POST", "/v1/admin/ingestion/jobs"),
+    ("POST", "/v1/admin/ingestion/jobs/{job_id}/retry"),
     ("POST", "/v1/admin/index/versions/{version_id}/rollback-preflight"),
     ("POST", "/v1/admin/index/versions/{version_id}/activate"),
     ("PUT", "/v1/admin/suggested-questions"),

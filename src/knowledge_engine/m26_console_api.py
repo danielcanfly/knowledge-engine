@@ -20,14 +20,21 @@ def create_app():
     app = create_public_app()
     install_admin_control_plane(app)
     install_admin_overview(app)
-    install_admin_ingestion_routes(app, include_job_reads=False)
+    durable_adapter = getattr(app.state, "m26_durable_ingestion_adapter", None)
+    install_admin_ingestion_routes(app, adapter=durable_adapter, include_job_reads=True)
     install_admin_corpus(app)
     install_admin_qa(app)
     app.include_router(playground_router())
     install_suggested_questions_admin(app)
     install_admin_usage(app)
     install_admin_health(app)
-    install_jobs_rollback_routes(app)
+    install_jobs_rollback_routes(
+        app,
+        evidence_provider=(
+            durable_adapter.as_p09_provider() if durable_adapter is not None else None
+        ),
+        include_job_reads=False,
+    )
     install_golden_questions_admin(app)
     install_admin_settings(app)
     install_admin_audit(app)
