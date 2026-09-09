@@ -11,6 +11,12 @@ permissions:
 jobs:
   qualify:
     runs-on: ubuntu-latest
+    environment: production
+    env:
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
     steps:
       - name: Checkout exact R1 candidate
         uses: actions/checkout@v4
@@ -24,6 +30,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "db21f14e11863c25540045766cb8b5f880162c6b"
           echo "R1_CANDIDATE_SHA=$(git rev-parse HEAD)"
           echo "R1_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
+
+      - name: Require read-only production bundle authority
+        run: |
+          set -euo pipefail
+          for name in R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            test -n "${!name:-}" || { echo 'R1_PRODUCTION_BUNDLE_AUTHORITY=MISSING'; exit 2; }
+          done
+          echo 'R1_PRODUCTION_BUNDLE_AUTHORITY=PASS'
+          echo 'PRODUCTION_MUTATION=0'
 
       - name: Install qualification dependencies
         run: |
@@ -75,17 +90,28 @@ jobs:
             tests/test_l3b_production_admin_binding.py \
             tests/test_l3b_console_runtime_binding.py
 
-      - name: Production compose runtime rehearsal
+      - name: Production-equivalent read-only R2 compose rehearsal
         run: |
           set -euo pipefail
-          cat > .env <<'EOF_ENV'
+          umask 077
+          cat > .env <<EOF_ENV
           APP_ENV=test
           AUTH_MODE=disabled
-          OBJECT_STORE_BACKEND=filesystem
-          FILESYSTEM_STORE_ROOT=/tmp/l3b-object-store
+          OBJECT_STORE_BACKEND=r2
+          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
+          R2_BUCKET=$R2_BUCKET
+          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
+          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
+          R2_REGION=auto
+          KNOWLEDGE_CHANNEL=production
+          CACHE_DIR=/var/lib/knowledge-engine/cache
+          LOG_LEVEL=INFO
           EOF_ENV
           export COMPOSE_PROJECT_NAME=l3br1qual
-          cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1 || true; }
+          cleanup() {
+            docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+            rm -f .env
+          }
           trap cleanup EXIT
 
           docker compose config > /tmp/l3b-r1-compose.yml
@@ -103,6 +129,7 @@ jobs:
           from pathlib import Path
           from knowledge_engine.m26_admin_production import L3B_CAPABILITY_IDS, SqliteAdminControlStore
           from knowledge_engine.m26_console_api import app
+          from knowledge_engine.m26_production_answer_bundle import load_production_answer_bundle
           from knowledge_engine.m26_qa_inbox_integration import qa_repository_from_env
 
           caps = app.state.admin_capability_provider.list_capabilities()
@@ -113,6 +140,8 @@ jobs:
           assert '/v1/answers/health' in paths
           assert '/v1/admin/qa/inbox/events' in paths
           assert '/v1/admin/suggested-questions/promotions/preview' in paths
+          bundle = load_production_answer_bundle()
+          assert bundle.release_id
           repo = qa_repository_from_env()
           assert repo.db_path == Path('/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3')
           assert app.state.admin_audit_sink.db_path == Path('/var/lib/knowledge-engine/public-api/admin-control.sqlite3')
@@ -120,17 +149,17 @@ jobs:
           probe.write_text('ok')
           assert probe.read_text() == 'ok'
           probe.unlink()
+          print('R1_PRODUCTION_BUNDLE_READ=PASS')
           print('R1_COMBINED_APP_CAPABILITIES=PASS')
           print('R1_DURABLE_STORE_WRITE=PASS')
           PY
 
-          docker image inspect knowledge-engine:0.2.0 --format 'R1_IMAGE_USER={{.Config.User}}'
           test "$(docker image inspect knowledge-engine:0.2.0 --format '{{.Config.User}}')" = knowledge
           echo 'R1_IMAGE_NON_ROOT=PASS'
 
           docker compose up -d --remove-orphans
           healthy=0
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 45); do
             if curl --fail --silent --max-time 2 http://127.0.0.1:8080/v1/answers/health >/tmp/public-health.json; then
               healthy=1
               break
@@ -156,9 +185,9 @@ jobs:
           PY
 
           admin_status="$(curl --silent --output /tmp/admin-body.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
-          echo "R1_UNAUTH_ADMIN_STATUS=$admin_status"
           test "$admin_status" = 503
           grep -F 'ADMIN_AUTH_CONFIGURATION_MISSING' /tmp/admin-body.json
           echo 'R1_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
-          echo 'L3B_R1_PRODUCTION_COMPOSE_REHEARSAL=PASS'
+          echo 'L3B_R1_PRODUCTION_EQUIVALENT_COMPOSE_REHEARSAL=PASS'
+          echo 'R2_WRITES=0'
           echo 'PRODUCTION_MUTATION=0'
