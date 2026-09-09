@@ -6,6 +6,7 @@ from .m26_admin_corpus import install_admin_corpus
 from .m26_admin_health import install_admin_health
 from .m26_admin_ingestion import install_admin_ingestion_routes
 from .m26_admin_overview import install_admin_overview
+from .m26_admin_production import production_admin_runtime_from_env
 from .m26_admin_settings import CANONICAL_ADMIN_API_VERSION, install_admin_settings
 from .m26_admin_usage import install_admin_usage
 from .m26_console_p05_ask_playground import router as playground_router
@@ -18,7 +19,16 @@ from .m26_translation_gateway_public_api import create_app as create_public_app
 
 def create_app():
     app = create_public_app()
-    install_admin_control_plane(app)
+    production_admin = production_admin_runtime_from_env()
+    if production_admin is None:
+        install_admin_control_plane(app)
+    else:
+        install_admin_control_plane(
+            app,
+            capability_provider=production_admin.capability_provider,
+            audit_sink=production_admin.store,
+            idempotency_store=production_admin.store,
+        )
     install_admin_overview(app)
     install_admin_ingestion_routes(app, include_job_reads=False)
     install_admin_corpus(app)
