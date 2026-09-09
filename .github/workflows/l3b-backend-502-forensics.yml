@@ -165,7 +165,87 @@ jobs:
           print('SWAP_FREE_KB=' + str(mem.get('SwapFree', 0)))
           PY
 
-          local_health="$(curl --silent --show-error --max-time 10 http://127.0.0.1:8080/v1/answers/health)"
+          nginx -T 2>&1 | python3 -c '
+          import re, sys
+          current = "GLOBAL"
+          emitted = 0
+          for raw in sys.stdin:
+              line = raw.strip()
+              loc = re.match(r"location\s+([^\s{]+)", line)
+              if loc:
+                  current = loc.group(1)
+              match = re.match(r"proxy_pass\s+([^;]+)", line)
+              if not match:
+                  continue
+              target = match.group(1)
+              target = re.sub(r"(?<![A-Fa-f0-9])(?:\d{1,3}\.){3}\d{1,3}(?![A-Fa-f0-9])", "[REDACTED_IP]", target)
+              target = re.sub(r"//[^/@\s]+@", "//[REDACTED_USERINFO]@", target)
+              print(f"NGINX_PROXY_ROUTE_{emitted}=location:{current}|target:{target}")
+              emitted += 1
+          print("NGINX_PROXY_ROUTE_COUNT=" + str(emitted))
+          '
+
+          python3 - /var/log/nginx/access.log /var/log/nginx/error.log <<'PY'
+          import collections, pathlib, re, sys
+          access = pathlib.Path(sys.argv[1])
+          error = pathlib.Path(sys.argv[2])
+          routes = collections.Counter()
+          timeline = []
+          if access.is_file():
+              for line in access.read_text(encoding='utf-8', errors='ignore').splitlines():
+                  req = re.search(r'"([A-Z]+)\s+([^ ?"]+)[^" ]*\s+HTTP/[^\"]+"\s+(\d{3})', line)
+                  stamp = re.search(r'\[([^\]]+)\]', line)
+                  if not req or req.group(3) != '502':
+                      continue
+                  key = req.group(1) + ' ' + req.group(2)
+                  routes[key] += 1
+                  if stamp: timeline.append((stamp.group(1), key))
+          for idx, (route, count) in enumerate(routes.most_common(20)):
+              print(f'NGINX_502_ROUTE_{idx}={route}|count={count}')
+          for idx, (stamp, route) in enumerate(timeline[-20:]):
+              print(f'NGINX_502_RECENT_{idx}={stamp}|{route}')
+
+          classes = collections.Counter()
+          events = []
+          if error.is_file():
+              for line in error.read_text(encoding='utf-8', errors='ignore').splitlines():
+                  low = line.lower()
+                  if 'upstream' not in low and 'connect() failed' not in low:
+                      continue
+                  if 'connection refused' in low: cls = 'CONNECTION_REFUSED'
+                  elif 'timed out' in low: cls = 'UPSTREAM_TIMEOUT'
+                  elif 'no live upstreams' in low: cls = 'NO_LIVE_UPSTREAMS'
+                  elif 'host not found' in low: cls = 'UPSTREAM_DNS'
+                  elif 'no route to host' in low: cls = 'NO_ROUTE_TO_HOST'
+                  elif 'prematurely closed' in low: cls = 'UPSTREAM_PREMATURE_CLOSE'
+                  else: cls = 'OTHER_UPSTREAM'
+                  request = re.search(r'request: "([A-Z]+)\s+([^ ?"]+)', line)
+                  stamp = re.match(r'([^ ]+\s+[^ ]+)', line)
+                  route = (request.group(1) + ' ' + request.group(2)) if request else 'UNKNOWN'
+                  classes[cls] += 1
+                  events.append(((stamp.group(1) if stamp else 'UNKNOWN'), cls, route))
+          for key, count in sorted(classes.items()): print(f'NGINX_UPSTREAM_CLASS_{key}={count}')
+          for idx, (stamp, cls, route) in enumerate(events[-20:]):
+              print(f'NGINX_UPSTREAM_RECENT_{idx}={stamp}|{cls}|{route}')
+          PY
+
+          app_admin_code="$(curl --silent --show-error --max-time 10 --output /tmp/l3b-app-admin.body --write-out '%{http_code}' http://localhost:8080/v1/admin/settings || true)"
+          printf 'LOCAL_APP_ADMIN_STATUS=%s\n' "$app_admin_code"
+          if grep -q 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/l3b-app-admin.body 2>/dev/null; then
+            echo 'LOCAL_APP_ADMIN_ROUTE=PASS_FAIL_CLOSED'
+          else
+            echo 'LOCAL_APP_ADMIN_ROUTE=UNEXPECTED_BODY'
+          fi
+          nginx_admin_code="$(curl --insecure --silent --show-error --max-time 10 --output /tmp/l3b-nginx-admin.body --write-out '%{http_code}' -H 'Host: api.danielcanfly.com' https://localhost/v1/admin/settings || true)"
+          printf 'LOCAL_NGINX_ADMIN_STATUS=%s\n' "$nginx_admin_code"
+          if grep -q 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/l3b-nginx-admin.body 2>/dev/null; then
+            echo 'LOCAL_NGINX_ADMIN_ROUTE=PASS_FAIL_CLOSED'
+          else
+            echo 'LOCAL_NGINX_ADMIN_ROUTE=UNEXPECTED_BODY'
+          fi
+          rm -f /tmp/l3b-app-admin.body /tmp/l3b-nginx-admin.body
+
+          local_health="$(curl --silent --show-error --max-time 10 http://localhost:8080/v1/answers/health)"
           python3 - "$local_health" "$EXPECTED_SHA" <<'PY'
           import json, sys
           payload = json.loads(sys.argv[1])
