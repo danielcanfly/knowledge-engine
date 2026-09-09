@@ -20,6 +20,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/answers/health', timeout=3)"
 
-# The standard compose runtime and the public API use the same canonical app.
-# Deploy workflow identity gates still bind the immutable release SHA.
-CMD ["uvicorn", "knowledge_engine.m26_public_api:app", "--host", "0.0.0.0", "--port", "8080"]
+# Production serves the current public runtime plus the accepted owner-only Admin app.
+# Public /v1/answers* remains available; /v1/admin/* stays fail-closed behind Admin controls.
+CMD ["uvicorn", "knowledge_engine.m26_console_api:app", "--host", "0.0.0.0", "--port", "8080"]
