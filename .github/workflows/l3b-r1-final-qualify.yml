@@ -78,7 +78,12 @@ jobs:
       - name: Production compose runtime rehearsal
         run: |
           set -euo pipefail
-          : > .env
+          cat > .env <<'EOF_ENV'
+          APP_ENV=test
+          AUTH_MODE=disabled
+          OBJECT_STORE_BACKEND=filesystem
+          FILESYSTEM_STORE_ROOT=/tmp/l3b-object-store
+          EOF_ENV
           export COMPOSE_PROJECT_NAME=l3br1qual
           cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1 || true; }
           trap cleanup EXIT
