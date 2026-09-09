@@ -112,7 +112,20 @@ jobs:
           subjects = [item.strip() for item in os.environ.get("M26_CONSOLE_OWNER_SUBJECTS", "").split(",") if item.strip()]
           origin = os.environ.get("M26_CONSOLE_ORIGIN", "").strip().rstrip("/")
           parsed = urlsplit(team)
+          normalized = team if "://" in team else "https://" + team
+          normalized_parsed = urlsplit(normalized)
           print("ADMIN_CFG_TEAM_DOMAIN=" + ("VALID" if parsed.scheme == "https" and parsed.netloc.endswith(".cloudflareaccess.com") else "INVALID_OR_MISSING"))
+          if not team:
+              team_class = "MISSING"
+          elif "://" not in team and normalized_parsed.netloc.endswith(".cloudflareaccess.com") and not normalized_parsed.path:
+              team_class = "BARE_CF_ACCESS_HOST"
+          elif parsed.scheme != "https":
+              team_class = "NON_HTTPS_SCHEME"
+          elif not parsed.netloc.endswith(".cloudflareaccess.com"):
+              team_class = "NON_CF_ACCESS_HOST"
+          else:
+              team_class = "OTHER_INVALID"
+          print("ADMIN_CFG_TEAM_DOMAIN_CLASS=" + team_class)
           print("ADMIN_CFG_AUDIENCE=" + ("PRESENT" if audience else "MISSING"))
           print("ADMIN_CFG_OWNER_EMAILS=" + ("PRESENT" if emails else "MISSING"))
           print("ADMIN_CFG_OWNER_SUBJECTS=" + ("PRESENT" if subjects else "MISSING"))
