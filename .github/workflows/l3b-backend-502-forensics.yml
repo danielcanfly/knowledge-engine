@@ -49,8 +49,8 @@ jobs:
           echo 'FORENSIC_WINDOW_BEGIN=2026-09-09T08:20:00Z'
           echo 'FORENSIC_WINDOW_END=NOW'
           printf 'OBSERVED_AT=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          printf 'HOST_BOOT_TIME=%sZ\n' "$(uptime -s | tr ' ' T')"
-          last -x reboot shutdown --time-format iso 2>/dev/null | awk '/^(reboot|shutdown)/ {print "HOST_LIFECYCLE_EVENT=" $1 ":" $3 ":" $4; if (++n == 6) exit}' || true
+          boot_epoch="$(awk '$1 == "btime" {print $2}' /proc/stat)"
+          printf 'HOST_BOOT_EPOCH=%s\n' "${boot_epoch:-UNKNOWN}"
 
           actual_head="$(git rev-parse HEAD)"
           printf 'CHECKOUT_HEAD=%s\n' "$actual_head"
