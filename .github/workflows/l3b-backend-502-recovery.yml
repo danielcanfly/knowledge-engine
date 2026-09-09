@@ -69,67 +69,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           test "$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')" = "$EXPECTED_SHA"
 
-          python3 - .env <<'PY'
-          from pathlib import Path
-          import sys
+          sudo -n sed -i -E 's#^(export[[:space:]]+)?M26_CONSOLE_ACCESS_TEAM_DOMAIN=([^:/]+\.cloudflareaccess\.com)$#\1M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://\2#' .env
+          sudo -n grep -Eq '^(export[[:space:]]+)?M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://[^/]+\.cloudflareaccess\.com$' .env
 
-          path = Path(sys.argv[1])
-          lines = path.read_text(encoding="utf-8").splitlines()
-          found = False
-          out = []
-          for line in lines:
-              candidate = line[7:] if line.startswith("export ") else line
-              if candidate.startswith("M26_CONSOLE_ACCESS_TEAM_DOMAIN="):
-                  value = candidate.split("=", 1)[1].strip()
-                  if value.startswith("https://") and value.endswith(".cloudflareaccess.com"):
-                      pass
-                  elif value.endswith(".cloudflareaccess.com") and "://" not in value and "/" not in value:
-                      line = ("export " if line.startswith("export ") else "") + "M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://" + value
-                  else:
-                      raise SystemExit("unexpected team-domain binding shape")
-                  found = True
-              out.append(line)
-          if not found:
-              raise SystemExit("team-domain binding missing")
-          path.write_text("\n".join(out) + "\n", encoding="utf-8")
-          PY
-
-          sudo -n python3 - "$nginx_path" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          text = path.read_text(encoding="utf-8")
-          marker = "    # L3B_CANONICAL_ADMIN_ORIGIN_SPLIT\n"
-          block = '''    # L3B_CANONICAL_ADMIN_ORIGIN_SPLIT
-          location ^~ /v1/admin/ {
-              proxy_pass http://127.0.0.1:8080;
-              proxy_http_version 1.1;
-              proxy_set_header Host $host;
-              proxy_set_header X-Real-IP $remote_addr;
-              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto $scheme;
-              proxy_set_header Connection "";
-              proxy_buffering off;
-              proxy_request_buffering off;
-              proxy_cache off;
-              proxy_connect_timeout 30s;
-              proxy_send_timeout 120s;
-              proxy_read_timeout 120s;
+          sudo -n awk '
+          BEGIN { inserted = 0 }
+          $0 == "    location / {" && inserted == 0 {
+              print "    # L3B_CANONICAL_ADMIN_ORIGIN_SPLIT"
+              print "    location ^~ /v1/admin/ {"
+              print "        proxy_pass http://127.0.0.1:8080;"
+              print "    }"
+              print ""
+              inserted = 1
           }
-
-          '''
-          if marker in text:
-              raise SystemExit("admin route marker already present")
-          needle = "    location / {\n"
-          if text.count(needle) != 1:
-              raise SystemExit("expected exactly one catch-all location")
-          text = text.replace(needle, block + needle, 1)
-          path.write_text(text, encoding="utf-8")
-          PY
-
+          { print }
+          END { if (inserted == 0) exit 4 }
+          ' "$nginx_path" | sudo -n tee "$nginx_path.l3b-next" >/dev/null
+          sudo -n mv "$nginx_path.l3b-next" "$nginx_path"
           sudo -n grep -F 'location ^~ /v1/admin/' "$nginx_path"
-          test "$(sudo -n nginx -T 2>/dev/null | grep -cF 'proxy_pass http://127.0.0.1:8080;' || true)" -ge 3 || {
+          test "$(sudo -n nginx -T 2>/dev/null | grep -cF 'location ^~ /v1/admin/' || true)" -eq 1 || {
             echo 'RECOVERY_NGINX_ADMIN_ROUTE=NOT_ACTIVE'
             exit 1
           }
