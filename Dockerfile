@@ -12,7 +12,9 @@ COPY src ./src
 COPY pilot ./pilot
 RUN python -m pip install --upgrade pip && python -m pip install .
 
-RUN mkdir -p /var/lib/knowledge-engine/cache /var/lib/knowledge-engine/rate-limit && \
+RUN mkdir -p /var/lib/knowledge-engine/cache \
+    /var/lib/knowledge-engine/rate-limit \
+    /var/lib/knowledge-engine/public-api && \
     chown -R knowledge:knowledge /var/lib/knowledge-engine /app
 USER knowledge
 
