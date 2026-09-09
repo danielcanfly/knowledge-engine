@@ -1,0 +1,180 @@
+name: L3B Backend 502 Minimal Recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l3b-backend-502-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      EXPECTED_SHA: 51d464565601d3f1c0301d87c3f0efcec9e68f6d
+    steps:
+      - name: Require existing recovery seam
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo "RECOVERY_AUTH_SEAM=MISSING:$name"; exit 42; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+          echo 'RECOVERY_AUTH_SEAM=PASS'
+
+      - name: Apply bounded ingress and auth-binding recovery
+        run: |
+          set -euo pipefail
+          set +x
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          set +x
+          cd "$DEPLOY_PATH"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          env_backup="$DEPLOY_PATH/.env.l3b-502-recovery-$stamp.bak"
+          nginx_path="$(readlink -f /etc/nginx/sites-enabled/llamaindex-demo 2>/dev/null || true)"
+          test -n "$nginx_path" && test -f "$nginx_path"
+          nginx_backup="$nginx_path.l3b-502-recovery-$stamp.bak"
+          cp -p .env "$env_backup"
+          sudo -n cp -p "$nginx_path" "$nginx_backup"
+          chmod 600 "$env_backup"
+
+          rollback() {
+            set +e
+            cp -p "$env_backup" .env
+            sudo -n cp -p "$nginx_backup" "$nginx_path"
+            sudo -n nginx -t >/dev/null 2>&1 && sudo -n systemctl reload nginx >/dev/null 2>&1
+            docker compose up -d --force-recreate --no-build knowledge-engine >/dev/null 2>&1
+            echo 'RECOVERY_ROLLBACK=EXECUTED'
+          }
+          trap rollback ERR
+
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')" = "$EXPECTED_SHA"
+
+          python3 - .env <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          lines = path.read_text(encoding="utf-8").splitlines()
+          found = False
+          out = []
+          for line in lines:
+              if line.startswith("M26_CONSOLE_ACCESS_TEAM_DOMAIN="):
+                  value = line.split("=", 1)[1].strip()
+                  if value.startswith("https://") and value.endswith(".cloudflareaccess.com"):
+                      pass
+                  elif value.endswith(".cloudflareaccess.com") and "://" not in value and "/" not in value:
+                      line = "M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://" + value
+                  else:
+                      raise SystemExit("unexpected team-domain binding shape")
+                  found = True
+              out.append(line)
+          if not found:
+              raise SystemExit("team-domain binding missing")
+          path.write_text("\n".join(out) + "\n", encoding="utf-8")
+          PY
+
+          python3 - "$nginx_path" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text(encoding="utf-8")
+          marker = "    # L3B_CANONICAL_ADMIN_ORIGIN_SPLIT\n"
+          block = '''    # L3B_CANONICAL_ADMIN_ORIGIN_SPLIT
+    location ^~ /v1/admin/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 120s;
+        proxy_read_timeout 120s;
+    }
+
+'''
+          if marker in text:
+              raise SystemExit("admin route marker already present")
+          needle = "    location / {\n"
+          if text.count(needle) != 1:
+              raise SystemExit("expected exactly one catch-all location")
+          text = text.replace(needle, block + needle, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          sudo -n nginx -t
+          sudo -n systemctl reload nginx
+          docker compose up -d --force-recreate --no-build knowledge-engine
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --max-time 5 http://127.0.0.1:8080/v1/answers/health >/tmp/l3b-health.json; then
+              python3 - "$EXPECTED_SHA" <<'PY'
+          import json, sys
+          payload = json.load(open('/tmp/l3b-health.json', encoding='utf-8'))
+          actual = (payload.get('backend') or payload.get('runtime') or {}).get('build_sha', '')
+          if payload.get('ok') is not True or actual != sys.argv[1]:
+              raise SystemExit(1)
+          PY
+              break
+            fi
+            sleep 2
+          done
+          test -s /tmp/l3b-health.json
+
+          local_admin_code="$(curl --silent --output /tmp/l3b-admin.json --write-out '%{http_code}' --max-time 10 http://127.0.0.1:8080/v1/admin/settings || true)"
+          echo "RECOVERY_LOCAL_APP_ADMIN_STATUS=$local_admin_code"
+          test "$local_admin_code" = 401
+          grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/l3b-admin.json
+
+          local_nginx_code="$(curl --insecure --silent --output /tmp/l3b-nginx-admin.json --write-out '%{http_code}' --max-time 10 -H 'Host: api.danielcanfly.com' https://127.0.0.1/v1/admin/settings || true)"
+          echo "RECOVERY_LOCAL_NGINX_ADMIN_STATUS=$local_nginx_code"
+          test "$local_nginx_code" = 401
+          grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/l3b-nginx-admin.json
+
+          echo "RECOVERY_CHECKOUT_HEAD=$(git rev-parse HEAD)"
+          echo "RECOVERY_RUNTIME_SHA=$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
+          echo 'RECOVERY_ENV_TEAM_DOMAIN_NORMALIZED=YES'
+          echo 'RECOVERY_NGINX_ADMIN_ROUTE=8080'
+          echo 'RECOVERY_BACKEND_RESTART=1'
+          echo 'RECOVERY_DNS_ACCESS_WRITE=0'
+          echo 'RECOVERY_DATA_PLANE_MUTATION=0'
+          echo 'RECOVERY_ROLLBACK=NOT_REQUIRED'
+          rm -f /tmp/l3b-health.json /tmp/l3b-admin.json /tmp/l3b-nginx-admin.json
+          trap - ERR
+          REMOTE
+
+      - name: Reconfirm public health after recovery
+        run: |
+          set -euo pipefail
+          payload="$(curl --fail --silent --show-error --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
+          python3 - "$payload" "$EXPECTED_SHA" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          actual = (payload.get("backend") or payload.get("runtime") or {}).get("build_sha", "")
+          print("RECOVERY_EDGE_HEALTH_OK=" + ("YES" if payload.get("ok") is True else "NO"))
+          print("RECOVERY_EDGE_HEALTH_BUILD_SHA=" + actual)
+          if payload.get("ok") is not True or actual != sys.argv[2]:
+              raise SystemExit(1)
+          PY
+          echo 'RECOVERY_QUALIFICATION=PASS'
