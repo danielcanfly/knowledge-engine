@@ -23,76 +23,56 @@ jobs:
         run: |
           set -euo pipefail
           for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
-            test -n "${!name:-}" || { echo "MISSING_$name"; exit 2; }
+            test -n "${!name:-}" || { echo "MISSING_READ_AUTHORITY"; exit 2; }
           done
           install -m 700 -d ~/.ssh
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
 
-      - name: Read production runtime and configuration presence
+      - name: Read neutral production readiness labels
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          printf 'LIVE_CHECKOUT_SHA=%s\n' "$(git rev-parse HEAD)"
-          printf 'LIVE_RUNNING_SHA=%s\n' "$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
-          has_env_key() {
-            key="$1"
-            if [ -f .env ] && grep -Eq "^${key}=.+" .env; then
-              printf '%s=YES\n' "$key"
-            else
-              printf '%s=NO\n' "$key"
-            fi
+          present() { [ -f .env ] && grep -Eq "^$1=.+" .env; }
+          yn() { if "$@"; then echo YES; else echo NO; fi; }
+          access_core() {
+            present M26_CONSOLE_ACCESS_TEAM_DOMAIN && present M26_CONSOLE_ACCESS_AUD &&
+              (present M26_CONSOLE_OWNER_EMAILS || present M26_CONSOLE_OWNER_SUBJECTS)
           }
-          for key in \
-            M26_CONSOLE_ACCESS_TEAM_DOMAIN \
-            M26_CONSOLE_ACCESS_AUD \
-            M26_CONSOLE_OWNER_EMAILS \
-            M26_CONSOLE_OWNER_SUBJECTS \
-            M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN \
-            M26_SUGGESTED_QUESTIONS_GITHUB_WRITE_TOKEN \
-            MINIMAX_API_KEY \
-            STAGING_M26_OWNER_SUBJECT_HASH \
-            KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH \
-            M26_OWNER_SUBJECT_HASH \
-            M26_QA_TRUST_CLOUDFLARE_COUNTRY \
-            M26_QA_DB_PATH \
-            M26_ADMIN_CONTROL_DB_PATH \
-            M26_L3B_ADMIN_QUALIFIED; do
-            has_env_key "$key"
-          done
-          printf 'PORT_8080_LOOPBACK_ONLY='
-          if ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080'; then echo YES; else echo NO; fi
-          printf 'NGINX_API_SERVER_NAME_PRESENT='
-          if grep -Rqs 'server_name[[:space:]].*api\.danielcanfly\.com' /etc/nginx 2>/dev/null; then echo YES; else echo NO; fi
-          printf 'NGINX_CF_REAL_IP_HEADER_PRESENT='
-          if grep -Rqs 'real_ip_header[[:space:]]\+CF-Connecting-IP' /etc/nginx 2>/dev/null; then echo YES; else echo NO; fi
-          printf 'NGINX_CF_SET_REAL_IP_RULE_COUNT='
-          grep -Rhs 'set_real_ip_from' /etc/nginx 2>/dev/null | wc -l | tr -d ' '
-          printf '\nPRODUCTION_MUTATION=0\n'
+          sq_runtime() {
+            present M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN &&
+              present M26_SUGGESTED_QUESTIONS_GITHUB_WRITE_TOKEN &&
+              present MINIMAX_API_KEY &&
+              (present STAGING_M26_OWNER_SUBJECT_HASH || present KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH || present M26_OWNER_SUBJECT_HASH)
+          }
+          qa_runtime_binding() {
+            present M26_QA_DB_PATH && present M26_ADMIN_CONTROL_DB_PATH && present M26_L3B_ADMIN_QUALIFIED
+          }
+          echo "LIVE_IDENTITY_MATCH=$(if [ \"$(git rev-parse HEAD)\" = \"$(docker compose exec -T knowledge-engine sh -c 'printf %s \"$M26_QUERY_BUILD_SHA\"')\" ]; then echo YES; else echo NO; fi)"
+          printf 'ACCESS_BACKEND_CONFIG_READY='; yn access_core
+          printf 'SQ_PUBLICATION_RUNTIME_READY='; yn sq_runtime
+          printf 'L3B_RUNTIME_BINDING_ALREADY_PRESENT='; yn qa_runtime_binding
+          printf 'COUNTRY_TRUST_FLAG_PRESENT='; yn present M26_QA_TRUST_CLOUDFLARE_COUNTRY
+          printf 'PORT_8080_LOOPBACK_ONLY='; if ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080'; then echo YES; else echo NO; fi
+          printf 'NGINX_CF_REAL_IP_TRUST_CONFIGURED='; if grep -Rqs 'real_ip_header[[:space:]]\+CF-Connecting-IP' /etc/nginx 2>/dev/null && grep -Rqs 'set_real_ip_from' /etc/nginx 2>/dev/null; then echo YES; else echo NO; fi
+          echo 'PRODUCTION_MUTATION=0'
           REMOTE
 
-      - name: Read public Cloudflare edge markers
+      - name: Read public edge and direct-origin reachability
         run: |
           set -euo pipefail
-          curl --silent --show-error --max-time 15 --dump-header /tmp/public-headers.txt --output /tmp/public-health.json \
-            https://api.danielcanfly.com/v1/answers/health
+          curl --silent --show-error --max-time 15 --dump-header /tmp/public-headers.txt --output /tmp/public-health.json https://api.danielcanfly.com/v1/answers/health
           code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
-          printf 'PUBLIC_HEALTH_HTTP=%s\n' "$code"
-          printf 'PUBLIC_SERVER_CLOUDFLARE='
-          if grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/public-headers.txt; then echo YES; else echo NO; fi
-          printf 'PUBLIC_CF_RAY_PRESENT='
-          if grep -Eiq '^cf-ray:' /tmp/public-headers.txt; then echo YES; else echo NO; fi
-          printf 'DIRECT_ORIGIN_HTTPS_PROBE='
+          printf 'PUBLIC_HEALTH_OK='; if [ "$code" = 200 ]; then echo YES; else echo NO; fi
+          printf 'PUBLIC_EDGE_CLOUDFLARE='; if grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/public-headers.txt && grep -Eiq '^cf-ray:' /tmp/public-headers.txt; then echo YES; else echo NO; fi
+          printf 'DIRECT_ORIGIN_REACHABLE='
           if [[ "$ORACLE_VM_HOST" =~ ^[0-9a-fA-F:.]+$ ]]; then
-            direct="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 8 \
-              --resolve "api.danielcanfly.com:443:$ORACLE_VM_HOST" \
-              -H 'CF-Ray: l3b-direct-probe' -H 'CF-IPCountry: TW' \
-              https://api.danielcanfly.com/v1/answers/health || true)"
-            printf '%s\n' "${direct:-000}"
+            direct="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 8 --resolve "api.danielcanfly.com:443:$ORACLE_VM_HOST" https://api.danielcanfly.com/v1/answers/health || true)"
+            if [ "$direct" = 200 ]; then echo YES; else echo NO; fi
           else
-            echo NOT_APPLICABLE_NON_IP_HOST
+            echo UNKNOWN
           fi
           echo 'PRODUCTION_MUTATION=0'
