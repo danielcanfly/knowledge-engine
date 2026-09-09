@@ -7,11 +7,13 @@ services:
       - ${M26_RUNTIME_ENV_FILE:-.env}
     environment:
       M26_PUBLIC_QUOTA_DB: /var/lib/knowledge-engine/rate-limit/quota.sqlite3
+      M26_QA_DB_PATH: /var/lib/knowledge-engine/public-api/qa-inbox.sqlite3
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - knowledge-engine-cache:/var/lib/knowledge-engine/cache
       - m26-daily-ip-rate-limit-data:/var/lib/knowledge-engine/rate-limit
+      - m26-qa-inbox-data:/var/lib/knowledge-engine/public-api
     read_only: true
     tmpfs:
       - /tmp
@@ -19,7 +21,7 @@ services:
       - no-new-privileges:true
     command:
       - uvicorn
-      - knowledge_engine.m26_public_api:app
+      - knowledge_engine.m26_console_api:app
       - --host
       - 0.0.0.0
       - --port
@@ -28,3 +30,4 @@ services:
 volumes:
   knowledge-engine-cache:
   m26-daily-ip-rate-limit-data:
+  m26-qa-inbox-data:
