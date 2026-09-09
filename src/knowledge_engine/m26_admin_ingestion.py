@@ -19,6 +19,14 @@ from .m26_admin_ingestion_core import (
     UnavailableIngestionAdapter,
     build_dry_run_plan,
 )
+from .m26_admin_ingestion_sync import (
+    DeterministicSyncIngestionAdapter,
+    SyncBlogRequest,
+    build_index_health,
+    build_manifest_diff,
+    build_sync_plan,
+    require_sync_adapter,
+)
 
 CAP_INDEX_CURRENT_READ = "index.current.read"
 CAP_INDEX_AUDIT_START = "index.audit.start"
@@ -100,13 +108,32 @@ def _begin_operation(request: Request, payload: Any) -> tuple[str, bool]:
     )
 
 
-def _accepted(request: Request, operation_id: str, replayed: bool) -> dict[str, Any]:
-    return {
+def _begin_stateful_operation(request: Request, payload: Any) -> Any:
+    return request.app.state.admin_idempotency.begin_stateful(
+        actor_id=actor_from(request).actor_id,
+        method=request.method,
+        path=request.url.path,
+        idempotency_key=request.headers.get("idempotency-key", ""),
+        request_payload=payload,
+    )
+
+
+def _accepted(
+    request: Request,
+    operation_id: str,
+    replayed: bool,
+    *,
+    result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    envelope: dict[str, Any] = {
         "request_id": request_id_from(request),
         "operation_id": operation_id,
         "status": "accepted",
         "replayed": replayed,
     }
+    if result is not None:
+        envelope["result"] = result
+    return envelope
 
 
 def _audit(request: Request, action: str, operation_id: str, reason: str) -> None:
@@ -131,6 +158,10 @@ def _router() -> APIRouter:
     @router.get("/index/current", operation_id="getCurrentIndex")
     async def current_index(request: Request) -> dict[str, Any]:
         return _read_envelope(request, _adapter(request).current_index())
+
+    @router.get("/index/health", operation_id="getIndexHealth")
+    async def index_health(request: Request) -> dict[str, Any]:
+        return _read_envelope(request, build_index_health(_adapter(request).current_index()))
 
     @router.post("/index/audits", status_code=202, operation_id="startIndexAudit")
     async def start_index_audit(request: Request) -> dict[str, Any]:
@@ -167,6 +198,50 @@ def _router() -> APIRouter:
         _adapter(request).create_dry_run(operation_id, body)
         return _accepted(request, operation_id, False)
 
+    @router.post("/ingestion/sync", status_code=202, operation_id="syncBlog")
+    async def sync_blog(request: Request, body: SyncBlogRequest) -> dict[str, Any]:
+        # Reuse the already-qualified job-confirm mutation capability. The new
+        # product action is orchestration over the same governed mutation seam,
+        # not a new authority surface.
+        _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
+        adapter = _adapter(request)
+        sync = require_sync_adapter(adapter)
+        payload = body.model_dump()
+        coordinator = request.app.state.admin_idempotency
+        lease = _begin_stateful_operation(request, payload)
+        if lease.replayed:
+            return _accepted(request, lease.operation_id, True)
+        try:
+            _audit(
+                request,
+                "ingestion.sync",
+                lease.operation_id,
+                "ADMIN_INGESTION_SYNC_ACCEPTED",
+            )
+            sync_with_lease = getattr(adapter, "sync_blog_with_lease", None)
+            result = (
+                sync_with_lease(lease.operation_id, body, lease)
+                if callable(sync_with_lease)
+                else sync(lease.operation_id, body)
+            )
+        except Exception:
+            durable = _adapter(request)
+            if callable(getattr(durable, "sync_blog_with_lease", None)):
+                fail_lease = getattr(getattr(durable, "ledger", None), "fail_lease", None)
+                if callable(fail_lease):
+                    fail_lease(lease, detail="Ingestion execution failed")
+            else:
+                coordinator.fail_stateful(lease)
+            raise
+        if not callable(getattr(_adapter(request), "sync_blog_with_lease", None)):
+            coordinator.succeed_stateful(lease)
+        return _accepted(
+            request,
+            lease.operation_id,
+            False,
+            result=result if isinstance(result, dict) else None,
+        )
+
     @router.get("/ingestion/jobs", operation_id="listIngestionJobs")
     async def list_ingestion_jobs(request: Request) -> dict[str, Any]:
         return _read_envelope(request, _adapter(request).list_jobs())
@@ -184,6 +259,26 @@ def _router() -> APIRouter:
     @router.get("/ingestion/jobs/{job_id}", operation_id="getIngestionJob")
     async def get_ingestion_job(request: Request, job_id: str) -> dict[str, Any]:
         return _read_envelope(request, _adapter(request).get_job(job_id))
+
+    @router.post(
+        "/ingestion/jobs/{job_id}/retry", status_code=202, operation_id="retryIngestionJob"
+    )
+    async def retry_ingestion_job(request: Request, job_id: str) -> dict[str, Any]:
+        _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
+        operation_id, replayed = _begin_operation(request, {"job_id": job_id})
+        if replayed:
+            return _accepted(request, operation_id, True)
+        adapter = _adapter(request)
+        retry = getattr(adapter, "retry_job", None)
+        if not callable(retry):
+            raise AdminAPIError(
+                status_code=503,
+                code="ADMIN_INGESTION_RETRY_ADAPTER_UNQUALIFIED",
+                message="The durable ingestion retry adapter is not qualified",
+            )
+        _audit(request, "ingestion.job.retry", operation_id, "ADMIN_INGESTION_RETRY_ACCEPTED")
+        result = retry(job_id, owner=operation_id)
+        return _accepted(request, operation_id, False, result=result)
 
     return router
 
@@ -216,10 +311,15 @@ __all__ = [
     "CAP_INGESTION_JOBS_READ",
     "CAP_INGESTION_SCAN",
     "ConfirmJobRequest",
+    "DeterministicSyncIngestionAdapter",
     "DryRunRequest",
     "InMemoryIngestionAdapter",
     "ReadObservation",
+    "SyncBlogRequest",
     "UnavailableIngestionAdapter",
     "build_dry_run_plan",
+    "build_index_health",
+    "build_manifest_diff",
+    "build_sync_plan",
     "install_admin_ingestion_routes",
 ]

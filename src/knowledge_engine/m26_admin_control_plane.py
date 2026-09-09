@@ -362,7 +362,22 @@ def install_admin_control_plane(
         raise AdminConfigurationError("Admin console origin is frozen")
     app.state.admin_capability_provider = capability_provider or DefaultCapabilityProvider()
     app.state.admin_audit_sink = audit_sink or UnavailableAuditSink()
-    store = idempotency_store or UnavailableIdempotencyStore()
+    if idempotency_store is None:
+        try:
+            from .m26_sqlite_ingestion import build_sqlite_ingestion_adapter
+
+            durable_adapter = build_sqlite_ingestion_adapter()
+            store = (
+                durable_adapter.ledger
+                if durable_adapter is not None
+                else UnavailableIdempotencyStore()
+            )
+            if durable_adapter is not None:
+                app.state.m26_durable_ingestion_adapter = durable_adapter
+        except Exception:
+            store = UnavailableIdempotencyStore()
+    else:
+        store = idempotency_store
     app.state.admin_idempotency_store = store
     app.state.admin_idempotency = IdempotencyCoordinator(store)
     registry = AdminMutationRegistry()

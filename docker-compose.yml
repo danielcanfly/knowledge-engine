@@ -16,6 +16,7 @@ services:
       - knowledge-engine-cache:/var/lib/knowledge-engine/cache
       - m26-daily-ip-rate-limit-data:/var/lib/knowledge-engine/rate-limit
       - m26-qa-inbox-data:/var/lib/knowledge-engine/public-api
+      - m26-ingestion-state:/var/lib/knowledge-engine/ingestion
     read_only: true
     tmpfs:
       - /tmp
@@ -33,3 +34,4 @@ volumes:
   knowledge-engine-cache:
   m26-daily-ip-rate-limit-data:
   m26-qa-inbox-data:
+  m26-ingestion-state:
