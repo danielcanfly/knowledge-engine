@@ -15,13 +15,13 @@ jobs:
       - name: Checkout exact R1 candidate
         uses: actions/checkout@v4
         with:
-          ref: 758155b4c2a039316f0f9c1f03d394d688343560
+          ref: 34d559e5e35886910ea1b9516fbb2767a78b8e7f
           fetch-depth: 1
 
       - name: Seal source identity
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "758155b4c2a039316f0f9c1f03d394d688343560"
+          test "$(git rev-parse HEAD)" = "34d559e5e35886910ea1b9516fbb2767a78b8e7f"
           echo "R1_CANDIDATE_SHA=$(git rev-parse HEAD)"
           echo "R1_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
 
@@ -104,7 +104,7 @@ jobs:
           assert [item.capability_id for item in caps] == sorted(L3B_CAPABILITY_IDS)
           assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
           assert app.state.admin_audit_sink is app.state.admin_idempotency_store
-          paths = {path for route in app.routes if (path := getattr(route, 'path', None)) is not None}
+          paths = set(app.openapi()['paths'])
           assert '/v1/answers/health' in paths
           assert '/v1/admin/qa/inbox/events' in paths
           assert '/v1/admin/suggested-questions/promotions/preview' in paths
