@@ -61,7 +61,7 @@ jobs:
               printf 'SERVICE_%s_PRESENT=YES\n' "${unit^^}"
               systemctl show "$unit.service" \
                 --property=ActiveState,SubState,ActiveEnterTimestamp,ExecMainStartTimestamp,NRestarts \
-                --value 2>/dev/null | awk -v name="${unit^^}" '{print "SERVICE_" name "_STATE_FIELD_" NR "=" $0}'
+                2>/dev/null | awk -v name="${unit^^}" '{print "SERVICE_" name "_" $0}'
             else
               printf 'SERVICE_%s_PRESENT=NO\n' "${unit^^}"
             fi
@@ -90,7 +90,7 @@ jobs:
 
           docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"'
 
-          docker events \
+          docker events </dev/null \
             --since '2026-09-09T08:20:00Z' \
             --until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --filter "container=$container_id" \
@@ -134,8 +134,36 @@ jobs:
               printf 'PROXY_LOG_%s_502_COUNT=%s\n' "$label" "$(grep -cE '(^|[^0-9])502([^0-9]|$)' "$log" 2>/dev/null || true)"
               printf 'PROXY_LOG_%s_503_COUNT=%s\n' "$label" "$(grep -cE '(^|[^0-9])503([^0-9]|$)' "$log" 2>/dev/null || true)"
               printf 'PROXY_LOG_%s_UPSTREAM_ERROR_COUNT=%s\n' "$label" "$(grep -ciE 'upstream.*(failed|refused|timed out|closed)|connect\(\).*failed' "$log" 2>/dev/null || true)"
+              python3 - "$log" "$label" <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          label = sys.argv[2]
+          counts = {"window_lines": 0, "window_502": 0, "window_503": 0, "window_upstream_error": 0}
+          time_markers = ("09/Sep/2026:10:3", "09/Sep/2026:10:4", "2026/09/09 10:3", "2026/09/09 10:4")
+          for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+              if not any(marker in line for marker in time_markers):
+                  continue
+              counts["window_lines"] += 1
+              if re.search(r"(^|\D)502(\D|$)", line): counts["window_502"] += 1
+              if re.search(r"(^|\D)503(\D|$)", line): counts["window_503"] += 1
+              if re.search(r"upstream.*(?:failed|refused|timed out|closed)|connect\(\).*failed", line, re.I):
+                  counts["window_upstream_error"] += 1
+          for key, value in counts.items(): print(f"PROXY_LOG_{label}_{key.upper()}={value}")
+          PY
             fi
           done
+
+          python3 - <<'PY'
+          import pathlib
+          mem = {}
+          for line in pathlib.Path('/proc/meminfo').read_text().splitlines():
+              key, value = line.split(':', 1)
+              mem[key] = int(value.strip().split()[0])
+          print('MEM_TOTAL_KB=' + str(mem.get('MemTotal', 0)))
+          print('MEM_AVAILABLE_KB=' + str(mem.get('MemAvailable', 0)))
+          print('SWAP_TOTAL_KB=' + str(mem.get('SwapTotal', 0)))
+          print('SWAP_FREE_KB=' + str(mem.get('SwapFree', 0)))
+          PY
 
           local_health="$(curl --silent --show-error --max-time 10 http://127.0.0.1:8080/v1/answers/health)"
           python3 - "$local_health" "$EXPECTED_SHA" <<'PY'
