@@ -165,7 +165,7 @@ jobs:
           print('SWAP_FREE_KB=' + str(mem.get('SwapFree', 0)))
           PY
 
-          nginx -T 2>&1 | python3 -c '
+          { sudo -n nginx -T 2>&1 || nginx -T 2>&1 || true; } | python3 -c '
           import re, sys
           current = "GLOBAL"
           emitted = 0
