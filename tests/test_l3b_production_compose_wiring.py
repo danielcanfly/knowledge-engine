@@ -1,6 +1,3 @@
-from pathlib import Path
-
-
 QA_DATA_DIR = "/var/lib/knowledge-engine/public-api"
 QA_DB_PATH = f"{QA_DATA_DIR}/qa-inbox.sqlite3"
 ADMIN_DB_PATH = f"{QA_DATA_DIR}/admin-control.sqlite3"
@@ -8,22 +5,27 @@ COMBINED_APP = "knowledge_engine.m26_console_api:app"
 PUBLIC_ONLY_APP = "knowledge_engine.m26_public_api:app"
 
 
+def _read_text(path: str) -> str:
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 def test_dockerfile_prepares_non_root_qa_data_directory() -> None:
-    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    dockerfile = _read_text("Dockerfile")
     assert QA_DATA_DIR in dockerfile
     assert "chown -R knowledge:knowledge /var/lib/knowledge-engine /app" in dockerfile
     assert COMBINED_APP in dockerfile
 
 
 def test_compose_runs_combined_console_app_not_public_only_app() -> None:
-    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    compose = _read_text("docker-compose.yml")
     assert f"      - {COMBINED_APP}" in compose
     assert PUBLIC_ONLY_APP not in compose
     assert "    read_only: true" in compose
 
 
 def test_compose_binds_durable_qa_and_admin_control_storage() -> None:
-    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    compose = _read_text("docker-compose.yml")
     assert f"      M26_QA_DB_PATH: {QA_DB_PATH}" in compose
     assert f"      M26_ADMIN_CONTROL_DB_PATH: {ADMIN_DB_PATH}" in compose
     assert '      M26_L3B_ADMIN_QUALIFIED: "true"' in compose
