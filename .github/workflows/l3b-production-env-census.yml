@@ -10,14 +10,29 @@ permissions:
 
 jobs:
   census:
+    name: census-${{ matrix.check }}
     runs-on: ubuntu-latest
     environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - access
+          - sq
+          - l3b_binding
+          - country_truthy
+          - loopback
+          - nginx_cf_trust
+          - identity
+          - public_cloudflare
+          - direct_origin
     env:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
     steps:
-      - name: Require read authority
+      - name: Configure read authority
+        if: ${{ matrix.check != 'public_cloudflare' && matrix.check != 'direct_origin' }}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
         run: |
@@ -30,75 +45,64 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
 
-      - name: P01 Access backend config present
-        continue-on-error: true
+      - name: Execute exact read-only check
         run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          check='${{ matrix.check }}'
+          case "$check" in
+            access)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail; cd "$DEPLOY_PATH"
           p(){ [ -f .env ] && grep -Eq "^$1=.+" .env; }
           p M26_CONSOLE_ACCESS_TEAM_DOMAIN && p M26_CONSOLE_ACCESS_AUD && (p M26_CONSOLE_OWNER_EMAILS || p M26_CONSOLE_OWNER_SUBJECTS)
           REMOTE
-
-      - name: P02 Suggested Questions runtime present
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+              ;;
+            sq)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail; cd "$DEPLOY_PATH"
           p(){ [ -f .env ] && grep -Eq "^$1=.+" .env; }
           p M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN && p M26_SUGGESTED_QUESTIONS_GITHUB_WRITE_TOKEN && p MINIMAX_API_KEY && (p STAGING_M26_OWNER_SUBJECT_HASH || p KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH || p M26_OWNER_SUBJECT_HASH)
           REMOTE
-
-      - name: P03 L3B runtime binding already present
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+              ;;
+            l3b_binding)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail; cd "$DEPLOY_PATH"
           p(){ [ -f .env ] && grep -Eq "^$1=.+" .env; }
           p M26_QA_DB_PATH && p M26_ADMIN_CONTROL_DB_PATH && p M26_L3B_ADMIN_QUALIFIED
           REMOTE
-
-      - name: P04 Country trust flag already present
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+              ;;
+            country_truthy)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail; cd "$DEPLOY_PATH"
-          [ -f .env ] && grep -Eq '^M26_QA_TRUST_CLOUDFLARE_COUNTRY=.+$' .env
+          value="$(awk -F= '$1=="M26_QA_TRUST_CLOUDFLARE_COUNTRY"{sub(/^[^=]*=/,""); print; exit}' .env 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+          case "$value" in true|1|yes|on) exit 0 ;; *) exit 1 ;; esac
           REMOTE
-
-      - name: P05 Loopback application port
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080'"
-
-      - name: P06 Nginx Cloudflare real-IP trust configured
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "grep -Rqs 'real_ip_header[[:space:]]\\+CF-Connecting-IP' /etc/nginx 2>/dev/null && grep -Rqs 'set_real_ip_from' /etc/nginx 2>/dev/null"
-
-      - name: P07 Checkout and running identity match
-        continue-on-error: true
-        run: |
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+              ;;
+            loopback)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080'"
+              ;;
+            nginx_cf_trust)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "grep -Rqs 'real_ip_header[[:space:]]\\+CF-Connecting-IP' /etc/nginx 2>/dev/null && grep -Rqs 'set_real_ip_from' /etc/nginx 2>/dev/null"
+              ;;
+            identity)
+              ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail; cd "$DEPLOY_PATH"
           checkout="$(git rev-parse HEAD)"
           running="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
           [ "$checkout" = "$running" ]
           REMOTE
-
-      - name: P08 Public health through Cloudflare
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --max-time 15 --dump-header /tmp/headers --output /tmp/body https://api.danielcanfly.com/v1/answers/health
-          grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/headers
-          grep -Eiq '^cf-ray:' /tmp/headers
-
-      - name: P09 Direct origin reachable
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          [[ "$ORACLE_VM_HOST" =~ ^[0-9a-fA-F:.]+$ ]]
-          code="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 8 --resolve "api.danielcanfly.com:443:$ORACLE_VM_HOST" https://api.danielcanfly.com/v1/answers/health || true)"
-          [ "$code" = 200 ]
-
-      - name: Mutation seal
-        run: echo 'PRODUCTION_MUTATION=0'
+              ;;
+            public_cloudflare)
+              curl --fail --silent --show-error --max-time 15 --dump-header /tmp/headers --output /tmp/body https://api.danielcanfly.com/v1/answers/health
+              grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/headers
+              grep -Eiq '^cf-ray:' /tmp/headers
+              ;;
+            direct_origin)
+              [[ "$ORACLE_VM_HOST" =~ ^[0-9a-fA-F:.]+$ ]]
+              code="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 8 --resolve "api.danielcanfly.com:443:$ORACLE_VM_HOST" https://api.danielcanfly.com/v1/answers/health || true)"
+              [ "$code" = 200 ]
+              ;;
+            *) exit 2 ;;
+          esac
+          echo "CHECK_${check}=PASS"
+          echo 'PRODUCTION_MUTATION=0'
