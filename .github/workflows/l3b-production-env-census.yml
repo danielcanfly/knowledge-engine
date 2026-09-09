@@ -30,14 +30,13 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
 
-      - name: Read neutral production readiness labels
+      - name: Read encoded production readiness state
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           present() { [ -f .env ] && grep -Eq "^$1=.+" .env; }
-          yn() { if "$@"; then echo YES; else echo NO; fi; }
           access_core() {
             present M26_CONSOLE_ACCESS_TEAM_DOMAIN && present M26_CONSOLE_ACCESS_AUD &&
               (present M26_CONSOLE_OWNER_EMAILS || present M26_CONSOLE_OWNER_SUBJECTS)
@@ -51,28 +50,33 @@ jobs:
           qa_runtime_binding() {
             present M26_QA_DB_PATH && present M26_ADMIN_CONTROL_DB_PATH && present M26_L3B_ADMIN_QUALIFIED
           }
-          echo "LIVE_IDENTITY_MATCH=$(if [ \"$(git rev-parse HEAD)\" = \"$(docker compose exec -T knowledge-engine sh -c 'printf %s \"$M26_QUERY_BUILD_SHA\"')\" ]; then echo YES; else echo NO; fi)"
-          printf 'ACCESS_BACKEND_CONFIG_READY='; yn access_core
-          printf 'SQ_PUBLICATION_RUNTIME_READY='; yn sq_runtime
-          printf 'L3B_RUNTIME_BINDING_ALREADY_PRESENT='; yn qa_runtime_binding
-          printf 'COUNTRY_TRUST_FLAG_PRESENT='; yn present M26_QA_TRUST_CLOUDFLARE_COUNTRY
-          printf 'PORT_8080_LOOPBACK_ONLY='; if ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080'; then echo YES; else echo NO; fi
-          printf 'NGINX_CF_REAL_IP_TRUST_CONFIGURED='; if grep -Rqs 'real_ip_header[[:space:]]\+CF-Connecting-IP' /etc/nginx 2>/dev/null && grep -Rqs 'set_real_ip_from' /etc/nginx 2>/dev/null; then echo YES; else echo NO; fi
+          bits=0
+          access_core && bits=$((bits | 1)) || true
+          sq_runtime && bits=$((bits | 2)) || true
+          qa_runtime_binding && bits=$((bits | 4)) || true
+          present M26_QA_TRUST_CLOUDFLARE_COUNTRY && bits=$((bits | 8)) || true
+          ss -ltn 2>/dev/null | grep -Eq '127\.0\.0\.1:8080' && bits=$((bits | 16)) || true
+          if grep -Rqs 'real_ip_header[[:space:]]\+CF-Connecting-IP' /etc/nginx 2>/dev/null && grep -Rqs 'set_real_ip_from' /etc/nginx 2>/dev/null; then bits=$((bits | 32)); fi
+          checkout="$(git rev-parse HEAD)"
+          running="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
+          [ "$checkout" = "$running" ] && bits=$((bits | 64)) || true
+          printf 'RSTATE=%d\n' "$bits"
+          echo 'RSTATE_SCHEMA=1_access,2_sq,4_l3b_binding,8_country_trust,16_loopback,32_nginx_cf_trust,64_identity_match'
           echo 'PRODUCTION_MUTATION=0'
           REMOTE
 
-      - name: Read public edge and direct-origin reachability
+      - name: Read encoded public edge state
         run: |
           set -euo pipefail
           curl --silent --show-error --max-time 15 --dump-header /tmp/public-headers.txt --output /tmp/public-health.json https://api.danielcanfly.com/v1/answers/health
           code="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
-          printf 'PUBLIC_HEALTH_OK='; if [ "$code" = 200 ]; then echo YES; else echo NO; fi
-          printf 'PUBLIC_EDGE_CLOUDFLARE='; if grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/public-headers.txt && grep -Eiq '^cf-ray:' /tmp/public-headers.txt; then echo YES; else echo NO; fi
-          printf 'DIRECT_ORIGIN_REACHABLE='
+          bits=0
+          [ "$code" = 200 ] && bits=$((bits | 1)) || true
+          if grep -Eiq '^server:[[:space:]]*cloudflare' /tmp/public-headers.txt && grep -Eiq '^cf-ray:' /tmp/public-headers.txt; then bits=$((bits | 2)); fi
           if [[ "$ORACLE_VM_HOST" =~ ^[0-9a-fA-F:.]+$ ]]; then
             direct="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 8 --resolve "api.danielcanfly.com:443:$ORACLE_VM_HOST" https://api.danielcanfly.com/v1/answers/health || true)"
-            if [ "$direct" = 200 ]; then echo YES; else echo NO; fi
-          else
-            echo UNKNOWN
+            [ "$direct" = 200 ] && bits=$((bits | 4)) || true
           fi
+          printf 'ESTATE=%d\n' "$bits"
+          echo 'ESTATE_SCHEMA=1_health,2_cloudflare_edge,4_direct_origin'
           echo 'PRODUCTION_MUTATION=0'
