@@ -30,6 +30,29 @@ L3B_CAPABILITY_IDS = (
 L3B_QUALIFICATION_DIGEST = hashlib.sha256(
     json.dumps(L3B_CAPABILITY_IDS, separators=(",", ":")).encode()
 ).hexdigest()
+L3B_SUGGESTED_QUESTIONS_PUBLISH_BLOCKED_REASON = (
+    "L3B_SUGGESTED_QUESTIONS_PUBLISH_NOT_AUTHORIZED"
+)
+
+
+@dataclass(frozen=True)
+class _CanonicalL3BCapabilityGate(CapabilityGate):
+    """Production-owned capability evidence with an explicit canonical view."""
+
+    qualification_status: str = "qualified"
+    effective_state: str = "read_only"
+    mutation_authorized: bool = False
+
+    def to_payload(self) -> dict[str, Any]:
+        payload = super().to_payload()
+        payload.update(
+            {
+                "qualification_status": self.qualification_status,
+                "effective_state": self.effective_state,
+                "mutation_authorized": self.mutation_authorized,
+            }
+        )
+        return payload
 
 
 class QualifiedL3BCapabilityProvider:
@@ -37,16 +60,34 @@ class QualifiedL3BCapabilityProvider:
 
     def __init__(self) -> None:
         self._gates = {
-            capability_id: CapabilityGate(
+            capability_id: _CanonicalL3BCapabilityGate(
                 capability_id=capability_id,
-                state="enabled",
-                reason_code="L3B_QA_PRODUCTION_QUALIFIED",
+                state=(
+                    "disabled"
+                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "read_only"
+                ),
+                reason_code=(
+                    L3B_SUGGESTED_QUESTIONS_PUBLISH_BLOCKED_REASON
+                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "L3B_QA_PRODUCTION_QUALIFIED"
+                ),
                 source="l3b_production_qualification",
                 resource_identity={
                     "lane": "L3B_QA_P0",
                     "binding": "qualified-production-runtime/v1",
                 },
                 evidence_digest=L3B_QUALIFICATION_DIGEST,
+                qualification_status=(
+                    "blocked_authority"
+                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "qualified"
+                ),
+                effective_state=(
+                    "unavailable"
+                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "read_only"
+                ),
             )
             for capability_id in L3B_CAPABILITY_IDS
         }
