@@ -1,0 +1,29 @@
+name: L3B Public State Isolation Diagnostic
+
+on:
+  push:
+    branches:
+      - ops/l3b-public-state-diagnostic-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout diagnostic tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ops/l3b-public-state-diagnostic-20260909
+          path: tooling
+          persist-credentials: false
+      - name: Checkout exact current production main
+        uses: actions/checkout@v4
+        with:
+          ref: 68fa4b437b778e6f44a885bafd0f42016bbf7142
+          fetch-depth: 0
+          path: work
+          persist-credentials: false
+      - name: Run isolated public-state differential
+        run: python tooling/tools/l3b_public_state_diagnostic.py work
