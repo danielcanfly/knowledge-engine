@@ -14,6 +14,7 @@ import inspect
 import json
 import os
 import sqlite3
+import subprocess
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -31,6 +32,10 @@ from .m26_admin_contract import (
 )
 from .m26_admin_ingestion_core import ReadObservation
 from .m26_admin_ingestion_sync import build_sync_plan
+from .m26_ingestion_candidate_writer import (
+    build_candidate_release_plan,
+    stage_candidate_release,
+)
 from .m26_jobs_rollback_api import EvidenceObservation
 
 SCHEMA_VERSION = "knowledge-engine-m26-sqlite-ingestion/v1"
@@ -62,6 +67,29 @@ def _decode(value: str | None, default: Any = None) -> Any:
 
 def _error(code: str, message: str, status: int = 503) -> AdminAPIError:
     return AdminAPIError(status_code=status, code=code, message=message, retryable=True)
+
+
+def _request_payload(request: Any) -> dict[str, Any]:
+    """Persist only the small, canonical operator intent needed for replay."""
+
+    if hasattr(request, "model_dump"):
+        payload = request.model_dump(exclude_none=True)
+    elif isinstance(request, Mapping):
+        payload = dict(request)
+    else:
+        payload = {
+            key: getattr(request, key)
+            for key in ("confirmation", "expected_plan_digest")
+            if hasattr(request, key) and getattr(request, key) is not None
+        }
+    return {str(key): value for key, value in payload.items()}
+
+
+def _error_payload(exc: Exception) -> dict[str, str]:
+    return {
+        "code": str(getattr(exc, "code", "ADMIN_INGESTION_EXECUTION_FAILED")),
+        "detail": "Ingestion observation or planning failed before candidate work",
+    }
 
 
 class SQLiteIngestionLedger:
@@ -105,6 +133,7 @@ class SQLiteIngestionLedger:
                     actor_scope TEXT NOT NULL,
                     idempotency_fingerprint TEXT NOT NULL,
                     request_hash TEXT NOT NULL,
+                    request_payload_json TEXT NOT NULL DEFAULT '{}',
                     status TEXT NOT NULL CHECK(status IN ('PENDING','RUNNING','SUCCEEDED','FAILED')),
                     phase TEXT NOT NULL DEFAULT 'scan',
                     progress INTEGER NOT NULL DEFAULT 0 CHECK(progress >= 0 AND progress <= 100),
@@ -134,6 +163,14 @@ class SQLiteIngestionLedger:
                     ON ingestion_jobs(updated_at DESC);
                 """
             )
+            columns = {
+                str(row["name"])
+                for row in db.execute("PRAGMA table_info(ingestion_jobs)").fetchall()
+            }
+            if "request_payload_json" not in columns:
+                db.execute(
+                    "ALTER TABLE ingestion_jobs ADD COLUMN request_payload_json TEXT NOT NULL DEFAULT '{}'"
+                )
 
     @staticmethod
     def _legacy(row: sqlite3.Row) -> IdempotencyRecord:
@@ -289,6 +326,7 @@ class SQLiteIngestionLedger:
             "actor_scope": str(job.get("actor_scope", "")),
             "idempotency_fingerprint": str(job.get("idempotency_fingerprint", "")),
             "request_hash": str(job.get("request_hash", "")),
+            "request_payload_json": _json(job.get("request_payload", {})),
             "status": str(job.get("status", "PENDING")),
             "phase": str(job.get("phase", "scan")),
             "progress": int(job.get("progress", 0)),
@@ -347,6 +385,7 @@ class SQLiteIngestionLedger:
             "actor_scope": row["actor_scope"],
             "idempotency_fingerprint": row["idempotency_fingerprint"],
             "request_hash": row["request_hash"],
+            "request_payload": _decode(row["request_payload_json"], {}),
             "status": row["status"],
             "phase": row["phase"],
             "progress": row["progress"],
@@ -434,9 +473,12 @@ class SQLiteIngestionLedger:
                     "completed_at",
                     "manifest_diff_json",
                     "result_json",
+                    "request_payload_json",
                 }:
                     fields[column] = (
-                        _json(value) if column in {"manifest_diff_json", "result_json"} else value
+                        _json(value)
+                        if column in {"manifest_diff_json", "result_json", "request_payload_json"}
+                        else value
                     )
             fields["version"] = expected_version + 1
             fields["updated_at"] = utc_now()
@@ -565,6 +607,7 @@ class SQLiteIngestionLedger:
         result: Mapping[str, Any] | None = None,
         error: Mapping[str, Any] | None = None,
         expected_version: int | None = None,
+        expected_lease_owner: str | None = None,
     ) -> dict[str, Any]:
         target_job = "SUCCEEDED" if success else "FAILED"
         target_idem = "SUCCEEDED" if success else "FAILED"
@@ -583,7 +626,7 @@ class SQLiteIngestionLedger:
                 or idem["state"] != "IN_PROGRESS"
                 or job["operation_id"] != lease.operation_id
                 or job["attempt"] != lease.attempt
-                or job["lease_owner"] != lease.operation_id
+                or job["lease_owner"] != (expected_lease_owner or lease.operation_id)
                 or (expected_version is not None and job["version"] != expected_version)
             ):
                 raise _error(
@@ -731,19 +774,18 @@ class SQLiteIngestionAdapter:
         return self.candidate_executor(*args)
 
     def sync_blog(
-        self, operation_id: str, request: Any, lease: StatefulIdempotencyLease | None = None
+        self,
+        operation_id: str,
+        request: Any,
+        lease: StatefulIdempotencyLease | None = None,
+        *,
+        execution_owner: str | None = None,
     ) -> dict[str, Any]:
-        source, active = self._observe()
-        plan = build_sync_plan(
-            source_revision=str(source["source_revision"]),
-            documents=source["documents"],
-            active_document_digests=active["document_digests"],
-        )
-        job_id = "syncjob_" + operation_id.removeprefix("admop_")
         if lease is None:
             raise _error(
                 "ADMIN_INGESTION_LEASE_REQUIRED", "A stateful idempotency lease is required"
             )
+        job_id = "syncjob_" + operation_id.removeprefix("admop_")
         existing = self.ledger.get_job(job_id)
         if existing and existing["status"] == "SUCCEEDED":
             return existing
@@ -755,9 +797,30 @@ class SQLiteIngestionAdapter:
                     "actor_scope": lease.scope,
                     "idempotency_fingerprint": lease.key_fingerprint,
                     "request_hash": lease.request_hash,
+                    "request_payload": _request_payload(request),
                     "status": "PENDING",
                     "attempt": lease.attempt,
                     "version": 1,
+                }
+            )
+        owner = execution_owner or operation_id
+        claimed = self.ledger.claim_job(
+            job_id,
+            owner=owner,
+            now=time.time(),
+            attempt=lease.attempt,
+        )
+        try:
+            source, active = self._observe()
+            plan = build_sync_plan(
+                source_revision=str(source["source_revision"]),
+                documents=source["documents"],
+                active_document_digests=active["document_digests"],
+            )
+            claimed = self.ledger.update_job(
+                job_id,
+                expected_version=claimed["version"],
+                patch={
                     "source_revision": source["source_revision"],
                     "source_identity_digest": source["source_identity_digest"],
                     "active_manifest_key": active.get("manifest_key"),
@@ -765,15 +828,20 @@ class SQLiteIngestionAdapter:
                     "plan_id": plan["plan_id"],
                     "plan_digest": plan["plan_digest"],
                     "manifest_diff": plan["plan"]["manifest_diff"],
-                }
+                },
             )
-        owner = operation_id
-        claimed = self.ledger.claim_job(
-            job_id,
-            owner=owner,
-            now=time.time(),
-            attempt=lease.attempt,
-        )
+        except Exception as exc:
+            current = self.ledger.get_job(job_id)
+            if current and current["status"] == "RUNNING":
+                self.ledger.complete_terminal(
+                    lease,
+                    job_id=job_id,
+                    success=False,
+                    error=_error_payload(exc),
+                    expected_version=current["version"],
+                    expected_lease_owner=owner,
+                )
+            raise
         if bool(plan["plan"]["requires_confirmation"]) and not getattr(
             request, "confirmation", False
         ):
@@ -786,6 +854,7 @@ class SQLiteIngestionAdapter:
                     "detail": "Confirmation is required",
                 },
                 expected_version=claimed["version"],
+                expected_lease_owner=owner,
             )
             raise _error(
                 "ADMIN_INGESTION_DESTRUCTIVE_CONFIRMATION_REQUIRED",
@@ -805,6 +874,7 @@ class SQLiteIngestionAdapter:
                     "detail": "The reviewed plan digest is stale or missing",
                 },
                 expected_version=claimed["version"],
+                expected_lease_owner=owner,
             )
             raise _error(
                 "ADMIN_INGESTION_STALE_PLAN", "The reviewed plan digest is stale or missing", 409
@@ -820,6 +890,7 @@ class SQLiteIngestionAdapter:
                     "detail": "Source or active manifest changed before candidate writes",
                 },
                 expected_version=claimed["version"],
+                expected_lease_owner=owner,
             )
             raise _error(
                 "ADMIN_INGESTION_STALE_PLAN",
@@ -838,6 +909,7 @@ class SQLiteIngestionAdapter:
                     "plan_digest": plan["plan_digest"],
                 },
                 expected_version=claimed["version"],
+                expected_lease_owner=owner,
             )
 
         def progress(phase: str, value: int) -> dict[str, Any]:
@@ -870,6 +942,7 @@ class SQLiteIngestionAdapter:
                 success=True,
                 result=result,
                 expected_version=current["version"] if current else None,
+                expected_lease_owner=owner,
             )
         except Exception as exc:
             current = self.ledger.get_job(job_id)
@@ -883,6 +956,7 @@ class SQLiteIngestionAdapter:
                         "detail": "Ingestion execution failed",
                     },
                     expected_version=current["version"],
+                    expected_lease_owner=owner,
                 )
             raise
 
@@ -898,7 +972,7 @@ class SQLiteIngestionAdapter:
         job = self.ledger.get_job(job_id)
         if job is None:
             raise _error("ADMIN_INGESTION_JOB_NOT_FOUND", "No durable ingestion job exists", 404)
-        claimed = self.ledger.retry_failed_job(job_id, owner=job["operation_id"], now=time.time())
+        claimed = self.ledger.retry_failed_job(job_id, owner=owner, now=time.time())
         lease = StatefulIdempotencyLease(
             scope=claimed["actor_scope"],
             key_fingerprint=claimed["idempotency_fingerprint"],
@@ -909,14 +983,34 @@ class SQLiteIngestionAdapter:
         )
         from .m26_admin_ingestion_sync import SyncBlogRequest
 
-        return self.sync_blog_with_lease(claimed["operation_id"], SyncBlogRequest(), lease)
+        payload = claimed.get("request_payload") or {}
+        try:
+            replay_request = SyncBlogRequest.model_validate(payload)
+        except Exception as exc:
+            self.ledger.complete_terminal(
+                lease,
+                job_id=job_id,
+                success=False,
+                error={
+                    "code": "ADMIN_INGESTION_REQUEST_PAYLOAD_INVALID",
+                    "detail": "Persisted ingestion request payload is invalid",
+                },
+                expected_version=claimed["version"],
+                expected_lease_owner=owner,
+            )
+            raise _error(
+                "ADMIN_INGESTION_REQUEST_PAYLOAD_INVALID",
+                "Persisted ingestion request payload is invalid",
+                409,
+            ) from exc
+        return self.sync_blog(claimed["operation_id"], replay_request, lease, execution_owner=owner)
 
     def as_p09_provider(self) -> SQLiteJobsEvidenceProvider:
         return SQLiteJobsEvidenceProvider(self)
 
 
 class SQLiteJobsEvidenceProvider:
-    def __init__(self, adapter: SQLiteIngestionAdapter) -> None:
+    def __init__(self, adapter: Any) -> None:
         self.adapter = adapter
 
     @staticmethod
@@ -950,7 +1044,69 @@ class SQLiteJobsEvidenceProvider:
         )
 
 
-def build_sqlite_ingestion_adapter() -> SQLiteIngestionAdapter | None:
+class SQLiteIngestionReadAuthority:
+    """Durable job reads with an explicit fail-closed mutation boundary."""
+
+    def __init__(self, ledger: SQLiteIngestionLedger, missing_seams: list[str]) -> None:
+        self.ledger = ledger
+        self.missing_seams = tuple(sorted(missing_seams))
+        self.reason_code = "ADMIN_INGESTION_RUNTIME_SEAMS_UNQUALIFIED"
+
+    def _unavailable(self) -> ReadObservation:
+        return ReadObservation(
+            availability="unavailable",
+            data=None,
+            source="sqlite_ingestion_ledger",
+            reason_code=self.reason_code,
+            detail="Candidate execution is disabled because required runtime seams are unavailable.",
+            resource_identity={"missing_seams": list(self.missing_seams)},
+        )
+
+    def current_index(self) -> ReadObservation:
+        return self._unavailable()
+
+    def list_audits(self) -> ReadObservation:
+        return self._unavailable()
+
+    def list_jobs(self) -> ReadObservation:
+        return ReadObservation(
+            availability="available",
+            data={"jobs": self.ledger.list_jobs()},
+            source="sqlite_ingestion_ledger",
+            freshness="live",
+            observed_at=utc_now(),
+            resource_identity={"path": str(self.ledger.path)},
+        )
+
+    def get_job(self, job_id: str) -> ReadObservation:
+        job = self.ledger.get_job(job_id)
+        if job is None:
+            return ReadObservation(
+                availability="unavailable",
+                data=None,
+                source="sqlite_ingestion_ledger",
+                reason_code="ADMIN_INGESTION_JOB_NOT_FOUND",
+                detail="No durable ingestion job exists",
+            )
+        return ReadObservation(
+            availability="available",
+            data=job,
+            source="sqlite_ingestion_ledger",
+            freshness="live",
+            observed_at=utc_now(),
+            resource_identity={"path": str(self.ledger.path)},
+        )
+
+    def as_p09_provider(self) -> SQLiteJobsEvidenceProvider:
+        return SQLiteJobsEvidenceProvider(self)
+
+
+def build_sqlite_ingestion_adapter(
+    *,
+    source_observer: Callable[[], Mapping[str, Any]] | None = None,
+    active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
+    candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
+) -> SQLiteIngestionAdapter | SQLiteIngestionReadAuthority | None:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().lower() in {
         "1",
         "true",
@@ -960,7 +1116,143 @@ def build_sqlite_ingestion_adapter() -> SQLiteIngestionAdapter | None:
     if not enabled:
         return None
     path = os.getenv("M26_INGESTION_STATE_DB", DEFAULT_INGESTION_STATE_DB)
-    return SQLiteIngestionAdapter(SQLiteIngestionLedger(path))
+    if source_observer is None:
+        source_root = os.getenv("M26_SOURCE_ROOT", "").strip()
+        source_observer = (
+            dynamic_source_observer_from_path(Path(source_root)) if source_root else None
+        )
+    active_observer = active_manifest_observer
+    if active_observer is None:
+        try:
+            from .config import Settings
+            from .storage import create_object_store
+
+            active_observer = active_manifest_observer_from_store(
+                create_object_store(Settings.from_env())
+            )
+        except Exception:
+            # The controller remains truthful and fails closed until an active
+            # authority is configured; the durable job/read authority still works.
+            active_observer = None
+    ledger = SQLiteIngestionLedger(path)
+    missing = [
+        name
+        for name, seam in (
+            ("dynamic_source_observer", source_observer),
+            ("active_manifest_observer", active_observer),
+            ("candidate_executor", candidate_executor),
+        )
+        if seam is None
+    ]
+    if missing:
+        return SQLiteIngestionReadAuthority(ledger, missing)
+    return SQLiteIngestionAdapter(
+        ledger,
+        source_observer=source_observer,
+        active_manifest_observer=active_observer,
+        candidate_executor=candidate_executor,
+    )
+
+
+def dynamic_source_observer_from_path(source_root: str | Path) -> Callable[[], Mapping[str, Any]]:
+    """Observe a current markdown checkout without frozen corpus assumptions.
+
+    The observer is deliberately read-only: it scans tracked markdown files,
+    hashes their exact bytes, and derives revision from the checkout's current
+    Git commit (or the deterministic tree digest for a non-Git fixture).
+    """
+
+    root = Path(source_root).expanduser().resolve()
+
+    def observe() -> Mapping[str, Any]:
+        if not root.is_dir():
+            raise _error("ADMIN_INGESTION_SOURCE_UNAVAILABLE", "Source root is unavailable")
+        content_root = root / "src/content/blog"
+        if not content_root.is_dir():
+            content_root = root
+        files = sorted(content_root.glob("*/en.md"))
+        if not files:
+            raise _error(
+                "ADMIN_INGESTION_SOURCE_EMPTY",
+                "Source root contains no published English blog documents",
+            )
+        documents: list[dict[str, Any]] = []
+        for path in files:
+            slug = path.parent.name
+            data = path.read_bytes()
+            documents.append(
+                {
+                    "document_id": f"daniel_blog_en__{slug}",
+                    "digest": hashlib.sha256(data).hexdigest(),
+                    "origin_path": path.relative_to(root).as_posix(),
+                    "bytes": len(data),
+                }
+            )
+        identity = {"documents": documents}
+        identity_digest = _hash(identity)
+        revision = f"tree:{identity_digest}"
+        try:
+            completed = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            commit = completed.stdout.strip().lower()
+            if completed.returncode == 0 and commit:
+                revision = f"git:{commit}"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        return {
+            "source_revision": revision,
+            "source_identity_digest": identity_digest,
+            "documents": documents,
+        }
+
+    return observe
+
+
+def candidate_executor_from_primitives(
+    *,
+    store: Any,
+    vector_materializer: Any,
+    artifact_builder: Callable[[Mapping[str, Any]], Mapping[str, Any]],
+) -> Callable[..., Mapping[str, Any]]:
+    """Compose the existing immutable writer and Qdrant materializer.
+
+    Artifact construction stays behind the qualified canonical builder seam;
+    this function does not scan, compile, tokenize, or index independently.
+    """
+
+    def execute(
+        _operation_id: str,
+        _request: Any,
+        progress: Callable[[str, int], Any],
+        context: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        inputs = dict(artifact_builder(context))
+        progress("artifact_build", 20)
+        plan = build_candidate_release_plan(
+            release_id=str(inputs["release_id"]),
+            source_commit_sha=str(inputs["source_commit_sha"]),
+            source_repository_head_sha=str(inputs["source_repository_head_sha"]),
+            admission_sha256=str(inputs["admission_sha256"]),
+            source_count=int(inputs["source_count"]),
+            artifact_bytes=inputs["artifact_bytes"],
+            created_at=str(inputs["created_at"]),
+        )
+        progress("candidate_materialization", 50)
+        receipt = stage_candidate_release(
+            store=store,
+            vector_materializer=vector_materializer,
+            plan=plan,
+        )
+        progress("candidate_verify", 95)
+        return receipt
+
+    return execute
 
 
 def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str, Any]]:
@@ -1003,7 +1295,10 @@ __all__ = [
     "DEFAULT_INGESTION_STATE_DB",
     "SQLiteIngestionAdapter",
     "SQLiteIngestionLedger",
+    "SQLiteIngestionReadAuthority",
     "SQLiteJobsEvidenceProvider",
     "active_manifest_observer_from_store",
     "build_sqlite_ingestion_adapter",
+    "candidate_executor_from_primitives",
+    "dynamic_source_observer_from_path",
 ]

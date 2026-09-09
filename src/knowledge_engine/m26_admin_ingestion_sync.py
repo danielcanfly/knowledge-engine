@@ -160,7 +160,13 @@ def require_sync_adapter(adapter: Any) -> Any:
     if not callable(method):
         raise AdminAPIError(
             status_code=503,
-            code="ADMIN_INGESTION_SYNC_ADAPTER_UNQUALIFIED",
+            code=str(
+                getattr(
+                    adapter,
+                    "reason_code",
+                    "ADMIN_INGESTION_SYNC_ADAPTER_UNQUALIFIED",
+                )
+            ),
             message="The one-click blog sync actuator is not qualified",
         )
     return method
@@ -239,10 +245,7 @@ class DeterministicSyncIngestionAdapter:
                     "manifest_diff": plan["plan"]["manifest_diff"],
                 },
             )
-        if (
-            requires_confirmation
-            and request.expected_plan_digest != plan["plan_digest"]
-        ):
+        if requires_confirmation and request.expected_plan_digest != plan["plan_digest"]:
             raise AdminAPIError(
                 status_code=409,
                 code="ADMIN_INGESTION_STALE_PLAN",

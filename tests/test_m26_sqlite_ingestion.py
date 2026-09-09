@@ -18,12 +18,17 @@ from knowledge_engine.m26_admin_contract import (
 )
 from knowledge_engine.m26_admin_control_plane import install_admin_control_plane
 from knowledge_engine.m26_admin_ingestion import install_admin_ingestion_routes
-from knowledge_engine.m26_admin_ingestion_sync import SyncBlogRequest
+from knowledge_engine.m26_admin_ingestion_sync import SyncBlogRequest, build_sync_plan
+from knowledge_engine.m26_ingestion_candidate_writer import CandidateVectorVerification
 from knowledge_engine.m26_jobs_rollback_api import install_jobs_rollback_routes
 from knowledge_engine.m26_sqlite_ingestion import (
     SQLiteIngestionAdapter,
     SQLiteIngestionLedger,
+    build_sqlite_ingestion_adapter,
+    candidate_executor_from_primitives,
+    dynamic_source_observer_from_path,
 )
+from knowledge_engine.storage import FileObjectStore
 
 
 class Authenticator:
@@ -142,7 +147,9 @@ def test_expired_running_lease_recovers_and_failed_retry_increments_once(tmp_pat
         ledger.retry_failed_job("job-lease", owner="another", now=200.0)
 
 
-def test_concurrent_failed_retry_serializes_to_one_attempt(tmp_path: Path) -> None:
+def test_concurrent_failed_retry_serializes_across_independent_connections(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "ingestion.sqlite3"
     ledger = SQLiteIngestionLedger(path)
     lease = _lease(ledger, "retry-key-000001")
@@ -162,11 +169,14 @@ def test_concurrent_failed_retry_serializes_to_one_attempt(tmp_path: Path) -> No
         success=False,
         error={"code": "VECTOR_FAILED", "detail": "failed"},
     )
+    first = SQLiteIngestionLedger(path)
+    second = SQLiteIngestionLedger(path)
     results: list[object] = []
 
     def retry(owner: str) -> None:
         try:
-            results.append(ledger.retry_failed_job("job-retry", owner=owner, now=100.0))
+            connection = first if owner == "a" else second
+            results.append(connection.retry_failed_job("job-retry", owner=owner, now=100.0))
         except AdminAPIError as exc:
             results.append(exc.code)
 
@@ -177,6 +187,285 @@ def test_concurrent_failed_retry_serializes_to_one_attempt(tmp_path: Path) -> No
         thread.join()
     assert sum(isinstance(result, dict) for result in results) == 1
     assert ledger.get_job("job-retry")["attempt"] == 2
+
+
+def test_observer_failure_creates_visible_failed_job_before_substantive_work(
+    tmp_path: Path,
+) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "observer-failure.sqlite3")
+    lease = _lease(ledger, "observer-failure-key1")
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: (_ for _ in ()).throw(
+            AdminAPIError(
+                status_code=503,
+                code="SOURCE_READ_FAILED",
+                message="source unavailable",
+            )
+        ),
+        active_manifest_observer=lambda: {},
+    )
+    with pytest.raises(AdminAPIError, match="source unavailable"):
+        adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+    jobs = adapter.list_jobs().data["jobs"]
+    assert len(jobs) == 1
+    assert jobs[0]["status"] == "FAILED"
+    assert jobs[0]["error_code"] == "SOURCE_READ_FAILED"
+    observed = adapter.get_job(jobs[0]["job_id"])
+    assert observed.availability == "available"
+    assert observed.data["status"] == "FAILED"
+
+
+def test_active_observer_failure_creates_visible_failed_job(tmp_path: Path) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "active-observer-failure.sqlite3")
+    lease = _lease(ledger, "active-observer-fail1")
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: {
+            "source_revision": "dynamic",
+            "documents": [{"document_id": "a", "digest": "a"}],
+        },
+        active_manifest_observer=lambda: (_ for _ in ()).throw(
+            AdminAPIError(
+                status_code=503,
+                code="ACTIVE_READ_FAILED",
+                message="active unavailable",
+            )
+        ),
+    )
+    with pytest.raises(AdminAPIError, match="active unavailable"):
+        adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+    assert ledger.list_jobs()[0]["error_code"] == "ACTIVE_READ_FAILED"
+
+
+def test_plan_failure_creates_visible_failed_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "plan-failure.sqlite3")
+    lease = _lease(ledger, "plan-failure-key1")
+
+    def fail_plan(**_kwargs: object) -> dict[str, object]:
+        raise AdminAPIError(status_code=503, code="PLAN_BUILD_FAILED", message="plan failed")
+
+    monkeypatch.setattr("knowledge_engine.m26_sqlite_ingestion.build_sync_plan", fail_plan)
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: {
+            "source_revision": "dynamic",
+            "documents": [{"document_id": "a", "digest": "a"}],
+        },
+        active_manifest_observer=lambda: {
+            "manifest_key": "active",
+            "manifest_sha256": "a" * 64,
+            "document_digests": {},
+        },
+    )
+    with pytest.raises(AdminAPIError, match="plan failed"):
+        adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+    assert ledger.list_jobs()[0]["error_code"] == "PLAN_BUILD_FAILED"
+
+
+def test_failed_destructive_retry_replays_confirmation_and_plan_digest(tmp_path: Path) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "retry-payload.sqlite3")
+    source = {"source_revision": "r1", "documents": [{"document_id": "new", "digest": "n"}]}
+    active = {
+        "manifest_key": "m1",
+        "manifest_sha256": "msha1",
+        "document_digests": {"old": "o"},
+    }
+    calls: list[dict[str, object]] = []
+
+    def executor(
+        _operation: str, request: SyncBlogRequest, _progress: object, context: dict[str, object]
+    ):
+        calls.append({"request": request.model_dump(), "plan": context["plan"]})
+        if len(calls) == 1:
+            raise RuntimeError("vector failed")
+        return {"candidate_release_id": "candidate"}
+
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: source,
+        active_manifest_observer=lambda: active,
+        candidate_executor=executor,
+    )
+    plan = build_sync_plan(
+        source_revision="r1",
+        documents=source["documents"],
+        active_document_digests=active["document_digests"],
+    )
+    request = SyncBlogRequest(confirmation=True, expected_plan_digest=plan["plan_digest"])
+    lease = IdempotencyCoordinator(ledger).begin_stateful(
+        actor_id="owner",
+        method="POST",
+        path="/sync",
+        idempotency_key="destructive-retry-key2",
+        request_payload=request.model_dump(),
+    )
+    with pytest.raises(RuntimeError):
+        adapter.sync_blog_with_lease(lease.operation_id, request, lease)
+    job_id = "syncjob_" + lease.operation_id.removeprefix("admop_")
+    failed = ledger.get_job(job_id)
+    assert failed and failed["status"] == "FAILED"
+    assert failed["request_payload"] == request.model_dump()
+    result = adapter.retry_job(job_id, owner="retry-request")
+    assert result["status"] == "SUCCEEDED"
+    assert calls[1]["request"] == request.model_dump()
+    assert calls[1]["plan"]["plan_digest"] == plan["plan_digest"]
+
+
+def test_failed_stale_plan_retry_preserves_stale_digest_and_fails_again(tmp_path: Path) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "stale-retry.sqlite3")
+    source = {"source_revision": "r1", "documents": []}
+    active = {
+        "manifest_key": "m1",
+        "manifest_sha256": "msha1",
+        "document_digests": {"removed": "old"},
+    }
+    request = SyncBlogRequest(confirmation=True, expected_plan_digest="f" * 64)
+    lease = IdempotencyCoordinator(ledger).begin_stateful(
+        actor_id="owner",
+        method="POST",
+        path="/sync",
+        idempotency_key="stale-retry-key001",
+        request_payload=request.model_dump(),
+    )
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: source,
+        active_manifest_observer=lambda: active,
+        candidate_executor=lambda *_args: pytest.fail("stale plan must not execute"),
+    )
+    with pytest.raises(AdminAPIError) as first:
+        adapter.sync_blog_with_lease(lease.operation_id, request, lease)
+    assert first.value.code == "ADMIN_INGESTION_STALE_PLAN"
+    job_id = "syncjob_" + lease.operation_id.removeprefix("admop_")
+    with pytest.raises(AdminAPIError) as retry:
+        adapter.retry_job(job_id, owner="retry-owner")
+    assert retry.value.code == "ADMIN_INGESTION_STALE_PLAN"
+    failed = ledger.get_job(job_id)
+    assert failed and failed["status"] == "FAILED" and failed["attempt"] == 2
+    assert failed["request_payload"]["expected_plan_digest"] == "f" * 64
+
+
+def test_dynamic_source_observer_and_runtime_factory_accept_181_documents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = tmp_path / "blog-repository"
+    content_root = source_root / "src/content/blog"
+    content_root.mkdir(parents=True)
+    for index in range(181):
+        article = content_root / f"article-{index}"
+        article.mkdir()
+        (article / "en.md").write_text(f"# {index}\n", encoding="utf-8")
+    observed = dynamic_source_observer_from_path(source_root)()
+    assert len(observed["documents"]) == 181
+    assert observed["source_identity_digest"]
+    assert observed["documents"][-1]["document_id"].startswith("daniel_blog_en__")
+    assert observed["documents"][-1]["origin_path"].startswith("src/content/blog/")
+    monkeypatch.setenv("M26_INGESTION_ENABLED", "true")
+    monkeypatch.setenv("M26_INGESTION_STATE_DB", str(tmp_path / "factory.sqlite3"))
+    monkeypatch.setenv("M26_SOURCE_ROOT", str(source_root))
+    adapter = build_sqlite_ingestion_adapter(
+        active_manifest_observer=lambda: {
+            "manifest_key": "active",
+            "manifest_sha256": "a" * 64,
+            "document_digests": {},
+        },
+        candidate_executor=lambda *_args: {"candidate_release_id": "candidate"},
+    )
+    assert adapter is not None and adapter.source_observer is not None
+    assert len(adapter.source_observer()["documents"]) == 181
+
+
+def test_runtime_factory_without_all_execution_seams_is_explicit_read_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("M26_INGESTION_ENABLED", "true")
+    monkeypatch.setenv("M26_INGESTION_STATE_DB", str(tmp_path / "read-only.sqlite3"))
+    adapter = build_sqlite_ingestion_adapter(
+        source_observer=lambda: {"source_revision": "r", "documents": []},
+        active_manifest_observer=lambda: {"document_digests": {}},
+    )
+    assert adapter is not None
+    assert adapter.reason_code == "ADMIN_INGESTION_RUNTIME_SEAMS_UNQUALIFIED"
+    assert adapter.list_jobs().availability == "available"
+    assert not hasattr(adapter, "sync_blog")
+
+    app = FastAPI()
+    install_admin_control_plane(
+        app,
+        authenticator=Authenticator(),
+        capability_provider=Capabilities(),
+        audit_sink=Audit(),
+        idempotency_store=adapter.ledger,
+    )
+    install_admin_ingestion_routes(app, adapter=adapter, include_job_reads=True)
+    response = TestClient(app).post(
+        "/v1/admin/ingestion/sync",
+        headers={
+            "origin": "https://console.danielcanfly.com",
+            "cf-access-jwt-assertion": "valid",
+            "idempotency-key": "read-only-boundary1",
+        },
+        json={},
+    )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == adapter.reason_code
+    assert adapter.ledger.list_jobs() == []
+
+
+def test_candidate_executor_seam_reuses_writer_and_manifest_last(tmp_path: Path) -> None:
+    events: list[str] = []
+
+    class Store(FileObjectStore):
+        def put(self, key: str, data: bytes, **kwargs: object):
+            events.append(key)
+            return super().put(key, data, **kwargs)
+
+    class Vector:
+        def materialize_and_verify(
+            self, *, collection_name: str, release_id: str, semantic_documents: object
+        ) -> CandidateVectorVerification:
+            events.append("qdrant:" + collection_name)
+            return CandidateVectorVerification(
+                collection_name=collection_name,
+                release_id=release_id,
+                point_count=1,
+                section_ids=("section-a",),
+            )
+
+    def json_bytes(value: object) -> bytes:
+        import json
+
+        return (json.dumps(value, sort_keys=True) + "\n").encode()
+
+    artifacts = {
+        "graph": json_bytes({"nodes": []}),
+        "graph_v2": json_bytes({"nodes": []}),
+        "lexical_index": json_bytes({"documents": [{"section_id": "section-a"}]}),
+        "provenance": json_bytes({"records": []}),
+        "semantic_inputs": json_bytes(
+            {"documents": [{"section_id": "section-a", "text": "text", "payload": {}}]}
+        ),
+    }
+    executor = candidate_executor_from_primitives(
+        store=Store(tmp_path / "objects"),
+        vector_materializer=Vector(),
+        artifact_builder=lambda _context: {
+            "release_id": "candidate-runtime-001",
+            "source_commit_sha": "a" * 40,
+            "source_repository_head_sha": "b" * 40,
+            "admission_sha256": "c" * 64,
+            "source_count": 1,
+            "artifact_bytes": artifacts,
+            "created_at": "2026-09-09T00:00:00Z",
+        },
+    )
+    receipt = executor("op", SyncBlogRequest(), lambda *_args: None, {})
+    assert receipt["status"] == "candidate_release_finalized"
+    assert events[-1] == "releases/candidate-runtime-001/manifest.json"
+    assert "qdrant:m26_blog_candidate_runtime_001" in events
 
 
 def test_dynamic_source_and_active_drift_fail_before_executor(tmp_path: Path) -> None:

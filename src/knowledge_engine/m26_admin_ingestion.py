@@ -204,14 +204,14 @@ def _router() -> APIRouter:
         # product action is orchestration over the same governed mutation seam,
         # not a new authority surface.
         _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
+        adapter = _adapter(request)
+        sync = require_sync_adapter(adapter)
         payload = body.model_dump()
         coordinator = request.app.state.admin_idempotency
         lease = _begin_stateful_operation(request, payload)
         if lease.replayed:
             return _accepted(request, lease.operation_id, True)
         try:
-            adapter = _adapter(request)
-            sync = require_sync_adapter(adapter)
             _audit(
                 request,
                 "ingestion.sync",
