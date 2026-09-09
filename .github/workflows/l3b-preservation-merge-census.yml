@@ -1,0 +1,48 @@
+name: L3B Preservation Merge Conflict Census
+
+on:
+  push:
+    branches:
+      - ops/l3b-preservation-merge-census-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 68fa4b437b778e6f44a885bafd0f42016bbf7142
+          fetch-depth: 0
+      - name: Fetch exact corrected L3-B candidate
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin 543926766f85f0938ec5fe9b60c65a70c33d754d
+          git cat-file -e 543926766f85f0938ec5fe9b60c65a70c33d754d^{commit}
+      - name: Attempt bounded no-commit merge and report conflicts
+        run: |
+          set -euo pipefail
+          git config user.name 'l3b-merge-census'
+          git config user.email 'l3b-merge-census@invalid.local'
+          set +e
+          git merge --no-commit --no-ff 543926766f85f0938ec5fe9b60c65a70c33d754d
+          rc=$?
+          set -e
+          echo "MERGE_EXIT_CODE=$rc"
+          echo 'UNMERGED_PATHS_BEGIN'
+          git diff --name-only --diff-filter=U | sort
+          echo 'UNMERGED_PATHS_END'
+          echo 'UNMERGED_STAGES_BEGIN'
+          git ls-files -u | sort || true
+          echo 'UNMERGED_STAGES_END'
+          echo 'MERGE_STATUS_BEGIN'
+          git status --short
+          echo 'MERGE_STATUS_END'
+          if [ -f .git/MERGE_HEAD ]; then
+            git merge --abort
+          fi
+          test "$(git rev-parse HEAD)" = 68fa4b437b778e6f44a885bafd0f42016bbf7142
+          test -z "$(git status --porcelain)"
+          echo 'SOURCE_MUTATION_PERSISTED=0'
