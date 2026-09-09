@@ -102,6 +102,24 @@ jobs:
 
           docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"' </dev/null
 
+          docker compose exec -T knowledge-engine python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+
+          team = os.environ.get("M26_CONSOLE_ACCESS_TEAM_DOMAIN", "").strip().rstrip("/")
+          audience = os.environ.get("M26_CONSOLE_ACCESS_AUD", "").strip()
+          emails = [item.strip() for item in os.environ.get("M26_CONSOLE_OWNER_EMAILS", "").split(",") if item.strip()]
+          subjects = [item.strip() for item in os.environ.get("M26_CONSOLE_OWNER_SUBJECTS", "").split(",") if item.strip()]
+          origin = os.environ.get("M26_CONSOLE_ORIGIN", "").strip().rstrip("/")
+          parsed = urlsplit(team)
+          print("ADMIN_CFG_TEAM_DOMAIN=" + ("VALID" if parsed.scheme == "https" and parsed.netloc.endswith(".cloudflareaccess.com") else "INVALID_OR_MISSING"))
+          print("ADMIN_CFG_AUDIENCE=" + ("PRESENT" if audience else "MISSING"))
+          print("ADMIN_CFG_OWNER_EMAILS=" + ("PRESENT" if emails else "MISSING"))
+          print("ADMIN_CFG_OWNER_SUBJECTS=" + ("PRESENT" if subjects else "MISSING"))
+          print("ADMIN_CFG_CONSOLE_ORIGIN=" + ("DEFAULT" if origin == "https://console.danielcanfly.com" else ("MISSING" if not origin else "NON_DEFAULT")))
+          print("ADMIN_CFG_AUTH_READY=" + ("YES" if parsed.scheme == "https" and parsed.netloc.endswith(".cloudflareaccess.com") and audience and (emails or subjects) and origin == "https://console.danielcanfly.com" else "NO"))
+          PY
+
           docker events </dev/null \
             --since '2026-09-09T08:20:00Z' \
             --until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
