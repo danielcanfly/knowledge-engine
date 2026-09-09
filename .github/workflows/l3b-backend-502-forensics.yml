@@ -1,0 +1,174 @@
+name: L3B Backend 502 Forensics Read Only
+
+on:
+  push:
+    branches:
+      - codex/l3b-backend-502-forensics-20260909
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l3b-backend-502-forensics-read-only
+  cancel-in-progress: false
+
+jobs:
+  forensics:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      EXPECTED_SHA: 51d464565601d3f1c0301d87c3f0efcec9e68f6d
+    steps:
+      - name: Require existing read-only SSH seam
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo "FORENSIC_AUTH_SEAM=MISSING:$name"; exit 42; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+          echo 'FORENSIC_AUTH_SEAM=PASS'
+
+      - name: Reconstruct origin runtime and failure window
+        run: |
+          set -euo pipefail
+          set +x
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          set +x
+          cd "$DEPLOY_PATH"
+
+          echo 'FORENSIC_WINDOW_BEGIN=2026-09-09T08:20:00Z'
+          echo 'FORENSIC_WINDOW_END=NOW'
+          printf 'OBSERVED_AT=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf 'HOST_BOOT_TIME=%sZ\n' "$(uptime -s | tr ' ' T')"
+          last -x reboot shutdown --time-format iso 2>/dev/null | awk '/^(reboot|shutdown)/ {print "HOST_LIFECYCLE_EVENT=" $1 ":" $3 ":" $4; if (++n == 6) exit}' || true
+
+          actual_head="$(git rev-parse HEAD)"
+          printf 'CHECKOUT_HEAD=%s\n' "$actual_head"
+          test "$actual_head" = "$EXPECTED_SHA"
+
+          for unit in docker nginx caddy cloudflared traefik; do
+            if systemctl cat "$unit.service" >/dev/null 2>&1; then
+              printf 'SERVICE_%s_PRESENT=YES\n' "${unit^^}"
+              systemctl show "$unit.service" \
+                --property=ActiveState,SubState,ActiveEnterTimestamp,ExecMainStartTimestamp,NRestarts \
+                --value 2>/dev/null | awk -v name="${unit^^}" '{print "SERVICE_" name "_STATE_FIELD_" NR "=" $0}'
+            else
+              printf 'SERVICE_%s_PRESENT=NO\n' "${unit^^}"
+            fi
+          done
+
+          container_id="$(docker compose ps -q knowledge-engine)"
+          test -n "$container_id"
+          docker inspect "$container_id" | python3 -c '
+          import json, sys
+          item = json.load(sys.stdin)[0]
+          state = item.get("State") or {}
+          restart = (item.get("HostConfig") or {}).get("RestartPolicy") or {}
+          config = item.get("Config") or {}
+          print("CONTAINER_STATUS=" + str(state.get("Status", "UNKNOWN")))
+          print("CONTAINER_RUNNING=" + ("YES" if state.get("Running") else "NO"))
+          print("CONTAINER_STARTED_AT=" + str(state.get("StartedAt", "UNKNOWN")))
+          print("CONTAINER_FINISHED_AT=" + str(state.get("FinishedAt", "UNKNOWN")))
+          print("CONTAINER_EXIT_CODE=" + str(state.get("ExitCode", "UNKNOWN")))
+          print("CONTAINER_OOM_KILLED=" + ("YES" if state.get("OOMKilled") else "NO"))
+          print("CONTAINER_ERROR_PRESENT=" + ("YES" if bool(state.get("Error")) else "NO"))
+          print("CONTAINER_RESTART_COUNT=" + str(item.get("RestartCount", "UNKNOWN")))
+          print("CONTAINER_RESTART_POLICY=" + str(restart.get("Name", "UNKNOWN")))
+          labels = config.get("Labels") or {}
+          print("COMPOSE_SERVICE=" + str(labels.get("com.docker.compose.service", "UNKNOWN")))
+          '
+
+          docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"'
+
+          docker events \
+            --since '2026-09-09T08:20:00Z' \
+            --until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --filter "container=$container_id" \
+            --format '{{.Time}}|{{.Action}}|{{index .Actor.Attributes "name"}}|{{index .Actor.Attributes "exitCode"}}' 2>/dev/null \
+            | awk -F'|' '{print "CONTAINER_EVENT=" $1 "|" $2 "|service=knowledge-engine|exit=" $4}' \
+            | tail -80 || true
+
+          journalctl --since '2026-09-09 08:20:00 UTC' --no-pager --output=json 2>/dev/null \
+            | python3 -c '
+          import json, sys
+          classes = {"oom": 0, "killed": 0, "restart": 0, "shutdown": 0, "docker_daemon": 0, "network": 0}
+          first = None
+          last = None
+          total = 0
+          for raw in sys.stdin:
+              try:
+                  row = json.loads(raw)
+              except Exception:
+                  continue
+              msg = str(row.get("MESSAGE", "")).lower()
+              ts = row.get("__REALTIME_TIMESTAMP")
+              total += 1
+              first = first or ts
+              last = ts or last
+              if "out of memory" in msg or "oom" in msg: classes["oom"] += 1
+              if "killed process" in msg or "killing" in msg: classes["killed"] += 1
+              if "restart" in msg or "restarting" in msg: classes["restart"] += 1
+              if "shutdown" in msg or "shutting down" in msg: classes["shutdown"] += 1
+              if "docker" in msg and ("daemon" in msg or "dockerd" in msg): classes["docker_daemon"] += 1
+              if "network" in msg and ("error" in msg or "failed" in msg): classes["network"] += 1
+          print("JOURNAL_RECORDS=" + str(total))
+          print("JOURNAL_FIRST_EPOCH_US=" + str(first or "NONE"))
+          print("JOURNAL_LAST_EPOCH_US=" + str(last or "NONE"))
+          for key in sorted(classes): print("JOURNAL_CLASS_" + key.upper() + "=" + str(classes[key]))
+          '
+
+          for log in /var/log/nginx/access.log /var/log/nginx/error.log /var/log/caddy/access.log; do
+            if [ -r "$log" ]; then
+              label="$(printf '%s' "$log" | tr '/.' '__')"
+              printf 'PROXY_LOG_%s_PRESENT=YES\n' "$label"
+              printf 'PROXY_LOG_%s_502_COUNT=%s\n' "$label" "$(grep -cE '(^|[^0-9])502([^0-9]|$)' "$log" 2>/dev/null || true)"
+              printf 'PROXY_LOG_%s_503_COUNT=%s\n' "$label" "$(grep -cE '(^|[^0-9])503([^0-9]|$)' "$log" 2>/dev/null || true)"
+              printf 'PROXY_LOG_%s_UPSTREAM_ERROR_COUNT=%s\n' "$label" "$(grep -ciE 'upstream.*(failed|refused|timed out|closed)|connect\(\).*failed' "$log" 2>/dev/null || true)"
+            fi
+          done
+
+          local_health="$(curl --silent --show-error --max-time 10 http://127.0.0.1:8080/v1/answers/health)"
+          python3 - "$local_health" "$EXPECTED_SHA" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          expected = sys.argv[2]
+          actual = (payload.get("backend") or payload.get("runtime") or {}).get("build_sha", "")
+          print("LOCAL_HEALTH_OK=" + ("YES" if payload.get("ok") is True else "NO"))
+          print("LOCAL_HEALTH_BUILD_SHA=" + actual)
+          if payload.get("ok") is not True or actual != expected:
+              raise SystemExit(1)
+          PY
+
+          echo 'PRODUCTION_DEPLOY=0'
+          echo 'PRODUCTION_RESTART=0'
+          echo 'PRODUCTION_ENV_WRITE=0'
+          echo 'PRODUCTION_DNS_ACCESS_WRITE=0'
+          echo 'R2_QDRANT_INDEX_CORPUS_MUTATION=0'
+          REMOTE
+
+      - name: Reconfirm edge health and identity
+        run: |
+          set -euo pipefail
+          set +x
+          health="$(curl --fail --silent --show-error --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
+          python3 - "$health" "$EXPECTED_SHA" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          expected = sys.argv[2]
+          actual = (payload.get("backend") or payload.get("runtime") or {}).get("build_sha", "")
+          print("EDGE_HEALTH_OK=" + ("YES" if payload.get("ok") is True else "NO"))
+          print("EDGE_HEALTH_BUILD_SHA=" + actual)
+          if payload.get("ok") is not True or actual != expected:
+              raise SystemExit(1)
+          PY
+          echo 'FORENSIC_READ_ONLY=PASS'
