@@ -12,9 +12,9 @@ from .m26_admin_usage import install_admin_usage
 from .m26_console_p05_ask_playground import router as playground_router
 from .m26_golden_questions_admin import install_golden_questions_admin
 from .m26_jobs_rollback_api import install_jobs_rollback_routes
+from .m26_public_api import create_app as create_public_app
 from .m26_qa_inbox_integration import install_qa_inbox
 from .m26_suggested_questions_admin import install_suggested_questions_admin
-from .m26_translation_gateway_public_api import create_app as create_public_app
 
 
 def create_app():
