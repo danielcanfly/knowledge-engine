@@ -1,0 +1,106 @@
+name: L3B Backend Live Read-Only Preflight
+
+on:
+  push:
+    branches:
+      - ops/l3b-backend-live-readonly-preflight-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      EXPECTED_PREDECESSOR: 68fa4b437b778e6f44a885bafd0f42016bbf7142
+    steps:
+      - name: Configure SSH authority
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo 'ORACLE_AUTHORITY=MISSING'; exit 2; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+
+      - name: Verify rollback identity and production env semantics
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED='$EXPECTED_PREDECESSOR' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          checkout="$(git rev-parse HEAD)"
+          running="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
+          test "$checkout" = "$EXPECTED"
+          test "$running" = "$EXPECTED"
+          echo 'LIVE_PREDECESSOR_CHECKOUT=PASS'
+          echo 'LIVE_PREDECESSOR_RUNTIME=PASS'
+
+          health="$(mktemp)"
+          curl --fail --silent --max-time 10 http://127.0.0.1:8080/v1/answers/health > "$health"
+          python3 - "$health" "$EXPECTED" <<'PY'
+          import json, sys
+          p = json.load(open(sys.argv[1]))
+          actual = (p.get('backend') or p.get('runtime') or {}).get('build_sha', '')
+          assert p.get('ok') is True, p
+          assert actual == sys.argv[2], (actual, sys.argv[2])
+          print('LIVE_PREDECESSOR_HEALTH_IDENTITY=PASS')
+          PY
+          rm -f "$health"
+
+          python3 - .env <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          wanted = {
+              'M26_CONSOLE_ACCESS_TEAM_DOMAIN', 'M26_CONSOLE_ACCESS_AUD',
+              'M26_CONSOLE_OWNER_EMAILS', 'M26_CONSOLE_OWNER_SUBJECTS',
+              'M26_CONSOLE_ORIGIN', 'M26_QA_TRUST_CLOUDFLARE_COUNTRY',
+              'M26_PUBLIC_IP_HMAC_SECRET'
+          }
+          vals = {}
+          def norm(name, raw):
+              value = raw.strip()
+              for _ in range(4):
+                  changed = False
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                      value = value[1:-1].strip(); changed = True
+                  if value.startswith(name):
+                      suffix = value[len(name):]
+                      if suffix and (suffix[0] in '=:' or suffix[0].isspace()):
+                          value = suffix.lstrip(' \t=:'); changed = True
+                  if not changed: break
+              return value
+          for raw in path.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line = raw.strip()
+              if line.startswith('export '): line = line[7:].lstrip()
+              m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$', line)
+              if m and m.group(1) in wanted:
+                  vals[m.group(1)] = norm(m.group(1), m.group(2))
+          team = vals.get('M26_CONSOLE_ACCESS_TEAM_DOMAIN','').rstrip('/')
+          aud = vals.get('M26_CONSOLE_ACCESS_AUD','').strip()
+          emails = [x.strip() for x in vals.get('M26_CONSOLE_OWNER_EMAILS','').split(',') if x.strip()]
+          subjects = [x.strip() for x in vals.get('M26_CONSOLE_OWNER_SUBJECTS','').split(',') if x.strip()]
+          origin = vals.get('M26_CONSOLE_ORIGIN','https://console.danielcanfly.com').rstrip('/')
+          country = vals.get('M26_QA_TRUST_CLOUDFLARE_COUNTRY','').lower()
+          hmac = vals.get('M26_PUBLIC_IP_HMAC_SECRET','')
+          checks = {
+              'ACCESS_TEAM_SEMANTIC': team.startswith('https://') and '.cloudflareaccess.com' in team,
+              'ACCESS_AUD_SEMANTIC': bool(aud),
+              'ACCESS_OWNER_ALLOWLIST': bool(emails or subjects),
+              'CONSOLE_ORIGIN_FROZEN': origin == 'https://console.danielcanfly.com',
+              'COUNTRY_TRUST_FAIL_CLOSED': country not in {'true','1','yes','on'},
+              'PUBLIC_HMAC_PRESENT': bool(hmac),
+          }
+          for key, ok in checks.items(): print(f'{key}=' + ('PASS' if ok else 'FAIL'))
+          if not all(checks.values()): raise SystemExit(1)
+          PY
+          echo 'PRODUCTION_MUTATION=0'
+          REMOTE
