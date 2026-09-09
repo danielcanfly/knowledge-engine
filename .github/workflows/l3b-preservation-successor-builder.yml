@@ -28,4 +28,4 @@ jobs:
           persist-credentials: true
 
       - name: Build, qualify, and publish successor only on full PASS
-        run: python tooling/tools/l3b_preservation_successor_builder.py work
+        run: python tooling/tools/l3b_preservation_successor_builder_v2.py work
