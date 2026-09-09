@@ -45,9 +45,15 @@ jobs:
         run: |
           set -euo pipefail
           set +x
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" bash -se -- \
-            "$ORACLE_VM_DEPLOY_PATH" "$EXPECTED_SHA" \
-            < .github/scripts/l3b-backend-502-recovery.sh
+          local_script=.github/scripts/l3b-backend-502-recovery.sh
+          remote_script="/tmp/l3b-backend-502-recovery-${GITHUB_RUN_ID}.sh"
+          local_digest="$(sha256sum "$local_script" | awk '{print $1}')"
+          scp "$local_script" "$ORACLE_VM_USER@$ORACLE_VM_HOST:$remote_script"
+          remote_digest="$(ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "sha256sum '$remote_script'" | awk '{print $1}')"
+          test "$local_digest" = "$remote_digest"
+          echo 'RECOVERY_SCRIPT_TRANSFER=VERIFIED'
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "chmod 700 '$remote_script' && '$remote_script' '$ORACLE_VM_DEPLOY_PATH' '$EXPECTED_SHA'; rc=\$?; rm -f '$remote_script'; exit \$rc"
 
       - name: Reconfirm public health after recovery
         run: |
