@@ -31,80 +31,68 @@ jobs:
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
           echo 'ORACLE_AUTHORITY=PASS'
 
-      - name: Read-only Cloudflare and console census
+      - name: Read-only Cloudflare authority probe via ephemeral Node container
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
-          echo 'CENSUS_BEGIN'
-          for cmd in node npm npx pnpm wrangler git; do
-            if command -v "$cmd" >/dev/null 2>&1; then
-              echo "CMD_${cmd}=YES"
-            else
-              echo "CMD_${cmd}=NO"
-            fi
-          done
-
-          python3 - "$DEPLOY_PATH/.env" <<'PY'
-          import pathlib, re, sys
-          p = pathlib.Path(sys.argv[1])
-          names = {
-              'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_AI_TOKEN', 'CLOUDFLARE_ACCOUNT_ID',
-              'CF_API_TOKEN_PRIMARY', 'CF_API_TOKEN_FALLBACK', 'CF_API_TOKEN',
-              'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL'
-          }
-          seen = set()
-          if p.is_file():
-              for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
-                  line = raw.strip()
-                  if line.startswith('export '):
-                      line = line[7:].lstrip()
-                  m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$', line)
-                  if m and m.group(1) in names and m.group(2).strip().strip('"\''):
-                      seen.add(m.group(1))
-          for name in sorted(names):
-              print(f'ENVFILE_{name}=' + ('YES' if name in seen else 'NO'))
+          command -v docker >/dev/null 2>&1 || { echo 'DOCKER=NO'; exit 2; }
+          echo 'DOCKER=YES'
+          cf_env="$(mktemp /tmp/l3b-cf-env.XXXXXX)"
+          cleanup(){ rm -f "$cf_env"; }
+          trap cleanup EXIT
+          python3 - "$DEPLOY_PATH/.env" "$cf_env" <<'PY'
+          import os, pathlib, re, sys
+          src = pathlib.Path(sys.argv[1])
+          dst = pathlib.Path(sys.argv[2])
+          wanted = {'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID'}
+          vals = {}
+          for raw in src.read_text(encoding='utf-8', errors='ignore').splitlines():
+              line = raw.strip()
+              if line.startswith('export '):
+                  line = line[7:].lstrip()
+              m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$', line)
+              if not m or m.group(1) not in wanted:
+                  continue
+              value = m.group(2).strip()
+              for _ in range(3):
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+                      value = value[1:-1].strip()
+                  else:
+                      break
+              if value:
+                  vals[m.group(1)] = value
+          missing = sorted(wanted - vals.keys())
+          if missing:
+              print('CF_ENV_AUTHORITY=MISSING')
+              raise SystemExit(2)
+          dst.write_text(''.join(f'{k}={vals[k]}\n' for k in sorted(vals)), encoding='utf-8')
+          os.chmod(dst, 0o600)
+          print('CF_ENV_AUTHORITY=PASS')
           PY
 
-          for f in "$HOME/.profile" "$HOME/.bashrc" /etc/environment; do
-            if [ -f "$f" ] && grep -Eq 'CLOUDFLARE_(API_TOKEN|AI_TOKEN|ACCOUNT_ID)|CF_API_TOKEN' "$f"; then
-              echo "SHELL_CF_NAME_PRESENT_$(basename "$f")=YES"
-            else
-              echo "SHELL_CF_NAME_PRESENT_$(basename "$f")=NO"
-            fi
-          done
-
-          config_present=NO
-          for p in "$HOME/.config/.wrangler" "$HOME/.wrangler" "$HOME/.config/wrangler"; do
-            if [ -e "$p" ]; then config_present=YES; fi
-          done
-          echo "WRANGLER_CONFIG_PRESENT=$config_present"
-
-          console_paths="$(find /home /opt /srv -maxdepth 5 -type d -name daniel-console 2>/dev/null | head -n 10 || true)"
-          if [ -n "$console_paths" ]; then
-            echo 'DANIEL_CONSOLE_CHECKOUT=YES'
-            printf '%s\n' "$console_paths" | sed 's#^#CONSOLE_PATH=#'
+          image='node:22-bookworm-slim'
+          docker pull "$image" >/dev/null
+          if docker run --rm --env-file "$cf_env" "$image" bash -lc \
+            'npx --yes wrangler@4 whoami >/tmp/whoami.out 2>/tmp/whoami.err'; then
+            echo 'WRANGLER_WHOAMI=PASS'
           else
-            echo 'DANIEL_CONSOLE_CHECKOUT=NO'
+            echo 'WRANGLER_WHOAMI=FAIL'
+            exit 3
           fi
 
-          if command -v npx >/dev/null 2>&1; then
-            if timeout 45s npx --yes wrangler@4 whoami >/tmp/l3b-wrangler-whoami.txt 2>/tmp/l3b-wrangler-whoami.err; then
-              echo 'WRANGLER_WHOAMI=PASS'
-            else
-              echo 'WRANGLER_WHOAMI=FAIL'
-            fi
-          elif command -v wrangler >/dev/null 2>&1; then
-            if timeout 45s wrangler whoami >/tmp/l3b-wrangler-whoami.txt 2>/tmp/l3b-wrangler-whoami.err; then
-              echo 'WRANGLER_WHOAMI=PASS'
-            else
-              echo 'WRANGLER_WHOAMI=FAIL'
-            fi
-          else
-            echo 'WRANGLER_WHOAMI=UNAVAILABLE'
-          fi
-          rm -f /tmp/l3b-wrangler-whoami.txt /tmp/l3b-wrangler-whoami.err
+          echo 'DEPLOYMENTS_LIST_BEGIN'
+          docker run --rm --env-file "$cf_env" "$image" bash -lc \
+            'npx --yes wrangler@4 deployments list --name daniel-console-production' \
+            | sed -E 's/(token|secret|key)[=:][^[:space:]]+/\1=[REDACTED]/Ig'
+          echo 'DEPLOYMENTS_LIST_END'
+
+          echo 'VERSIONS_LIST_BEGIN'
+          docker run --rm --env-file "$cf_env" "$image" bash -lc \
+            'npx --yes wrangler@4 versions list --name daniel-console-production' \
+            | sed -E 's/(token|secret|key)[=:][^[:space:]]+/\1=[REDACTED]/Ig'
+          echo 'VERSIONS_LIST_END'
+          echo 'TARGET_WORKER=daniel-console-production'
           echo 'CLOUDFLARE_MUTATION=0'
           echo 'PRODUCTION_MUTATION=0'
-          echo 'CENSUS_END'
           REMOTE
