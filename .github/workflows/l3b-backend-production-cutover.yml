@@ -76,55 +76,101 @@ jobs:
             "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$TARGET_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
           echo 'BACKEND_DEPLOY_COMMAND=PASS'
 
-      - name: Exact backend postflight
+      - name: Exact backend postflight with markers
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED='$TARGET_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
-          test "$(git rev-parse HEAD)" = "$EXPECTED"
-          test "$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')" = "$EXPECTED"
+          actual_head="$(git rev-parse HEAD)"
+          echo "POSTFLIGHT_REMOTE_HEAD=$actual_head"
+          test "$actual_head" = "$EXPECTED"
+          echo 'POSTFLIGHT_REMOTE_HEAD_MATCH=PASS'
+          actual_runtime="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
+          echo "POSTFLIGHT_REMOTE_RUNTIME_SHA=$actual_runtime"
+          test "$actual_runtime" = "$EXPECTED"
+          echo 'POSTFLIGHT_REMOTE_RUNTIME_MATCH=PASS'
           docker compose exec -T knowledge-engine python - <<'PY'
           import os
           from pathlib import Path
           from knowledge_engine.m26_admin_production import L3B_CAPABILITY_IDS, SqliteAdminControlStore
-          from knowledge_engine.m26_console_api import app
+          from knowledge_engine.m26_console_api import app, create_public_app
+
+          def check(name, condition, detail=''):
+              suffix = f' detail={detail}' if detail else ''
+              print(f'{name}=' + ('PASS' if condition else 'FAIL') + suffix, flush=True)
+              if not condition:
+                  raise SystemExit(1)
+
+          check('POSTFLIGHT_PUBLIC_BASE_MODULE', create_public_app.__module__ == 'knowledge_engine.m26_public_api', create_public_app.__module__)
           caps = [item.capability_id for item in app.state.admin_capability_provider.list_capabilities()]
-          assert caps == sorted(L3B_CAPABILITY_IDS), caps
-          assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
-          assert app.state.admin_audit_sink is app.state.admin_idempotency_store
-          assert Path(os.environ['M26_QA_DB_PATH']) == Path('/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3')
-          assert Path(os.environ['M26_ADMIN_CONTROL_DB_PATH']) == Path('/var/lib/knowledge-engine/public-api/admin-control.sqlite3')
-          assert os.environ.get('M26_L3B_ADMIN_QUALIFIED', '').lower() == 'true'
-          assert os.environ.get('M26_QA_TRUST_CLOUDFLARE_COUNTRY', '').lower() not in {'true','1','yes','on'}
-          print('RUNTIME_L3B_BINDING=PASS')
-          print('COUNTRY_TRUST_FAIL_CLOSED=PASS')
+          check('POSTFLIGHT_CAPABILITIES', caps == sorted(L3B_CAPABILITY_IDS), repr(caps))
+          check('POSTFLIGHT_ADMIN_AUDIT_STORE_CLASS', isinstance(app.state.admin_audit_sink, SqliteAdminControlStore), type(app.state.admin_audit_sink).__name__)
+          check('POSTFLIGHT_ADMIN_IDEMPOTENCY_STORE_CLASS', isinstance(app.state.admin_idempotency_store, SqliteAdminControlStore), type(app.state.admin_idempotency_store).__name__)
+          check('POSTFLIGHT_ADMIN_STORE_SHARED', app.state.admin_audit_sink is app.state.admin_idempotency_store)
+          check('POSTFLIGHT_QA_DB_PATH', Path(os.environ.get('M26_QA_DB_PATH', '')) == Path('/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3'), os.environ.get('M26_QA_DB_PATH', ''))
+          check('POSTFLIGHT_ADMIN_DB_PATH', Path(os.environ.get('M26_ADMIN_CONTROL_DB_PATH', '')) == Path('/var/lib/knowledge-engine/public-api/admin-control.sqlite3'), os.environ.get('M26_ADMIN_CONTROL_DB_PATH', ''))
+          check('POSTFLIGHT_L3B_FLAG', os.environ.get('M26_L3B_ADMIN_QUALIFIED', '').lower() == 'true', os.environ.get('M26_L3B_ADMIN_QUALIFIED', ''))
+          check('POSTFLIGHT_COUNTRY_TRUST_FAIL_CLOSED', os.environ.get('M26_QA_TRUST_CLOUDFLARE_COUNTRY', '').lower() not in {'true', '1', 'yes', 'on'})
+          paths = set(app.openapi()['paths'])
+          check('POSTFLIGHT_ROUTE_HEALTH', '/v1/answers/health' in paths)
+          check('POSTFLIGHT_ROUTE_ADMIN_QA', '/v1/admin/qa/inbox/events' in paths)
+          check('POSTFLIGHT_ROUTE_SQ_PREVIEW', '/v1/admin/suggested-questions/promotions/preview' in paths)
+          print('RUNTIME_L3B_BINDING=PASS', flush=True)
           PY
           status="$(curl --silent --output /tmp/admin.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
-          test "$status" = 401
+          echo "POSTFLIGHT_ADMIN_UNAUTH_STATUS=$status"
+          if [ "$status" != 401 ]; then
+            cat /tmp/admin.json || true
+            exit 1
+          fi
           grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/admin.json
           echo 'ADMIN_UNAUTH_FAIL_CLOSED=PASS'
           REMOTE
 
           health="$(curl --fail --silent --show-error --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
-          python3 -c 'import json,sys; p=json.loads(sys.argv[1]); expected=sys.argv[2]; actual=(p.get("backend") or p.get("runtime") or {}).get("build_sha",""); assert p.get("ok") is True and actual==expected,(p,expected)' "$health" "$TARGET_SHA"
-          cors_code="$(curl --silent --output /tmp/cors.headers --dump-header /tmp/cors.headers --write-out '%{http_code}' -X OPTIONS \
+          python3 - "$health" "$TARGET_SHA" <<'PY'
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          expected = sys.argv[2]
+          actual = (payload.get('backend') or payload.get('runtime') or {}).get('build_sha', '')
+          print('PUBLIC_HEALTH_BUILD_SHA=' + actual)
+          assert payload.get('ok') is True, payload
+          assert actual == expected, (actual, expected, payload)
+          print('PUBLIC_HEALTH_IDENTITY=PASS')
+          PY
+
+          cors_code="$(curl --silent --output /tmp/cors.body --dump-header /tmp/cors.headers --write-out '%{http_code}' -X OPTIONS \
             -H 'Origin: https://danielcanfly.com' \
             -H 'Access-Control-Request-Method: POST' \
             -H 'Access-Control-Request-Headers: content-type,x-m26-owner-bypass' \
             https://api.danielcanfly.com/v1/answers)"
-          test "$cors_code" = 204
+          echo "PUBLIC_CORS_STATUS=$cors_code"
+          if [ "$cors_code" != 204 ]; then
+            cat /tmp/cors.headers || true
+            cat /tmp/cors.body || true
+            exit 1
+          fi
           grep -Eiq '^access-control-allow-origin:[[:space:]]*https://danielcanfly.com' /tmp/cors.headers
+          echo 'PUBLIC_CORS=PASS'
 
           answer_code="$(curl --silent --show-error --max-time 90 --output /tmp/answer.sse --write-out '%{http_code}' \
             -H 'Origin: https://danielcanfly.com' -H 'Content-Type: application/json' \
             --data '{"question":"What is Daniel Can Fly about?"}' \
             https://api.danielcanfly.com/v1/answers || true)"
-          test "$answer_code" = 200
-          grep -Eq '"type"[[:space:]]*:[[:space:]]*"answer\.(completed|abstained)"' /tmp/answer.sse
-          echo 'PUBLIC_HEALTH_IDENTITY=PASS'
-          echo 'PUBLIC_CORS=PASS'
-          echo 'PUBLIC_ANSWER_REGRESSION=PASS'
+          echo "PUBLIC_ANSWER_STATUS=$answer_code"
+          if [ "$answer_code" != 200 ]; then
+            head -c 2000 /tmp/answer.sse || true
+            exit 1
+          fi
+          if grep -Eq '"type"[[:space:]]*:[[:space:]]*"answer\.(completed|abstained)"' /tmp/answer.sse; then
+            echo 'PUBLIC_ANSWER_REGRESSION=PASS'
+          elif grep -Eq 'event:[[:space:]]*answer\.(completed|abstained)' /tmp/answer.sse; then
+            echo 'PUBLIC_ANSWER_REGRESSION=PASS'
+          else
+            head -c 2000 /tmp/answer.sse || true
+            exit 1
+          fi
           echo 'BACKEND_PRODUCTION_POSTFLIGHT=PASS'
 
       - name: Roll back exact predecessor on any cutover failure
