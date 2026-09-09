@@ -17,27 +17,28 @@ jobs:
       R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CANDIDATE_SHA: 51d464565601d3f1c0301d87c3f0efcec9e68f6d
     steps:
-      - name: Checkout exact R1 candidate
+      - name: Checkout exact R2 candidate
         uses: actions/checkout@v4
         with:
-          ref: db21f14e11863c25540045766cb8b5f880162c6b
+          ref: 51d464565601d3f1c0301d87c3f0efcec9e68f6d
           fetch-depth: 1
 
       - name: Seal source identity
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "db21f14e11863c25540045766cb8b5f880162c6b"
-          echo "R1_CANDIDATE_SHA=$(git rev-parse HEAD)"
-          echo "R1_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          echo "R2_CANDIDATE_SHA=$(git rev-parse HEAD)"
+          echo "R2_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
 
       - name: Require read-only production bundle authority
         run: |
           set -euo pipefail
           for name in R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
-            test -n "${!name:-}" || { echo 'R1_PRODUCTION_BUNDLE_AUTHORITY=MISSING'; exit 2; }
+            test -n "${!name:-}" || { echo 'R2_PRODUCTION_BUNDLE_AUTHORITY=MISSING'; exit 2; }
           done
-          echo 'R1_PRODUCTION_BUNDLE_AUTHORITY=PASS'
+          echo 'R2_PRODUCTION_BUNDLE_AUTHORITY=PASS'
           echo 'PRODUCTION_MUTATION=0'
 
       - name: Install qualification dependencies
@@ -106,20 +107,21 @@ jobs:
           KNOWLEDGE_CHANNEL=production
           CACHE_DIR=/var/lib/knowledge-engine/cache
           LOG_LEVEL=INFO
+          M26_QUERY_BUILD_SHA=$CANDIDATE_SHA
           EOF_ENV
-          export COMPOSE_PROJECT_NAME=l3br1qual
+          export COMPOSE_PROJECT_NAME=l3br2qual
           cleanup() {
             docker compose down -v --remove-orphans >/dev/null 2>&1 || true
             rm -f .env
           }
           trap cleanup EXIT
 
-          docker compose config > /tmp/l3b-r1-compose.yml
-          grep -F 'knowledge_engine.m26_console_api:app' /tmp/l3b-r1-compose.yml
-          grep -F 'M26_QA_DB_PATH' /tmp/l3b-r1-compose.yml
-          grep -F 'M26_ADMIN_CONTROL_DB_PATH' /tmp/l3b-r1-compose.yml
-          grep -F 'M26_L3B_ADMIN_QUALIFIED' /tmp/l3b-r1-compose.yml
-          if grep -F 'knowledge_engine.m26_public_api:app' /tmp/l3b-r1-compose.yml; then
+          docker compose config > /tmp/l3b-r2-compose.yml
+          grep -F 'knowledge_engine.m26_console_api:app' /tmp/l3b-r2-compose.yml
+          grep -F 'M26_QA_DB_PATH' /tmp/l3b-r2-compose.yml
+          grep -F 'M26_ADMIN_CONTROL_DB_PATH' /tmp/l3b-r2-compose.yml
+          grep -F 'M26_L3B_ADMIN_QUALIFIED' /tmp/l3b-r2-compose.yml
+          if grep -F 'knowledge_engine.m26_public_api:app' /tmp/l3b-r2-compose.yml; then
             echo 'PUBLIC_ONLY_COMPOSE_ENTRYPOINT_PRESENT' >&2
             exit 1
           fi
@@ -128,10 +130,11 @@ jobs:
           docker compose run --rm --no-deps knowledge-engine python - <<'PY'
           from pathlib import Path
           from knowledge_engine.m26_admin_production import L3B_CAPABILITY_IDS, SqliteAdminControlStore
-          from knowledge_engine.m26_console_api import app
+          from knowledge_engine.m26_console_api import app, create_public_app
           from knowledge_engine.m26_production_answer_bundle import load_production_answer_bundle
           from knowledge_engine.m26_qa_inbox_integration import qa_repository_from_env
 
+          assert create_public_app.__module__ == 'knowledge_engine.m26_public_api'
           caps = app.state.admin_capability_provider.list_capabilities()
           assert [item.capability_id for item in caps] == sorted(L3B_CAPABILITY_IDS)
           assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
@@ -149,13 +152,14 @@ jobs:
           probe.write_text('ok')
           assert probe.read_text() == 'ok'
           probe.unlink()
-          print('R1_PRODUCTION_BUNDLE_READ=PASS')
-          print('R1_COMBINED_APP_CAPABILITIES=PASS')
-          print('R1_DURABLE_STORE_WRITE=PASS')
+          print('R2_CANONICAL_PUBLIC_BASE=PASS')
+          print('R2_PRODUCTION_BUNDLE_READ=PASS')
+          print('R2_COMBINED_APP_CAPABILITIES=PASS')
+          print('R2_DURABLE_STORE_WRITE=PASS')
           PY
 
           test "$(docker image inspect knowledge-engine:0.2.0 --format '{{.Config.User}}')" = knowledge
-          echo 'R1_IMAGE_NON_ROOT=PASS'
+          echo 'R2_IMAGE_NON_ROOT=PASS'
 
           docker compose up -d --remove-orphans
           healthy=0
@@ -167,27 +171,29 @@ jobs:
             sleep 1
           done
           if [ "$healthy" -ne 1 ]; then
-            echo 'R1_STARTUP_DIAGNOSTIC_BEGIN'
+            echo 'R2_STARTUP_DIAGNOSTIC_BEGIN'
             docker compose ps -a || true
             docker compose logs --no-color --tail=200 knowledge-engine || true
             cid="$(docker compose ps -aq knowledge-engine | head -n1)"
             if [ -n "$cid" ]; then
               docker inspect "$cid" --format 'STATE={{json .State}}' || true
             fi
-            echo 'R1_STARTUP_DIAGNOSTIC_END'
+            echo 'R2_STARTUP_DIAGNOSTIC_END'
             exit 1
           fi
-          python - <<'PY'
-          import json
+          python - "$CANDIDATE_SHA" <<'PY'
+          import json, sys
           payload = json.load(open('/tmp/public-health.json'))
+          actual = (payload.get('backend') or payload.get('runtime') or {}).get('build_sha', '')
           assert payload.get('ok') is True, payload
-          print('R1_PUBLIC_HEALTH=PASS')
+          assert actual == sys.argv[1], (actual, sys.argv[1], payload)
+          print('R2_PUBLIC_HEALTH_IDENTITY=PASS')
           PY
 
           admin_status="$(curl --silent --output /tmp/admin-body.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
           test "$admin_status" = 503
           grep -F 'ADMIN_AUTH_CONFIGURATION_MISSING' /tmp/admin-body.json
-          echo 'R1_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
-          echo 'L3B_R1_PRODUCTION_EQUIVALENT_COMPOSE_REHEARSAL=PASS'
+          echo 'R2_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
+          echo 'L3B_R2_PRODUCTION_EQUIVALENT_COMPOSE_REHEARSAL=PASS'
           echo 'R2_WRITES=0'
           echo 'PRODUCTION_MUTATION=0'
