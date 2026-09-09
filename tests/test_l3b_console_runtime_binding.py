@@ -19,7 +19,11 @@ def test_console_app_binds_only_qualified_l3b_controls_when_explicitly_enabled(
     )
     assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
     assert app.state.admin_audit_sink is app.state.admin_idempotency_store
-    paths = {route.path for route in app.routes}
+    paths = {
+        path
+        for route in app.routes
+        if (path := getattr(route, "path", None)) is not None
+    }
     assert "/v1/answers/health" in paths
     assert "/v1/admin/qa/inbox/events" in paths
     assert "/v1/admin/qa/inbox/summary" in paths
