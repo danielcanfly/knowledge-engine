@@ -112,6 +112,9 @@ jobs:
           LOG_LEVEL=INFO
           M26_QUERY_BUILD_SHA=$CANDIDATE_SHA
           M26_PUBLIC_IP_HMAC_SECRET=$QUALIFIER_PUBLIC_HMAC
+          M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://l3b-qualifier.cloudflareaccess.com
+          M26_CONSOLE_ACCESS_AUD=l3b-qualifier-aud
+          M26_CONSOLE_OWNER_EMAILS=owner@l3b.invalid
           EOF_ENV
           export COMPOSE_PROJECT_NAME=l3br2qual
           cleanup() {
@@ -132,6 +135,7 @@ jobs:
 
           docker compose build --pull
           docker compose run --rm --no-deps knowledge-engine python - <<'PY'
+          import os
           from pathlib import Path
           from knowledge_engine.m26_admin_production import L3B_CAPABILITY_IDS, SqliteAdminControlStore
           from knowledge_engine.m26_console_api import app, create_public_app
@@ -139,26 +143,31 @@ jobs:
           from knowledge_engine.m26_qa_inbox_integration import qa_repository_from_env
 
           assert create_public_app.__module__ == 'knowledge_engine.m26_public_api'
+          print('R2_MARKER_CANONICAL_PUBLIC_BASE=PASS')
           caps = app.state.admin_capability_provider.list_capabilities()
           assert [item.capability_id for item in caps] == sorted(L3B_CAPABILITY_IDS)
+          print('R2_MARKER_CAPABILITIES=PASS')
           assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
           assert app.state.admin_audit_sink is app.state.admin_idempotency_store
+          print('R2_MARKER_ADMIN_STORE=PASS')
           paths = set(app.openapi()['paths'])
           assert '/v1/answers/health' in paths
           assert '/v1/admin/qa/inbox/events' in paths
           assert '/v1/admin/suggested-questions/promotions/preview' in paths
+          print('R2_MARKER_ROUTE_SET=PASS')
           bundle = load_production_answer_bundle()
           assert bundle.release_id
+          print('R2_MARKER_PRODUCTION_BUNDLE=PASS')
           repo = qa_repository_from_env()
           assert repo.db_path == Path('/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3')
           assert app.state.admin_audit_sink.db_path == Path('/var/lib/knowledge-engine/public-api/admin-control.sqlite3')
+          assert os.environ.get('M26_L3B_ADMIN_QUALIFIED', '').lower() == 'true'
+          assert os.environ.get('M26_QA_TRUST_CLOUDFLARE_COUNTRY', '').lower() not in {'true','1','yes','on'}
+          print('R2_MARKER_RUNTIME_BINDING=PASS')
           probe = Path('/var/lib/knowledge-engine/public-api/runtime-write-probe')
           probe.write_text('ok')
           assert probe.read_text() == 'ok'
           probe.unlink()
-          print('R2_CANONICAL_PUBLIC_BASE=PASS')
-          print('R2_PRODUCTION_BUNDLE_READ=PASS')
-          print('R2_COMBINED_APP_CAPABILITIES=PASS')
           print('R2_DURABLE_STORE_WRITE=PASS')
           PY
 
@@ -195,9 +204,10 @@ jobs:
           PY
 
           admin_status="$(curl --silent --output /tmp/admin-body.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
-          test "$admin_status" = 503
-          grep -F 'ADMIN_AUTH_CONFIGURATION_MISSING' /tmp/admin-body.json
-          echo 'R2_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
+          echo "R2_ADMIN_UNAUTH_STATUS=$admin_status"
+          test "$admin_status" = 401
+          grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/admin-body.json
+          echo 'R2_ADMIN_ROUTE_PRODUCTION_LIKE_UNAUTH_401=PASS'
           echo 'L3B_R2_PRODUCTION_EQUIVALENT_COMPOSE_REHEARSAL=PASS'
           echo 'R2_WRITES=0'
           echo 'PRODUCTION_MUTATION=0'
