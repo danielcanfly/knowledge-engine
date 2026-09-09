@@ -53,45 +53,43 @@ jobs:
             exit 43
           fi
           docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"'
-          docker compose exec -T knowledge-engine python - <<'PY'
-          from pathlib import Path
-          import importlib.util
-          mods = [
-              'knowledge_engine.m26_qa_inbox_integration',
-              'knowledge_engine.qa_answer_quality',
-              'knowledge_engine.qa_answer_quality_sqlite',
-              'knowledge_engine.m26_admin_qa',
-              'knowledge_engine.m26_suggested_questions_admin',
-              'knowledge_engine.m26_console_api',
-          ]
-          for m in mods:
-              try:
-                  present = importlib.util.find_spec(m) is not None
-              except Exception:
-                  present = False
-              print(f'MODULE_{m.rsplit(".",1)[-1].upper()}={"YES" if present else "NO"}')
-          roots = [Path('/app/src/knowledge_engine'), Path('/app/knowledge_engine')]
-          root = next((p for p in roots if p.exists()), None)
-          if root is None:
-              print('SOURCE_ROOT=UNKNOWN')
-          else:
-              print(f'SOURCE_ROOT={root}')
-              needles = [
-                  '/v1/admin/qa',
-                  'Export New Failures',
-                  'suggested-questions',
-                  'failure',
-              ]
-              corpus = ''
-              for p in root.glob('*.py'):
-                  try:
-                      corpus += p.read_text(errors='ignore') + '\n'
-                  except Exception:
-                      pass
-              for needle in needles:
-                  key = ''.join(c if c.isalnum() else '_' for c in needle).upper().strip('_')
-                  print(f'SOURCE_CONTAINS_{key}={"YES" if needle in corpus else "NO"}')
-          PY
+
+          for mod in \
+            knowledge_engine.m26_qa_inbox_integration \
+            knowledge_engine.qa_answer_quality \
+            knowledge_engine.qa_answer_quality_sqlite \
+            knowledge_engine.m26_admin_qa \
+            knowledge_engine.m26_suggested_questions_admin \
+            knowledge_engine.m26_console_api
+          do
+            label="$(printf '%s' "${mod##*.}" | tr '[:lower:]' '[:upper:]')"
+            if docker compose exec -T knowledge-engine python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('$mod') is not None else 1)"; then
+              printf 'MODULE_%s=YES\n' "$label"
+            else
+              printf 'MODULE_%s=NO\n' "$label"
+            fi
+          done
+
+          docker compose exec -T knowledge-engine sh -lc '
+            root=""
+            for p in /app/src/knowledge_engine /app/knowledge_engine; do
+              if [ -d "$p" ]; then root="$p"; break; fi
+            done
+            if [ -z "$root" ]; then
+              echo SOURCE_ROOT=UNKNOWN
+              exit 0
+            fi
+            echo SOURCE_ROOT="$root"
+            for pair in "/v1/admin/qa|V1_ADMIN_QA" "suggested-questions|SUGGESTED_QUESTIONS" "Export New Failures|EXPORT_NEW_FAILURES"; do
+              needle=${pair%%|*}; label=${pair##*|}
+              if grep -R -F -q "$needle" "$root" 2>/dev/null; then
+                echo SOURCE_CONTAINS_${label}=YES
+              else
+                echo SOURCE_CONTAINS_${label}=NO
+              fi
+            done
+          '
+
           printf 'PUBLIC_HEALTH='; curl --fail --silent --show-error --max-time 10 https://api.danielcanfly.com/v1/answers/health | python3 -c 'import json,sys; d=json.load(sys.stdin); print("OK" if d.get("ok") else "NOT_OK")' || echo FAIL
           REMOTE
       - name: Mutation guard receipt
