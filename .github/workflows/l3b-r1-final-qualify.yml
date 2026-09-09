@@ -124,11 +124,14 @@ jobs:
           print('R1_DURABLE_STORE_WRITE=PASS')
           PY
 
-          image_id="$(docker compose images -q knowledge-engine | head -n1)"
-          test -n "$image_id"
-          test "$(docker inspect "$image_id" --format '{{.Config.User}}')" = knowledge
+          echo 'R1_IMAGE_DIAGNOSTIC_BEGIN'
+          docker compose images
+          docker image inspect knowledge-engine:0.2.0 --format 'R1_IMAGE_USER={{.Config.User}}'
+          test "$(docker image inspect knowledge-engine:0.2.0 --format '{{.Config.User}}')" = knowledge
+          echo 'R1_IMAGE_NON_ROOT=PASS'
 
           docker compose up -d --remove-orphans
+          docker compose ps
           for attempt in $(seq 1 60); do
             if curl --fail --silent --max-time 3 http://127.0.0.1:8080/v1/answers/health >/tmp/public-health.json; then
               break
@@ -144,6 +147,7 @@ jobs:
           PY
 
           admin_status="$(curl --silent --output /tmp/admin-body.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
+          echo "R1_UNAUTH_ADMIN_STATUS=$admin_status"
           test "$admin_status" = 503
           grep -F 'ADMIN_AUTH_CONFIGURATION_MISSING' /tmp/admin-body.json
           echo 'R1_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
