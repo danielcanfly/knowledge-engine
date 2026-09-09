@@ -18,14 +18,22 @@ jobs:
           fetch-depth: 0
       - name: Install
         run: python -m pip install -e '.[dev]'
-      - name: Replay exact four failing tests
+      - name: PA7 fixture baseline
         continue-on-error: true
+        run: python -m pytest -vv tests/test_m26_pa7_final_web_readiness.py::test_final_web_product_readiness_fixture_receipt_satisfies_a26_to_a53
+      - name: PA7 workflow baseline
+        continue-on-error: true
+        run: python -m pytest -vv tests/test_m26_pa7_final_web_readiness.py::test_final_web_live_workflow_binds_backend_pages_and_runtime_rows
+      - name: SM95 test presence baseline
         run: |
-          python -m pytest -vv \
-            tests/test_m26_pa7_final_web_readiness.py::test_final_web_product_readiness_fixture_receipt_satisfies_a26_to_a53 \
-            tests/test_m26_pa7_final_web_readiness.py::test_final_web_live_workflow_binds_backend_pages_and_runtime_rows \
-            tests/test_m26_sm95_release_runtime_contract.py::test_deploy_liveness_deliberately_remains_openapi_probe \
-            tests/test_m26_public_api_acceptance_edges.py::test_public_model_audit_distinguishes_synthesizer_from_reviewer
+          if [ -f tests/test_m26_sm95_release_runtime_contract.py ]; then
+            echo SM95_TEST_PRESENT=YES
+            exit 51
+          else
+            echo SM95_TEST_PRESENT=NO
+          fi
+      - name: Public model-event baseline
+        run: python -m pytest -vv tests/test_m26_public_api_acceptance_edges.py::test_public_model_audit_distinguishes_synthesizer_from_reviewer
       - name: Direct model-event sanity
         run: |
           python - <<'PY'
