@@ -15,13 +15,13 @@ jobs:
       - name: Checkout exact R1 candidate
         uses: actions/checkout@v4
         with:
-          ref: 34d559e5e35886910ea1b9516fbb2767a78b8e7f
+          ref: db21f14e11863c25540045766cb8b5f880162c6b
           fetch-depth: 1
 
       - name: Seal source identity
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "34d559e5e35886910ea1b9516fbb2767a78b8e7f"
+          test "$(git rev-parse HEAD)" = "db21f14e11863c25540045766cb8b5f880162c6b"
           echo "R1_CANDIDATE_SHA=$(git rev-parse HEAD)"
           echo "R1_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
 
