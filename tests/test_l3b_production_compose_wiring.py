@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 
 QA_DATA_DIR = "/var/lib/knowledge-engine/public-api"
 QA_DB_PATH = f"{QA_DATA_DIR}/qa-inbox.sqlite3"
@@ -19,17 +17,14 @@ def test_dockerfile_prepares_non_root_qa_data_directory() -> None:
 
 
 def test_compose_runs_combined_console_app_not_public_only_app() -> None:
-    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
-    service = compose["services"]["knowledge-engine"]
-    command = service["command"]
-    assert COMBINED_APP in command
-    assert PUBLIC_ONLY_APP not in command
-    assert service["read_only"] is True
+    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    assert f"      - {COMBINED_APP}" in compose
+    assert PUBLIC_ONLY_APP not in compose
+    assert "    read_only: true" in compose
 
 
 def test_compose_binds_durable_qa_inbox_volume_and_db_path() -> None:
-    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
-    service = compose["services"]["knowledge-engine"]
-    assert service["environment"]["M26_QA_DB_PATH"] == QA_DB_PATH
-    assert "m26-qa-inbox-data:/var/lib/knowledge-engine/public-api" in service["volumes"]
-    assert "m26-qa-inbox-data" in compose["volumes"]
+    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    assert f"      M26_QA_DB_PATH: {QA_DB_PATH}" in compose
+    assert f"      - m26-qa-inbox-data:{QA_DATA_DIR}" in compose
+    assert "  m26-qa-inbox-data:" in compose
