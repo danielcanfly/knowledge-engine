@@ -1,5 +1,5 @@
 name: L3B Backend 502 Forensics Read Only
-# post-recovery census trigger
+# post-recovery authenticated-path census trigger
 
 on:
   push:
