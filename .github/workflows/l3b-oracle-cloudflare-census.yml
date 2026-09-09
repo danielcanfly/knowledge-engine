@@ -1,0 +1,110 @@
+name: L3B Oracle Cloudflare Authority Census
+
+on:
+  push:
+    branches:
+      - ops/l3b-oracle-cloudflare-census-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+    steps:
+      - name: Configure SSH authority
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo 'ORACLE_AUTHORITY=MISSING'; exit 2; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+          echo 'ORACLE_AUTHORITY=PASS'
+
+      - name: Read-only Cloudflare and console census
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          echo 'CENSUS_BEGIN'
+          for cmd in node npm npx pnpm wrangler git; do
+            if command -v "$cmd" >/dev/null 2>&1; then
+              echo "CMD_${cmd}=YES"
+            else
+              echo "CMD_${cmd}=NO"
+            fi
+          done
+
+          python3 - "$DEPLOY_PATH/.env" <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path(sys.argv[1])
+          names = {
+              'CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_AI_TOKEN', 'CLOUDFLARE_ACCOUNT_ID',
+              'CF_API_TOKEN_PRIMARY', 'CF_API_TOKEN_FALLBACK', 'CF_API_TOKEN',
+              'CLOUDFLARE_API_KEY', 'CLOUDFLARE_EMAIL'
+          }
+          seen = set()
+          if p.is_file():
+              for raw in p.read_text(encoding='utf-8', errors='ignore').splitlines():
+                  line = raw.strip()
+                  if line.startswith('export '):
+                      line = line[7:].lstrip()
+                  m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$', line)
+                  if m and m.group(1) in names and m.group(2).strip().strip('"\''):
+                      seen.add(m.group(1))
+          for name in sorted(names):
+              print(f'ENVFILE_{name}=' + ('YES' if name in seen else 'NO'))
+          PY
+
+          for f in "$HOME/.profile" "$HOME/.bashrc" /etc/environment; do
+            if [ -f "$f" ] && grep -Eq 'CLOUDFLARE_(API_TOKEN|AI_TOKEN|ACCOUNT_ID)|CF_API_TOKEN' "$f"; then
+              echo "SHELL_CF_NAME_PRESENT_$(basename "$f")=YES"
+            else
+              echo "SHELL_CF_NAME_PRESENT_$(basename "$f")=NO"
+            fi
+          done
+
+          config_present=NO
+          for p in "$HOME/.config/.wrangler" "$HOME/.wrangler" "$HOME/.config/wrangler"; do
+            if [ -e "$p" ]; then config_present=YES; fi
+          done
+          echo "WRANGLER_CONFIG_PRESENT=$config_present"
+
+          console_paths="$(find /home /opt /srv -maxdepth 5 -type d -name daniel-console 2>/dev/null | head -n 10 || true)"
+          if [ -n "$console_paths" ]; then
+            echo 'DANIEL_CONSOLE_CHECKOUT=YES'
+            printf '%s\n' "$console_paths" | sed 's#^#CONSOLE_PATH=#'
+          else
+            echo 'DANIEL_CONSOLE_CHECKOUT=NO'
+          fi
+
+          if command -v npx >/dev/null 2>&1; then
+            if timeout 45s npx --yes wrangler@4 whoami >/tmp/l3b-wrangler-whoami.txt 2>/tmp/l3b-wrangler-whoami.err; then
+              echo 'WRANGLER_WHOAMI=PASS'
+            else
+              echo 'WRANGLER_WHOAMI=FAIL'
+            fi
+          elif command -v wrangler >/dev/null 2>&1; then
+            if timeout 45s wrangler whoami >/tmp/l3b-wrangler-whoami.txt 2>/tmp/l3b-wrangler-whoami.err; then
+              echo 'WRANGLER_WHOAMI=PASS'
+            else
+              echo 'WRANGLER_WHOAMI=FAIL'
+            fi
+          else
+            echo 'WRANGLER_WHOAMI=UNAVAILABLE'
+          fi
+          rm -f /tmp/l3b-wrangler-whoami.txt /tmp/l3b-wrangler-whoami.err
+          echo 'CLOUDFLARE_MUTATION=0'
+          echo 'PRODUCTION_MUTATION=0'
+          echo 'CENSUS_END'
+          REMOTE
