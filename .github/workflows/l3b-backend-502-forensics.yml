@@ -88,7 +88,7 @@ jobs:
           print("COMPOSE_SERVICE=" + str(labels.get("com.docker.compose.service", "UNKNOWN")))
           '
 
-          docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"'
+          docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"' </dev/null
 
           docker events </dev/null \
             --since '2026-09-09T08:20:00Z' \
