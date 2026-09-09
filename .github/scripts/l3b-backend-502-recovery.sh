@@ -15,7 +15,9 @@ stale_manifest="/tmp/l3b-stale-enabled.$stamp"
 
 test -n "$nginx_path" && test -f "$nginx_path"
 test "$(git rev-parse HEAD)" = "$expected_sha"
-test "$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')" = "$expected_sha"
+pre_runtime_sha="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"' || true)"
+test -n "$pre_runtime_sha"
+echo "RECOVERY_PRE_RUNTIME_SHA=$pre_runtime_sha"
 
 sudo -n install -d -m 700 "$backup_dir"
 sudo -n cp -p .env "$env_backup"
@@ -24,6 +26,8 @@ sudo -n find /etc/nginx/sites-enabled -maxdepth 1 -type f \
   -name 'llamaindex-demo.l3b-502-recovery-*.bak' -print >"$stale_manifest"
 
 rollback() {
+  original_status=$?
+  trap - ERR
   set +e
   sudo -n cp -p "$env_backup" .env
   sudo -n cp -p "$nginx_backup" "$nginx_path"
@@ -35,8 +39,10 @@ rollback() {
     fi
   done <"$stale_manifest"
   sudo -n nginx -t >/dev/null 2>&1 && sudo -n systemctl reload nginx >/dev/null 2>&1
-  docker compose up -d --force-recreate --no-build knowledge-engine >/dev/null 2>&1
+  DEPLOY_PATH="$deploy_path" RELEASE_SHA="$expected_sha" \
+    bash "$deploy_path/deploy/deploy.sh" >/dev/null 2>&1
   echo 'RECOVERY_ROLLBACK=EXECUTED'
+  exit "$original_status"
 }
 trap rollback ERR
 
@@ -74,26 +80,8 @@ sudo -n grep -F 'location ^~ /v1/admin/' "$nginx_path"
 test "$(sudo -n nginx -T 2>/dev/null | grep -cF 'location ^~ /v1/admin/' || true)" -eq 1
 sudo -n nginx -t
 sudo -n systemctl reload nginx
-docker compose up -d --force-recreate --no-build knowledge-engine
-
-health_ready=0
-for _attempt in $(seq 1 30); do
-  if curl --fail --silent --max-time 5 \
-    http://127.0.0.1:8080/v1/answers/health >/tmp/l3b-health.json; then
-    if python3 - "$expected_sha" <<'PY'
-import json, sys
-payload = json.load(open('/tmp/l3b-health.json', encoding='utf-8'))
-actual = (payload.get('backend') or payload.get('runtime') or {}).get('build_sha', '')
-raise SystemExit(0 if payload.get('ok') is True and actual == sys.argv[1] else 1)
-PY
-    then
-      health_ready=1
-      break
-    fi
-  fi
-  sleep 2
-done
-test "$health_ready" -eq 1
+DEPLOY_PATH="$deploy_path" RELEASE_SHA="$expected_sha" \
+  bash "$deploy_path/deploy/deploy.sh"
 
 local_app_code="$(curl --silent --output /tmp/l3b-admin.json --write-out '%{http_code}' \
   --max-time 10 http://127.0.0.1:8080/v1/admin/settings || true)"
@@ -111,7 +99,7 @@ echo "RECOVERY_RUNTIME_SHA=$(docker compose exec -T knowledge-engine sh -c 'prin
 echo 'RECOVERY_ENV_TEAM_DOMAIN_NORMALIZED=YES'
 echo 'RECOVERY_NGINX_ADMIN_ROUTE=8080'
 echo 'RECOVERY_STALE_ENABLED_BACKUPS=REMOVED_FROM_INCLUDE_PATH'
-echo 'RECOVERY_BACKEND_RESTART=1'
+echo 'RECOVERY_ACCEPTED_REVISION_REDEPLOY=1'
 echo 'RECOVERY_DNS_ACCESS_WRITE=0'
 echo 'RECOVERY_DATA_PLANE_MUTATION=0'
 echo 'RECOVERY_ROLLBACK=NOT_REQUIRED'
