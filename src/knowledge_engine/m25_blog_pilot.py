@@ -3,11 +3,14 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import io
 import json
 import os
 import re
+import tarfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 from collections.abc import Iterable
@@ -35,9 +38,9 @@ SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
 def canonical_bytes(value: Any) -> bytes:
-    return json.dumps(
-        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
 
 
 def sha256(value: bytes | str | Any) -> str:
@@ -94,7 +97,7 @@ class GitHubClient:
         self.token = token
         self.timeout = timeout
 
-    def _request_json(self, url: str) -> dict[str, Any]:
+    def _headers(self) -> dict[str, str]:
         headers = {
             "Accept": "application/vnd.github+json",
             "User-Agent": "knowledge-engine-m25-blog-pilot",
@@ -102,15 +105,15 @@ class GitHubClient:
         }
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
-        request = urllib.request.Request(url, headers=headers)
+        return headers
+
+    def _request_bytes(self, url: str) -> bytes:
+        request = urllib.request.Request(url, headers=self._headers())
         last_error: Exception | None = None
         for attempt in range(5):
             try:
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    payload = json.load(response)
-                if not isinstance(payload, dict):
-                    raise IntegrityError("M25-BLOG-001 GitHub returned a non-object")
-                return payload
+                    return response.read()
             except urllib.error.HTTPError as exc:
                 last_error = exc
                 if exc.code not in {429, 500, 502, 503, 504}:
@@ -119,6 +122,15 @@ class GitHubClient:
                 last_error = exc
             time.sleep(2**attempt)
         raise IntegrityError("M25-BLOG-003 GitHub request exhausted retries") from last_error
+
+    def _request_json(self, url: str) -> dict[str, Any]:
+        try:
+            payload = json.loads(self._request_bytes(url))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise IntegrityError("M25-BLOG-001 GitHub returned invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise IntegrityError("M25-BLOG-001 GitHub returned a non-object")
+        return payload
 
     def tree(self, repository: str, commit: str) -> list[TreeBlob]:
         url = f"https://api.github.com/repos/{repository}/git/trees/{commit}?recursive=1"
@@ -138,6 +150,54 @@ class GitHubClient:
             if isinstance(path, str) and isinstance(digest, str) and isinstance(size, int):
                 blobs.append(TreeBlob(path=path, sha=digest, size=size))
         return blobs
+
+    def resolve_commit(self, repository: str, ref: str) -> tuple[str, str]:
+        encoded = urllib.parse.quote(ref, safe="")
+        payload = self._request_json(f"https://api.github.com/repos/{repository}/commits/{encoded}")
+        commit = payload.get("sha")
+        commit_record = payload.get("commit")
+        committer = commit_record.get("committer") if isinstance(commit_record, dict) else None
+        committed_at = committer.get("date") if isinstance(committer, dict) else None
+        if (
+            not isinstance(commit, str)
+            or not re.fullmatch(r"[0-9a-f]{40}", commit)
+            or not isinstance(committed_at, str)
+            or not committed_at
+        ):
+            raise IntegrityError("M25-BLOG-005A GitHub commit identity is malformed")
+        return commit, committed_at
+
+    def archive_files(
+        self,
+        repository: str,
+        commit: str,
+        paths: Iterable[str],
+    ) -> dict[str, bytes]:
+        expected = set(paths)
+        if not expected or any(
+            path.startswith("/") or ".." in Path(path).parts for path in expected
+        ):
+            raise IntegrityError("M25-BLOG-005B archive path set is invalid")
+        encoded = urllib.parse.quote(commit, safe="")
+        data = self._request_bytes(f"https://api.github.com/repos/{repository}/tarball/{encoded}")
+        observed: dict[str, bytes] = {}
+        try:
+            with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+                for member in archive.getmembers():
+                    if not member.isfile():
+                        continue
+                    _prefix, separator, relative = member.name.partition("/")
+                    if not separator or relative not in expected:
+                        continue
+                    extracted = archive.extractfile(member)
+                    if extracted is None or relative in observed:
+                        raise IntegrityError("M25-BLOG-005C archive member is ambiguous")
+                    observed[relative] = extracted.read()
+        except tarfile.TarError as exc:
+            raise IntegrityError("M25-BLOG-005D GitHub archive is invalid") from exc
+        if set(observed) != expected:
+            raise IntegrityError("M25-BLOG-005E GitHub archive is incomplete")
+        return observed
 
     def blob(self, repository: str, blob_sha: str) -> bytes:
         url = f"https://api.github.com/repos/{repository}/git/blobs/{blob_sha}"
@@ -343,9 +403,7 @@ def partition_by_groups(
         for subtotal, selected in snapshot.items():
             total = subtotal + size
             candidate = selected + (index,)
-            if total <= batch_size and (
-                total not in choices or candidate < choices[total]
-            ):
+            if total <= batch_size and (total not in choices or candidate < choices[total]):
                 choices[total] = candidate
     if batch_size not in choices:
         counts = {group: len(members) for group, members in ordered}
@@ -435,9 +493,7 @@ def build_nodes_and_edges(
             }
         )
     series_node_ids = {
-        node["series_id"]: node["node_id"]
-        for node in nodes
-        if node["node_type"] == "Series"
+        node["series_id"]: node["node_id"] for node in nodes if node["node_type"] == "Series"
     }
     article_node_ids: dict[str, str] = {}
     for record in records:
@@ -515,18 +571,14 @@ def build_nodes_and_edges(
             edges.extend(
                 [
                     {
-                        "edge_id": stable_id(
-                            "edge", section_node_id, "part_of", article_node_id
-                        ),
+                        "edge_id": stable_id("edge", section_node_id, "part_of", article_node_id),
                         "source": section_node_id,
                         "target": article_node_id,
                         "type": "part_of",
                         "status": "candidate_structural",
                     },
                     {
-                        "edge_id": stable_id(
-                            "edge", article_node_id, "contains", section_node_id
-                        ),
+                        "edge_id": stable_id("edge", article_node_id, "contains", section_node_id),
                         "source": article_node_id,
                         "target": section_node_id,
                         "type": "contains",

@@ -270,8 +270,17 @@ def _active(document_digests: Mapping[str, str]) -> dict[str, Any]:
 def test_active_observer_uses_read_only_production_pointer_resolver(tmp_path: Path) -> None:
     store = FileObjectStore(tmp_path / "active-store")
     release_id = "active-production-fixture"
-    lexical = _json_bytes({"documents": [{"document_id": "article", "digest": "d" * 64}]})
+    source_index = _json_bytes({"entries": [{"source_id": "article", "content_sha256": "d" * 64}]})
+    lexical = _json_bytes(
+        {
+            "documents": [
+                {"source_id": "article", "section_id": "section-1"},
+                {"source_id": "article", "section_id": "section-2"},
+            ]
+        }
+    )
     payloads = {
+        "document_source_index": source_index,
         "graph": _json_bytes({"nodes": []}),
         "graph_v2": _json_bytes({"nodes": []}),
         "lexical_index": lexical,
@@ -290,7 +299,7 @@ def test_active_observer_uses_read_only_production_pointer_resolver(tmp_path: Pa
         "status": "candidate",
         "authority": {"production_pointer_authorized": False},
         "identities": {"source_commit_sha": "1" * 40, "admission_sha256": "2" * 64},
-        "counts": {"semantic_documents": 1},
+        "counts": {"semantic_documents": 2},
         "artifacts": artifacts,
     }
     candidate_key = f"releases/{release_id}/manifest.json"
@@ -329,8 +338,8 @@ def test_active_observer_uses_read_only_production_pointer_resolver(tmp_path: Pa
     assert observed["production_manifest_key"] == production_key
     assert observed["production_manifest_sha256"] == sha256_bytes(production_bytes)
     assert observed["document_count"] == 1
-    assert observed["lexical_chunk_count"] == 1
-    assert observed["vector_chunk_count"] == 1
+    assert observed["lexical_chunk_count"] == 2
+    assert observed["vector_chunk_count"] == 2
     assert observed["parity_basis"] == "manifest_counts"
     assert observed["qdrant_collection"] == "m26_blog_active_production_fixture"
 

@@ -41,11 +41,16 @@ jobs:
           JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
           JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
           JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+          KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+          QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
           RELEASE_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "git_sha must be an exact 40-character lowercase commit SHA"; exit 2; }
-          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET FULL_PRODUCTION_MANIFEST_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET FULL_PRODUCTION_MANIFEST_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE KNOWLEDGE_SOURCE_READ_TOKEN QDRANT_URL QDRANT_API_KEY CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_AI_TOKEN; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
       - name: Fail closed on production R2 manifest credential canary
@@ -89,15 +94,34 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
       - name: Record pre-mutation runtime identity and rollback receipt
+        id: checkpoint
         run: |
           set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          checkpoint="$(ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          container_id="$(docker compose ps -q knowledge-engine)"
+          test -n "$container_id"
+          image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+          runtime_sha="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$container_id" | sed -n 's/^M26_QUERY_BUILD_SHA=//p')"
+          [[ "$runtime_sha" =~ ^[0-9a-f]{40}$ ]]
+          rollback_tag="knowledge-engine-rollback:$runtime_sha"
+          existing_tag_id="$(docker image inspect "$rollback_tag" --format '{{.Id}}' 2>/dev/null || true)"
+          if [[ -n "$existing_tag_id" && "$existing_tag_id" != "$image_id" ]]; then
+            echo "ROLLBACK_TAG_IDENTITY_CONFLICT expected=$image_id actual=$existing_tag_id" >&2
+            exit 1
+          fi
+          if [[ -z "$existing_tag_id" ]]; then
+            docker image tag "$image_id" "$rollback_tag"
+          fi
+          test "$(docker image inspect "$rollback_tag" --format '{{.Id}}')" = "$image_id"
           {
             printf 'timestamp=%s\n' "$stamp"
             printf 'checkout_head=%s\n' "$(git rev-parse HEAD 2>/dev/null || true)"
+            printf 'runtime_sha=%s\n' "$runtime_sha"
+            printf 'image_id=%s\n' "$image_id"
+            printf 'rollback_tag=%s\n' "$rollback_tag"
             printf 'standard_compose_ps=\n'
             docker compose ps 2>/dev/null || true
             printf 'public_health=\n'
@@ -105,8 +129,18 @@ jobs:
           } > "/tmp/m26-predeploy-runtime-$stamp.txt"
           chmod 600 "/tmp/m26-predeploy-runtime-$stamp.txt"
           printf 'PREDEPLOY_RUNTIME_RECEIPT=%s\n' "/tmp/m26-predeploy-runtime-$stamp.txt"
+          printf 'ROLLBACK_SHA=%s\n' "$runtime_sha"
+          printf 'ROLLBACK_IMAGE_ID=%s\n' "$image_id"
           REMOTE
+          )"
+          printf '%s\n' "$checkpoint"
+          rollback_sha="$(printf '%s\n' "$checkpoint" | sed -n 's/^ROLLBACK_SHA=//p')"
+          rollback_image_id="$(printf '%s\n' "$checkpoint" | sed -n 's/^ROLLBACK_IMAGE_ID=//p')"
+          [[ "$rollback_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$rollback_image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'rollback_sha=%s\nrollback_image_id=%s\n' "$rollback_sha" "$rollback_image_id" >> "$GITHUB_OUTPUT"
       - name: Prepare repository and production environment
+        id: prepare
         env:
           AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
           JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
@@ -117,6 +151,11 @@ jobs:
           OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+          QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
@@ -137,24 +176,30 @@ jobs:
           KNOWLEDGE_CHANNEL=production
           CACHE_DIR=/var/lib/knowledge-engine/cache
           LOG_LEVEL=INFO
+          M26_INGESTION_ENABLED=true
+          M26_INGESTION_STATE_DB=/var/lib/knowledge-engine/ingestion/ingestion.sqlite3
+          M26_SOURCE_REPOSITORY=danielcanfly/daniel-blog
+          M26_SOURCE_REF=main
+          KNOWLEDGE_SOURCE_READ_TOKEN=$KNOWLEDGE_SOURCE_READ_TOKEN
+          QDRANT_URL=$QDRANT_URL
+          QDRANT_API_KEY=$QDRANT_API_KEY
+          CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID
+          CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN
           EOF_ENV
           if [ -n "${OWNER_BYPASS_SHA:-}" ]; then
             printf 'M26_ASK_OWNER_BYPASS_TOKEN_SHA256=%s\n' "$OWNER_BYPASS_SHA" >> /tmp/knowledge-engine.env
           fi
           scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          prepared="$(ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           chmod 600 .env.next
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          if [ -f .env ]; then
-            cp -p .env ".env.pre-deploy-$stamp"
-            chmod 600 ".env.pre-deploy-$stamp"
-            cp .env .env.merged
-          else
-            : > .env.merged
-            chmod 600 .env.merged
-          fi
+          test -f .env || { echo "Existing production .env is required for reversible deployment" >&2; exit 1; }
+          env_backup="$DEPLOY_PATH/.env.pre-deploy-$stamp"
+          cp -p .env "$env_backup"
+          chmod 600 "$env_backup"
+          cp .env .env.merged
           while IFS= read -r incoming || [ -n "$incoming" ]; do
             case "$incoming" in
               ''|\#*) continue ;;
@@ -171,16 +216,44 @@ jobs:
           chmod 600 .env.merged
           mv .env.merged .env
           rm .env.next
-          printf 'env_backup=%s\nenv_sha256=%s\n' ".env.pre-deploy-$stamp" "$(sha256sum .env | cut -d' ' -f1)"
+          printf 'ROLLBACK_ENV_FILE=%s\n' "$env_backup"
+          printf 'ROLLBACK_ENV_SHA256=%s\n' "$(sha256sum "$env_backup" | cut -d' ' -f1)"
+          printf 'CURRENT_ENV_SHA256=%s\n' "$(sha256sum .env | cut -d' ' -f1)"
           REMOTE
+          )"
+          printf '%s\n' "$prepared"
+          rollback_env_file="$(printf '%s\n' "$prepared" | sed -n 's/^ROLLBACK_ENV_FILE=//p')"
+          rollback_env_sha256="$(printf '%s\n' "$prepared" | sed -n 's/^ROLLBACK_ENV_SHA256=//p')"
+          test -n "$rollback_env_file"
+          [[ "$rollback_env_sha256" =~ ^[0-9a-f]{64}$ ]]
+          printf 'rollback_env_file=%s\nrollback_env_sha256=%s\n' "$rollback_env_file" "$rollback_env_sha256" >> "$GITHUB_OUTPUT"
           rm -f /tmp/knowledge-engine.env
       - name: Deploy exact requested revision
+        id: deploy
+        continue-on-error: true
         env:
           RELEASE_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+      - name: Restore exact predecessor after failed deployment
+        if: ${{ steps.deploy.outcome == 'failure' }}
+        env:
+          ROLLBACK_SHA: ${{ steps.checkpoint.outputs.rollback_sha }}
+          ROLLBACK_IMAGE_ID: ${{ steps.checkpoint.outputs.rollback_image_id }}
+          ROLLBACK_ENV_FILE: ${{ steps.prepare.outputs.rollback_env_file }}
+          ROLLBACK_ENV_SHA256: ${{ steps.prepare.outputs.rollback_env_sha256 }}
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' ROLLBACK_SHA='$ROLLBACK_SHA' ROLLBACK_IMAGE_ID='$ROLLBACK_IMAGE_ID' ROLLBACK_ENV_FILE='$ROLLBACK_ENV_FILE' ROLLBACK_ENV_SHA256='$ROLLBACK_ENV_SHA256' bash '$ORACLE_VM_DEPLOY_PATH/deploy/rollback.sh'"
+      - name: Fail deployment after successful predecessor restoration
+        if: ${{ steps.deploy.outcome == 'failure' }}
+        run: |
+          echo "Deployment failed; exact predecessor restoration completed" >&2
+          exit 1
       - name: Verify deployed standard runtime identity
+        if: ${{ steps.deploy.outcome == 'success' }}
         env:
           RELEASE_SHA: ${{ inputs.git_sha }}
         run: |
@@ -195,7 +268,7 @@ jobs:
           printf 'STANDARD_RUNTIME_HEAD=%s\nSTANDARD_RUNTIME_SHA=%s\n' "$actual" "$running"
           REMOTE
       - name: Optional public identity gate
-        if: ${{ inputs.require_public_identity }}
+        if: ${{ steps.deploy.outcome == 'success' && inputs.require_public_identity }}
         env:
           RELEASE_SHA: ${{ inputs.git_sha }}
         run: |

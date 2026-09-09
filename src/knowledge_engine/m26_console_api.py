@@ -11,26 +11,39 @@ from .m26_admin_settings import CANONICAL_ADMIN_API_VERSION, install_admin_setti
 from .m26_admin_usage import install_admin_usage
 from .m26_console_p05_ask_playground import router as playground_router
 from .m26_golden_questions_admin import install_golden_questions_admin
+from .m26_ingestion_runtime import (
+    CombinedCapabilityProvider,
+    build_runtime_ingestion_adapter_from_env,
+)
 from .m26_jobs_rollback_api import install_jobs_rollback_routes
 from .m26_public_api import create_app as create_public_app
 from .m26_qa_inbox_integration import install_qa_inbox
+from .m26_sqlite_ingestion import SQLiteIngestionAdapter
 from .m26_suggested_questions_admin import install_suggested_questions_admin
 
 
 def create_app():
     app = create_public_app()
     production_admin = production_admin_runtime_from_env()
+    durable_adapter = build_runtime_ingestion_adapter_from_env()
+    durable_store = (
+        durable_adapter.ledger if isinstance(durable_adapter, SQLiteIngestionAdapter) else None
+    )
     if production_admin is None:
-        install_admin_control_plane(app)
+        install_admin_control_plane(app, idempotency_store=durable_store)
     else:
         install_admin_control_plane(
             app,
-            capability_provider=production_admin.capability_provider,
+            capability_provider=CombinedCapabilityProvider(
+                production_admin.capability_provider,
+                durable_adapter,
+            ),
             audit_sink=production_admin.store,
-            idempotency_store=production_admin.store,
+            idempotency_store=durable_store or production_admin.store,
         )
+    if durable_adapter is not None:
+        app.state.m26_durable_ingestion_adapter = durable_adapter
     install_admin_overview(app)
-    durable_adapter = getattr(app.state, "m26_durable_ingestion_adapter", None)
     install_admin_ingestion_routes(app, adapter=durable_adapter, include_job_reads=True)
     install_admin_corpus(app)
     install_qa_inbox(app)

@@ -14,7 +14,8 @@ RUN python -m pip install --upgrade pip && python -m pip install .
 
 RUN mkdir -p /var/lib/knowledge-engine/cache \
     /var/lib/knowledge-engine/rate-limit \
-    /var/lib/knowledge-engine/public-api && \
+    /var/lib/knowledge-engine/public-api \
+    /var/lib/knowledge-engine/ingestion && \
     chown -R knowledge:knowledge /var/lib/knowledge-engine /app
 USER knowledge
 

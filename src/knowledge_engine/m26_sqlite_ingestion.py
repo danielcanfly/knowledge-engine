@@ -1443,25 +1443,61 @@ def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str,
     def observe() -> Mapping[str, Any]:
         try:
             active = resolve_active_production_release(store)
-            lexical = next(
-                item
-                for item in active.candidate_manifest.get("artifacts", [])
-                if item.get("kind") == "lexical_index"
+            artifact_rows = active.candidate_manifest.get("artifacts", [])
+            lexical = next(item for item in artifact_rows if item.get("kind") == "lexical_index")
+            source_index = next(
+                (item for item in artifact_rows if item.get("kind") == "document_source_index"),
+                None,
             )
-            lexical_bytes = store.get(str(lexical["key"]))
-            if sha256_bytes(lexical_bytes) != lexical.get("sha256"):
-                raise ValueError("active lexical artifact digest mismatch")
-            payload = json.loads(lexical_bytes)
-            documents = payload.get("documents", [])
-            digest_map = {
-                str(item["document_id"]): str(
-                    item.get("digest") or item.get("content_sha256") or item.get("source_digest")
+
+            def load_artifact(entry: Mapping[str, Any]) -> Mapping[str, Any]:
+                data = store.get(str(entry["key"]))
+                if sha256_bytes(data) != entry.get("sha256"):
+                    raise ValueError("active source identity artifact digest mismatch")
+                payload = json.loads(data)
+                if not isinstance(payload, Mapping):
+                    raise ValueError("active source identity artifact is malformed")
+                return payload
+
+            lexical_payload = load_artifact(lexical)
+            lexical_documents = lexical_payload.get("documents", [])
+            if not isinstance(lexical_documents, list):
+                raise ValueError("active lexical artifact documents are malformed")
+            if source_index is not None:
+                identity_payload = load_artifact(source_index)
+                documents = next(
+                    (
+                        identity_payload.get(key)
+                        for key in ("entries", "sources", "documents", "rows")
+                        if isinstance(identity_payload.get(key), list)
+                    ),
+                    None,
                 )
-                for item in documents
-                if isinstance(item, Mapping) and item.get("document_id")
-            }
+                id_keys = ("source_id", "document_id", "id")
+            else:
+                documents = lexical_documents
+                id_keys = ("document_id", "source_id")
+            if not isinstance(documents, list):
+                raise ValueError("active document source identity is unavailable")
+            digest_map: dict[str, str] = {}
+            for item in documents:
+                if not isinstance(item, Mapping):
+                    raise ValueError("active document source identity is malformed")
+                document_id = next(
+                    (str(item[key]) for key in id_keys if item.get(key)),
+                    "",
+                )
+                digest = str(
+                    item.get("content_sha256")
+                    or item.get("digest")
+                    or item.get("source_digest")
+                    or ""
+                )
+                if not document_id or not digest or document_id in digest_map:
+                    raise ValueError("active document source identity is incomplete")
+                digest_map[document_id] = digest
             if len(digest_map) != len(documents):
-                raise ValueError("active lexical artifact has incomplete document identity")
+                raise ValueError("active document source identity count mismatch")
             return {
                 "release_id": active.release_id,
                 "manifest_key": active.candidate_manifest_key,
@@ -1470,7 +1506,7 @@ def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str,
                 "production_manifest_sha256": active.production_manifest_sha256,
                 "document_digests": digest_map,
                 "document_count": len(digest_map),
-                "lexical_chunk_count": len(documents),
+                "lexical_chunk_count": len(lexical_documents),
                 "vector_chunk_count": active.semantic_point_count,
                 "parity_basis": "manifest_counts",
                 "source_revision": active.source_commit_sha,
