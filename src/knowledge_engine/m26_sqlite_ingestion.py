@@ -611,6 +611,17 @@ class SQLiteIngestionLedger:
     ) -> dict[str, Any]:
         target_job = "SUCCEEDED" if success else "FAILED"
         target_idem = "SUCCEEDED" if success else "FAILED"
+        candidate_release_id = None
+        candidate_manifest_key = None
+        candidate_manifest_sha256 = None
+        if success and result is not None:
+            candidate_release_id = result.get("release_id") or result.get("candidate_release_id")
+            candidate_manifest_key = result.get("manifest_key") or result.get(
+                "candidate_manifest_key"
+            )
+            candidate_manifest_sha256 = result.get("manifest_sha256") or result.get(
+                "candidate_manifest_sha256"
+            )
         with self._lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             idem = db.execute(
@@ -640,12 +651,15 @@ class SQLiteIngestionLedger:
                 (target_idem, now, lease.scope, lease.key_fingerprint),
             )
             db.execute(
-                "UPDATE ingestion_jobs SET status=?, phase=?, progress=?, result_json=?, error_code=?, error_detail=?, lease_owner=NULL, lease_expires_at=NULL, completed_at=?, version=version+1, updated_at=? WHERE job_id=?",
+                "UPDATE ingestion_jobs SET status=?, phase=?, progress=?, result_json=?, candidate_release_id=?, candidate_manifest_key=?, candidate_manifest_sha256=?, error_code=?, error_detail=?, lease_owner=NULL, lease_expires_at=NULL, completed_at=?, version=version+1, updated_at=? WHERE job_id=?",
                 (
                     target_job,
                     "finalize" if success else "failed",
                     100 if success else int(job["progress"]),
                     _json(result) if result is not None else None,
+                    candidate_release_id,
+                    candidate_manifest_key,
+                    candidate_manifest_sha256,
                     (error or {}).get("code"),
                     (error or {}).get("detail"),
                     now,
