@@ -1,0 +1,184 @@
+name: L3B Preservation Successor Builder Qualifier
+
+on:
+  push:
+    branches:
+      - ops/l3b-preservation-successor-builder-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  build-qualify-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 68fa4b437b778e6f44a885bafd0f42016bbf7142
+          fetch-depth: 0
+      - name: Merge exact L3-B backend and resolve only adjudicated seams
+        run: |
+          set -euo pipefail
+          git config user.name 'l3b-preservation-builder'
+          git config user.email 'l3b-preservation-builder@invalid.local'
+          git fetch --no-tags origin 543926766f85f0938ec5fe9b60c65a70c33d754d
+          set +e
+          git merge --no-commit --no-ff 543926766f85f0938ec5fe9b60c65a70c33d754d
+          rc=$?
+          set -e
+          test "$rc" -eq 1
+          actual="$(git diff --name-only --diff-filter=U | sort)"
+          expected=$'Dockerfile\nsrc/knowledge_engine/m26_public_api.py'
+          if [[ "$actual" != "$expected" ]]; then
+            echo 'UNEXPECTED_CONFLICT_SET'
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual"
+            exit 51
+          fi
+
+          git checkout --ours Dockerfile
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('Dockerfile')
+          s = p.read_text()
+          old = '''# The standard compose runtime and the public API use the same canonical app.\n# Deploy workflow identity gates still bind the immutable release SHA.\nCMD ["uvicorn", "knowledge_engine.m26_public_api:app", "--host", "0.0.0.0", "--port", "8080"]\n'''
+          new = '''# Production serves the current public runtime plus the accepted owner-only Admin app.\n# Public /v1/answers* remains available; /v1/admin/* stays fail-closed behind Admin controls.\nCMD ["uvicorn", "knowledge_engine.m26_console_api:app", "--host", "0.0.0.0", "--port", "8080"]\n'''
+          if old not in s:
+              raise SystemExit('Dockerfile resolution anchor missing')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+          git checkout --ours src/knowledge_engine/m26_public_api.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/knowledge_engine/m26_public_api.py')
+          s = p.read_text()
+
+          constants_anchor = 'PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"\nOWNER_BYPASS_HEADER = "x-m26-owner-bypass"\n'
+          constants_new = '''PUBLIC_HEALTH_SCHEMA = "danielcanfly-answers-health/v1"\n_QA_INTERNAL_CONTEXT_TTL_SECONDS = 300\n_QA_INTERNAL_CONTEXT_LIMIT = 256\n_qa_internal_context_lock = threading.Lock()\n_qa_internal_contexts: dict[str, tuple[float, dict[str, Any]]] = {}\nOWNER_BYPASS_HEADER = "x-m26-owner-bypass"\n'''
+          if constants_anchor not in s:
+              raise SystemExit('QA constants anchor missing')
+          s = s.replace(constants_anchor, constants_new, 1)
+
+          dto_anchor = '''                dto = dict(item.get("dto") if isinstance(item.get("dto"), Mapping) else {})\n                for event in _model_events_from_dto(dto):\n'''
+          dto_new = '''                dto = dict(item.get("dto") if isinstance(item.get("dto"), Mapping) else {})\n                _publish_qa_internal_context(admission.request_id, dto)\n                for event in _model_events_from_dto(dto):\n'''
+          if dto_anchor not in s:
+              raise SystemExit('QA publish anchor missing')
+          s = s.replace(dto_anchor, dto_new, 1)
+
+          func_anchor = '\ndef _public_citations(value: Any) -> list[dict[str, Any]]:\n'
+          funcs = r'''
+
+def _publish_qa_internal_context(request_id: str, dto: Mapping[str, Any]) -> None:
+    """Publish evidence to the in-process QA observer without changing public SSE."""
+    allowed = {
+        "selected_evidence",
+        "evidence_utilization_trace",
+        "semantic_closure",
+        "retrieval",
+        "integrity",
+        "identities",
+        "canonical_runtime",
+        "reason_codes",
+        "safe_abstention",
+        "status",
+    }
+    context = {key: dto[key] for key in allowed if key in dto}
+    now = time.monotonic()
+    with _qa_internal_context_lock:
+        expired = [
+            key
+            for key, (created, _) in _qa_internal_contexts.items()
+            if now - created > _QA_INTERNAL_CONTEXT_TTL_SECONDS
+        ]
+        for key in expired:
+            _qa_internal_contexts.pop(key, None)
+        while len(_qa_internal_contexts) >= _QA_INTERNAL_CONTEXT_LIMIT:
+            oldest = min(_qa_internal_contexts, key=lambda key: _qa_internal_contexts[key][0])
+            _qa_internal_contexts.pop(oldest, None)
+        _qa_internal_contexts[request_id] = (now, context)
+
+
+def consume_qa_internal_context(request_id: str) -> dict[str, Any]:
+    """Consume a one-shot backend-only QA context for the completed request."""
+    with _qa_internal_context_lock:
+        item = _qa_internal_contexts.pop(request_id, None)
+    if item is None or time.monotonic() - item[0] > _QA_INTERNAL_CONTEXT_TTL_SECONDS:
+        return {}
+    return item[1]
+'''
+          if func_anchor not in s:
+              raise SystemExit('QA function anchor missing')
+          s = s.replace(func_anchor, funcs + func_anchor, 1)
+          p.write_text(s)
+          PY
+
+          git add Dockerfile src/knowledge_engine/m26_public_api.py
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --cached --check
+          grep -Fq 'knowledge_engine.m26_console_api:app' Dockerfile
+          grep -Fq 'OWNER_BYPASS_HEADER = "x-m26-owner-bypass"' src/knowledge_engine/m26_public_api.py
+          grep -Fq 'def consume_qa_internal_context' src/knowledge_engine/m26_public_api.py
+          grep -Fq '_publish_qa_internal_context(admission.request_id, dto)' src/knowledge_engine/m26_public_api.py
+          echo 'MERGE_RESOLUTION=PASS'
+
+      - name: Install qualification dependencies
+        run: python -m pip install -e '.[dev]'
+
+      - name: Compileall
+        run: python -m compileall -q src
+
+      - name: L3-B QA Admin and current-production regression tests
+        run: |
+          set -euo pipefail
+          tests=(
+            tests/test_qa_answer_quality.py
+            tests/test_qa_answer_quality_r1.py
+            tests/test_qa_failure_clustering.py
+            tests/test_qa_inbox_api_completeness.py
+            tests/test_suggested_questions_promotion.py
+            tests/test_m26_admin_qa.py
+            tests/test_m26_suggested_questions_admin.py
+            tests/test_m26_admin_openapi.py
+            tests/test_m26_aq_production_entrypoint.py
+            tests/test_m26_pa7_final_web_readiness.py
+            tests/test_m26_sm95_release_runtime_contract.py
+          )
+          extras=()
+          for pattern in \
+            'tests/test_m26_public*.py' \
+            'tests/test_*daily*rate*limit*.py' \
+            'tests/test_m26_owner*.py' \
+            'tests/test_m26_production*.py' \
+            'tests/test_m26_*health*.py'; do
+            for f in $pattern; do
+              [[ -f "$f" ]] && extras+=("$f")
+            done
+          done
+          printf 'EXTRA_REGRESSION_TESTS=%s\n' "${extras[*]:-NONE}"
+          python -m pytest -q "${tests[@]}" "${extras[@]}"
+
+      - name: Authority-equivalent bounded Ruff
+        run: |
+          set -euo pipefail
+          mapfile -t pyfiles < <(git diff --cached --name-only --diff-filter=ACMR | grep -E '^(src/knowledge_engine|tests)/.*\.py$' || true)
+          test "${#pyfiles[@]}" -gt 0
+          ruff check --select E,F,I --ignore E501 "${pyfiles[@]}"
+
+      - name: Docker build qualification
+        run: |
+          set -euo pipefail
+          docker build -t l3b-preservation-successor:qualify .
+          docker inspect l3b-preservation-successor:qualify --format '{{json .Config.User}} {{json .Config.Healthcheck.Test}} {{json .Config.Cmd}}'
+
+      - name: Seal and publish exact successor merge commit
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '68fa4b437b778e6f44a885bafd0f42016bbf7142'
+          test "$(git rev-parse MERGE_HEAD)" = '543926766f85f0938ec5fe9b60c65a70c33d754d'
+          git commit -m 'merge(l3b): preserve production main and QA inbox backend'
+          successor="$(git rev-parse HEAD)"
+          echo "SUCCESSOR_COMMIT=$successor"
+          echo "SUCCESSOR_TREE=$(git rev-parse HEAD^{tree})"
+          echo "PARENT1=$(git rev-parse HEAD^1)"
+          echo "PARENT2=$(git rev-parse HEAD^2)"
+          git push origin HEAD:refs/heads/p0/qa-answer-quality-inbox-production-successor-20260909
