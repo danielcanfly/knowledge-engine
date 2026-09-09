@@ -20,7 +20,7 @@ jobs:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
-      TARGET_SHA: db21f14e11863c25540045766cb8b5f880162c6b
+      TARGET_SHA: 51d464565601d3f1c0301d87c3f0efcec9e68f6d
       PREDECESSOR_SHA: 68fa4b437b778e6f44a885bafd0f42016bbf7142
     steps:
       - name: Configure production SSH authority
@@ -68,7 +68,7 @@ jobs:
           echo 'PRODUCTION_MUTATION=0'
           REMOTE
 
-      - name: Deploy exact qualified R1 backend
+      - name: Deploy exact qualified R2 backend
         run: |
           set -euo pipefail
           touch /tmp/l3b-production-mutation-started
