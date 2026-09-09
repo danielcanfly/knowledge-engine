@@ -1,0 +1,146 @@
+name: L3B R1 Final Production Runtime Qualifier
+
+on:
+  push:
+    branches:
+      - ops/l3b-r1-final-qualifier-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact R1 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 416c69482117f9c58ba9563ccafafe6705bb24e6
+          fetch-depth: 1
+
+      - name: Seal source identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "416c69482117f9c58ba9563ccafafe6705bb24e6"
+          echo "R1_CANDIDATE_SHA=$(git rev-parse HEAD)"
+          echo "R1_CANDIDATE_TREE=$(git rev-parse HEAD^{tree})"
+
+      - name: Install qualification dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]'
+          python -m pip install ruff==0.15.20
+
+      - name: Static and contract qualification
+        run: |
+          set -euo pipefail
+          python -m compileall -q src
+          python -m pytest -q tests/test_l3b_production_compose_wiring.py
+          python -m pytest -q tests/test_l3b_production_admin_binding.py
+          python -m pytest -q tests/test_l3b_console_runtime_binding.py
+          python -m pytest -q \
+            tests/test_qa_answer_quality.py \
+            tests/test_qa_answer_quality_r1.py \
+            tests/test_qa_failure_clustering.py \
+            tests/test_qa_inbox_api_completeness.py \
+            tests/test_suggested_questions_promotion.py \
+            tests/test_m26_admin_qa.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_m26_admin_openapi.py \
+            tests/test_m26_aq_production_entrypoint.py
+          for f in \
+            tests/test_m26_public_api.py \
+            tests/test_m26_public_api_acceptance_edges.py \
+            tests/test_m26_public_api_execution_truth.py \
+            tests/test_m26_public_cutover_gate.py \
+            tests/test_m26_daily_ip_rate_limit.py \
+            tests/test_m26_production_answer_bundle.py; do
+            python -m pytest -q "$f"
+          done
+          python -m pytest -q tests/test_m26_admin_health.py
+          ruff check --select E,F,I --ignore E501 \
+            src/knowledge_engine/m26_admin_production.py \
+            src/knowledge_engine/m26_console_api.py \
+            src/knowledge_engine/m26_public_api.py \
+            src/knowledge_engine/m26_qa_inbox_integration.py \
+            src/knowledge_engine/qa_answer_quality.py \
+            src/knowledge_engine/qa_answer_quality_evaluator.py \
+            src/knowledge_engine/qa_answer_quality_sqlite.py \
+            src/knowledge_engine/qa_failure_clustering.py \
+            src/knowledge_engine/m26_admin_qa.py \
+            src/knowledge_engine/m26_suggested_questions_admin.py \
+            src/knowledge_engine/suggested_questions_promotion.py \
+            src/knowledge_engine/suggested_questions_scoring.py \
+            tests/test_l3b_production_compose_wiring.py \
+            tests/test_l3b_production_admin_binding.py \
+            tests/test_l3b_console_runtime_binding.py
+
+      - name: Production compose runtime rehearsal
+        run: |
+          set -euo pipefail
+          : > .env
+          export COMPOSE_PROJECT_NAME=l3br1qual
+          cleanup() { docker compose down -v --remove-orphans >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+
+          docker compose config > /tmp/l3b-r1-compose.yml
+          grep -F 'knowledge_engine.m26_console_api:app' /tmp/l3b-r1-compose.yml
+          grep -F 'M26_QA_DB_PATH' /tmp/l3b-r1-compose.yml
+          grep -F 'M26_ADMIN_CONTROL_DB_PATH' /tmp/l3b-r1-compose.yml
+          grep -F 'M26_L3B_ADMIN_QUALIFIED' /tmp/l3b-r1-compose.yml
+          if grep -F 'knowledge_engine.m26_public_api:app' /tmp/l3b-r1-compose.yml; then
+            echo 'PUBLIC_ONLY_COMPOSE_ENTRYPOINT_PRESENT' >&2
+            exit 1
+          fi
+
+          docker compose build --pull
+          docker compose run --rm --no-deps knowledge-engine python - <<'PY'
+          from pathlib import Path
+          from knowledge_engine.m26_admin_production import L3B_CAPABILITY_IDS, SqliteAdminControlStore
+          from knowledge_engine.m26_console_api import app
+          from knowledge_engine.m26_qa_inbox_integration import qa_repository_from_env
+
+          caps = app.state.admin_capability_provider.list_capabilities()
+          assert [item.capability_id for item in caps] == sorted(L3B_CAPABILITY_IDS)
+          assert isinstance(app.state.admin_audit_sink, SqliteAdminControlStore)
+          assert app.state.admin_audit_sink is app.state.admin_idempotency_store
+          paths = {route.path for route in app.routes}
+          assert '/v1/answers/health' in paths
+          assert '/v1/admin/qa/inbox/events' in paths
+          assert '/v1/admin/suggested-questions/promotions/preview' in paths
+          repo = qa_repository_from_env()
+          assert repo.db_path == Path('/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3')
+          assert app.state.admin_audit_sink.db_path == Path('/var/lib/knowledge-engine/public-api/admin-control.sqlite3')
+          probe = Path('/var/lib/knowledge-engine/public-api/runtime-write-probe')
+          probe.write_text('ok')
+          assert probe.read_text() == 'ok'
+          probe.unlink()
+          print('R1_COMBINED_APP_CAPABILITIES=PASS')
+          print('R1_DURABLE_STORE_WRITE=PASS')
+          PY
+
+          image_id="$(docker compose images -q knowledge-engine | head -n1)"
+          test -n "$image_id"
+          test "$(docker inspect "$image_id" --format '{{.Config.User}}')" = knowledge
+
+          docker compose up -d --remove-orphans
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8080/v1/answers/health >/tmp/public-health.json; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/public-health.json
+          python - <<'PY'
+          import json
+          payload = json.load(open('/tmp/public-health.json'))
+          assert payload.get('ok') is True, payload
+          print('R1_PUBLIC_HEALTH=PASS')
+          PY
+
+          admin_status="$(curl --silent --output /tmp/admin-body.json --write-out '%{http_code}' http://127.0.0.1:8080/v1/admin/qa/inbox/events)"
+          test "$admin_status" = 503
+          grep -F 'ADMIN_AUTH_CONFIGURATION_MISSING' /tmp/admin-body.json
+          echo 'R1_ADMIN_ROUTE_FAIL_CLOSED_WITHOUT_ACCESS_CONFIG=PASS'
+          echo 'L3B_R1_PRODUCTION_COMPOSE_REHEARSAL=PASS'
+          echo 'PRODUCTION_MUTATION=0'
