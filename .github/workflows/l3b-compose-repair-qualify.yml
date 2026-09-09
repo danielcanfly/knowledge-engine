@@ -1,0 +1,81 @@
+name: L3B Production Compose Repair Qualifier
+
+on:
+  push:
+    branches:
+      - fix/l3b-production-compose-wiring-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/l3b-production-compose-wiring-20260909
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install -e '.[dev]'
+          python -m pip install ruff==0.15.20
+      - name: Static and contract qualification
+        run: |
+          set -euo pipefail
+          python -m compileall -q src
+          python -m pytest -q tests/test_l3b_production_compose_wiring.py
+          python -m pytest -q \
+            tests/test_qa_answer_quality.py \
+            tests/test_qa_answer_quality_r1.py \
+            tests/test_qa_failure_clustering.py \
+            tests/test_qa_inbox_api_completeness.py \
+            tests/test_suggested_questions_promotion.py \
+            tests/test_m26_admin_qa.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_m26_admin_openapi.py \
+            tests/test_m26_aq_production_entrypoint.py
+          for f in \
+            tests/test_m26_public_api.py \
+            tests/test_m26_public_api_acceptance_edges.py \
+            tests/test_m26_public_api_execution_truth.py \
+            tests/test_m26_public_cutover_gate.py \
+            tests/test_m26_daily_ip_rate_limit.py \
+            tests/test_m26_production_answer_bundle.py; do
+            python -m pytest -q "$f"
+          done
+          python -m pytest -q tests/test_m26_admin_health.py
+          ruff check --select E,F,I --ignore E501 \
+            src/knowledge_engine/m26_public_api.py \
+            src/knowledge_engine/m26_console_api.py \
+            src/knowledge_engine/m26_qa_inbox_integration.py \
+            src/knowledge_engine/qa_answer_quality.py \
+            src/knowledge_engine/qa_answer_quality_evaluator.py \
+            src/knowledge_engine/qa_answer_quality_sqlite.py \
+            src/knowledge_engine/qa_failure_clustering.py \
+            src/knowledge_engine/m26_admin_qa.py \
+            src/knowledge_engine/m26_suggested_questions_admin.py \
+            src/knowledge_engine/suggested_questions_promotion.py \
+            src/knowledge_engine/suggested_questions_scoring.py \
+            tests/test_l3b_production_compose_wiring.py
+      - name: Production-compose runtime rehearsal
+        run: |
+          set -euo pipefail
+          : > .env
+          export COMPOSE_PROJECT_NAME=l3bcomposequal
+          trap 'docker compose down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
+          docker compose config > /tmp/l3b-compose-config.yml
+          grep -F 'knowledge_engine.m26_console_api:app' /tmp/l3b-compose-config.yml
+          grep -F '/var/lib/knowledge-engine/public-api' /tmp/l3b-compose-config.yml
+          if grep -F 'knowledge_engine.m26_public_api:app' /tmp/l3b-compose-config.yml; then
+            echo 'PUBLIC_ONLY_COMPOSE_ENTRYPOINT_PRESENT' >&2
+            exit 1
+          fi
+          docker compose build --pull
+          docker compose run --rm --no-deps knowledge-engine \
+            python -c "from pathlib import Path; p=Path('/var/lib/knowledge-engine/public-api/qa-write-probe'); p.write_text('ok'); assert p.read_text() == 'ok'; p.unlink(); print('QA_VOLUME_WRITE=PASS')"
+          image_id="$(docker compose images -q knowledge-engine | head -n1)"
+          test -n "$image_id"
+          test "$(docker inspect "$image_id" --format '{{.Config.User}}')" = knowledge
+          echo 'L3B_PRODUCTION_COMPOSE_REHEARSAL=PASS'
+          echo 'PRODUCTION_MUTATION=0'
