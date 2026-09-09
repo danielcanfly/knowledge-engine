@@ -1,0 +1,107 @@
+name: L3B Production Runtime Census Read Only
+
+on:
+  push:
+    branches:
+      - ops/l3b-production-runtime-census-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+    steps:
+      - name: Require read-only SSH seam
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH; do
+            test -n "${!name:-}" || { echo "RUNTIME_CENSUS_AUTH_SEAM=MISSING:$name"; exit 42; }
+          done
+          echo "RUNTIME_CENSUS_AUTH_SEAM=SET"
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
+      - name: Read current production runtime identity and QA capability
+        run: |
+          set -euo pipefail
+          set +x
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          set +x
+          cd "$DEPLOY_PATH"
+          printf 'CHECKOUT_HEAD=%s\n' "$(git rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
+          if docker compose ps --status running --services 2>/dev/null | grep -qx 'knowledge-engine'; then
+            echo 'SERVICE_RUNNING=YES'
+          else
+            echo 'SERVICE_RUNNING=NO'
+            exit 43
+          fi
+          docker compose exec -T knowledge-engine sh -lc 'printf "RUNTIME_BUILD_SHA=%s\n" "${M26_QUERY_BUILD_SHA:-UNKNOWN}"'
+          docker compose exec -T knowledge-engine python - <<'PY'
+          from pathlib import Path
+          import importlib.util
+          mods = [
+              'knowledge_engine.m26_qa_inbox_integration',
+              'knowledge_engine.qa_answer_quality',
+              'knowledge_engine.qa_answer_quality_sqlite',
+              'knowledge_engine.m26_admin_qa',
+              'knowledge_engine.m26_suggested_questions_admin',
+              'knowledge_engine.m26_console_api',
+          ]
+          for m in mods:
+              try:
+                  present = importlib.util.find_spec(m) is not None
+              except Exception:
+                  present = False
+              print(f'MODULE_{m.rsplit(".",1)[-1].upper()}={"YES" if present else "NO"}')
+          roots = [Path('/app/src/knowledge_engine'), Path('/app/knowledge_engine')]
+          root = next((p for p in roots if p.exists()), None)
+          if root is None:
+              print('SOURCE_ROOT=UNKNOWN')
+          else:
+              print(f'SOURCE_ROOT={root}')
+              needles = [
+                  '/v1/admin/qa',
+                  'Export New Failures',
+                  'suggested-questions',
+                  'failure',
+              ]
+              corpus = ''
+              for p in root.glob('*.py'):
+                  try:
+                      corpus += p.read_text(errors='ignore') + '\n'
+                  except Exception:
+                      pass
+              for needle in needles:
+                  key = ''.join(c if c.isalnum() else '_' for c in needle).upper().strip('_')
+                  print(f'SOURCE_CONTAINS_{key}={"YES" if needle in corpus else "NO"}')
+          PY
+          printf 'PUBLIC_HEALTH='; curl --fail --silent --show-error --max-time 10 https://api.danielcanfly.com/v1/answers/health | python3 -c 'import json,sys; d=json.load(sys.stdin); print("OK" if d.get("ok") else "NOT_OK")' || echo FAIL
+          REMOTE
+      - name: Mutation guard receipt
+        if: always()
+        run: |
+          echo 'PRODUCTION_DEPLOY=0'
+          echo 'PRODUCTION_ROLLBACK=0'
+          echo 'PRODUCTION_ENV_WRITE=0'
+          echo 'PRODUCTION_RESTART=0'
+          echo 'PRODUCTION_DNS_ACCESS_WRITE=0'
+          echo 'R2_MUTATION=0'
+          echo 'QDRANT_MUTATION=0'
+          echo 'SOURCE_PRODUCT_MUTATION=0'
