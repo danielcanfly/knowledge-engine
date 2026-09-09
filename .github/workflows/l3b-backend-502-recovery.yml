@@ -2,6 +2,9 @@ name: L3B Backend 502 Minimal Recovery
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - codex/l3b-backend-502-forensics-20260909
 
 permissions:
   contents: read
