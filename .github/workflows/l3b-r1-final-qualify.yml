@@ -124,21 +124,30 @@ jobs:
           print('R1_DURABLE_STORE_WRITE=PASS')
           PY
 
-          echo 'R1_IMAGE_DIAGNOSTIC_BEGIN'
-          docker compose images
           docker image inspect knowledge-engine:0.2.0 --format 'R1_IMAGE_USER={{.Config.User}}'
           test "$(docker image inspect knowledge-engine:0.2.0 --format '{{.Config.User}}')" = knowledge
           echo 'R1_IMAGE_NON_ROOT=PASS'
 
           docker compose up -d --remove-orphans
-          docker compose ps
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent --max-time 3 http://127.0.0.1:8080/v1/answers/health >/tmp/public-health.json; then
+          healthy=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:8080/v1/answers/health >/tmp/public-health.json; then
+              healthy=1
               break
             fi
             sleep 1
           done
-          test -s /tmp/public-health.json
+          if [ "$healthy" -ne 1 ]; then
+            echo 'R1_STARTUP_DIAGNOSTIC_BEGIN'
+            docker compose ps -a || true
+            docker compose logs --no-color --tail=200 knowledge-engine || true
+            cid="$(docker compose ps -aq knowledge-engine | head -n1)"
+            if [ -n "$cid" ]; then
+              docker inspect "$cid" --format 'STATE={{json .State}}' || true
+            fi
+            echo 'R1_STARTUP_DIAGNOSTIC_END'
+            exit 1
+          fi
           python - <<'PY'
           import json
           payload = json.load(open('/tmp/public-health.json'))
