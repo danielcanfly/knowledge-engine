@@ -27,6 +27,12 @@ def test_console_app_binds_only_qualified_l3b_controls_when_explicitly_enabled(
     assert "/v1/admin/suggested-questions/promotions/{promotion_id}/publish" in paths
 
 
+def test_console_app_preserves_canonical_public_runtime_contract() -> None:
+    import knowledge_engine.m26_console_api as console_api
+
+    assert console_api.create_public_app.__module__ == "knowledge_engine.m26_public_api"
+
+
 def test_console_app_remains_fail_closed_without_explicit_production_binding(
     monkeypatch,
 ) -> None:
