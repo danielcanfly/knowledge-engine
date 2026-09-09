@@ -71,10 +71,18 @@ jobs:
           print('BACKEND_HEALTH_IDENTITY=PASS')
           PY
 
-          admin_code="$(curl --silent --output /tmp/admin.json --write-out '%{http_code}' --max-time 15 https://api.danielcanfly.com/v1/admin/qa/inbox/events || true)"
+          admin_code="$(curl --silent --output /tmp/admin.body --dump-header /tmp/admin.headers --write-out '%{http_code}' --max-time 15 https://api.danielcanfly.com/v1/admin/qa/inbox/events || true)"
           echo "QA_ADMIN_UNAUTH_STATUS=$admin_code"
-          test "$admin_code" = 401
-          grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/admin.json
+          if [ "$admin_code" = 401 ]; then
+            grep -F 'ADMIN_ACCESS_ASSERTION_MISSING' /tmp/admin.body
+            echo 'QA_ADMIN_UNAUTH_APP_401=PASS'
+          elif [ "$admin_code" = 302 ] && grep -Eiq 'location: .*cloudflareaccess|cf-access' /tmp/admin.headers; then
+            echo 'QA_ADMIN_UNAUTH_EDGE_ACCESS_REDIRECT=PASS'
+          else
+            cat /tmp/admin.headers || true
+            head -c 1000 /tmp/admin.body || true
+            exit 1
+          fi
           echo 'QA_ADMIN_UNAUTH_FAIL_CLOSED=PASS'
           echo 'BACKEND_QA_RUNTIME=PASS'
 
