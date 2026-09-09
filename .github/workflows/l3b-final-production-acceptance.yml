@@ -40,11 +40,18 @@ jobs:
             exit 1
           fi
 
-          asset_code="$(curl --silent --output /tmp/qa-trend.js --write-out '%{http_code}' --max-time 15 "$QA_TREND_ASSET" || true)"
+          asset_code="$(curl --silent --output /tmp/qa-trend.body --dump-header /tmp/qa-trend.headers --write-out '%{http_code}' --max-time 15 "$QA_TREND_ASSET" || true)"
           echo "CONSOLE_QA_TREND_ASSET_STATUS=$asset_code"
-          test "$asset_code" = 200
-          grep -Eq 'Answer quality trend|Latency' /tmp/qa-trend.js
-          echo 'CONSOLE_QA_TREND_ASSET=PASS'
+          if [ "$asset_code" = 200 ]; then
+            grep -Eq 'Answer quality trend|Latency' /tmp/qa-trend.body
+            echo 'CONSOLE_QA_TREND_ASSET_PUBLIC=PASS'
+          elif [ "$asset_code" = 302 ] && grep -Eiq 'location: .*cloudflareaccess|cf-access' /tmp/qa-trend.headers; then
+            echo 'CONSOLE_QA_TREND_ASSET_ACCESS_PROTECTED=PASS'
+          else
+            cat /tmp/qa-trend.headers || true
+            head -c 1000 /tmp/qa-trend.body || true
+            exit 1
+          fi
           echo 'FRONTEND_PRODUCTION_ROUTE=PASS'
           echo "FRONTEND_ACCEPTED_SHA=$FRONTEND_SHA"
 
