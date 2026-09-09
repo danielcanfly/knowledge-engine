@@ -37,6 +37,7 @@ from .m26_ingestion_candidate_writer import (
     stage_candidate_release,
 )
 from .m26_jobs_rollback_api import EvidenceObservation
+from .storage import sha256_bytes
 
 SCHEMA_VERSION = "knowledge-engine-m26-sqlite-ingestion/v1"
 DEFAULT_INGESTION_STATE_DB = "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3"
@@ -419,7 +420,8 @@ class SQLiteIngestionLedger:
     def list_jobs(self, limit: int = 100) -> list[dict[str, Any]]:
         with self._connect() as db:
             rows = db.execute(
-                "SELECT * FROM ingestion_jobs ORDER BY updated_at DESC LIMIT ?",
+                "SELECT * FROM ingestion_jobs "
+                "ORDER BY updated_at DESC, completed_at DESC, created_at DESC, job_id ASC LIMIT ?",
                 (min(max(limit, 1), 500),),
             ).fetchall()
         return [self._job(row) for row in rows]
@@ -687,6 +689,137 @@ class SQLiteIngestionLedger:
                 )
 
 
+def _health_observer_error(exc: Exception, fallback: str) -> dict[str, str]:
+    return {
+        "reason_code": str(getattr(exc, "code", fallback)),
+        "detail": "Index health evidence could not be observed.",
+    }
+
+
+def _candidate_job_for_health(jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    running = next(
+        (job for job in jobs if str(job.get("status", "")).upper() in {"PENDING", "RUNNING"}),
+        None,
+    )
+    if running is not None:
+        return running
+    successful = next(
+        (
+            job
+            for job in jobs
+            if str(job.get("status", "")).upper() == "SUCCEEDED" and job.get("candidate_release_id")
+        ),
+        None,
+    )
+    if successful is not None:
+        return successful
+    return next(
+        (job for job in jobs if str(job.get("status", "")).upper() == "FAILED"),
+        None,
+    )
+
+
+def _current_index_observation(
+    *,
+    ledger: SQLiteIngestionLedger,
+    source_observer: Callable[[], Mapping[str, Any]] | None,
+    active_manifest_observer: Callable[[], Mapping[str, Any]] | None,
+    candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None,
+    missing_seams: list[str],
+) -> ReadObservation:
+    evidence: dict[str, Any] = {
+        "schema_version": "m26-index-health-evidence/v1",
+        "active": None,
+        "active_error": None,
+        "source": None,
+        "source_error": None,
+        "jobs": ledger.list_jobs(),
+        "candidate_job": None,
+        "candidate_manifest": None,
+        "candidate_manifest_error": None,
+        "missing_seams": sorted(missing_seams),
+    }
+    if source_observer is None:
+        evidence["source_error"] = {
+            "reason_code": "ADMIN_INGESTION_SOURCE_OBSERVER_UNQUALIFIED",
+            "detail": "Dynamic source observer is not configured.",
+        }
+    else:
+        try:
+            source = dict(source_observer())
+            if not isinstance(source.get("documents"), list):
+                raise ValueError("source documents are unavailable")
+            source.setdefault("source_identity_digest", _hash({"documents": source["documents"]}))
+            evidence["source"] = source
+        except Exception as exc:
+            evidence["source_error"] = _health_observer_error(
+                exc, "ADMIN_INGESTION_SOURCE_UNAVAILABLE"
+            )
+
+    if active_manifest_observer is None:
+        evidence["active_error"] = {
+            "reason_code": "ADMIN_INGESTION_ACTIVE_OBSERVER_UNQUALIFIED",
+            "detail": "Active production observer is not configured.",
+        }
+    else:
+        try:
+            active = dict(active_manifest_observer())
+            if not isinstance(active.get("document_digests"), Mapping):
+                raise ValueError("active document identities are unavailable")
+            evidence["active"] = active
+        except Exception as exc:
+            evidence["active_error"] = _health_observer_error(
+                exc, "ADMIN_INGESTION_ACTIVE_MANIFEST_UNAVAILABLE"
+            )
+
+    candidate_job = _candidate_job_for_health(evidence["jobs"])
+    evidence["candidate_job"] = candidate_job
+    if candidate_job is not None and candidate_job.get("candidate_release_id"):
+        key = candidate_job.get("candidate_manifest_key")
+        digest = candidate_job.get("candidate_manifest_sha256")
+        if not isinstance(key, str) or not isinstance(digest, str):
+            evidence["candidate_manifest_error"] = {
+                "reason_code": "ADMIN_INGESTION_CANDIDATE_MANIFEST_IDENTITY_MISSING",
+                "detail": "Durable candidate manifest identity is incomplete.",
+            }
+        elif candidate_manifest_observer is None:
+            evidence["candidate_manifest_error"] = {
+                "reason_code": "ADMIN_INGESTION_CANDIDATE_MANIFEST_OBSERVER_UNQUALIFIED",
+                "detail": "Candidate manifest observer is not configured.",
+            }
+        else:
+            try:
+                evidence["candidate_manifest"] = dict(candidate_manifest_observer(key, digest))
+            except Exception as exc:
+                evidence["candidate_manifest_error"] = _health_observer_error(
+                    exc, "ADMIN_INGESTION_CANDIDATE_MANIFEST_UNAVAILABLE"
+                )
+
+    errors = [
+        evidence["active_error"],
+        evidence["source_error"],
+        evidence["candidate_manifest_error"],
+    ]
+    partial = any(item is not None for item in errors) or bool(missing_seams)
+    reason_code = None
+    if partial:
+        first = next((item for item in errors if isinstance(item, Mapping)), None)
+        reason_code = str(
+            (first or {}).get("reason_code") or "ADMIN_INGESTION_RUNTIME_SEAMS_UNQUALIFIED"
+        )
+    return ReadObservation(
+        availability="partial" if partial else "available",
+        data=evidence,
+        source="sqlite_ingestion_health_authority",
+        freshness="live",
+        observed_at=utc_now(),
+        reason_code=reason_code,
+        detail="Index health contains explicit unavailable evidence." if partial else None,
+        resource_identity={"path": str(ledger.path)},
+        evidence_digest=_hash(evidence),
+    )
+
+
 class SQLiteIngestionAdapter:
     """Durable orchestration adapter around dynamic observers and candidate executor."""
 
@@ -696,11 +829,13 @@ class SQLiteIngestionAdapter:
         *,
         source_observer: Callable[[], Mapping[str, Any]] | None = None,
         active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
+        candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
         candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
     ) -> None:
         self.ledger = ledger
         self.source_observer = source_observer
         self.active_manifest_observer = active_manifest_observer
+        self.candidate_manifest_observer = candidate_manifest_observer
         self.candidate_executor = candidate_executor
 
     def _unavailable(self, reason: str) -> ReadObservation:
@@ -736,7 +871,13 @@ class SQLiteIngestionAdapter:
         )
 
     def current_index(self) -> ReadObservation:
-        return self._unavailable("ADMIN_INGESTION_INDEX_OBSERVER_UNQUALIFIED")
+        return _current_index_observation(
+            ledger=self.ledger,
+            source_observer=self.source_observer,
+            active_manifest_observer=self.active_manifest_observer,
+            candidate_manifest_observer=self.candidate_manifest_observer,
+            missing_seams=[],
+        )
 
     def list_audits(self) -> ReadObservation:
         return self._unavailable("ADMIN_INGESTION_AUDIT_OBSERVER_UNQUALIFIED")
@@ -1061,9 +1202,20 @@ class SQLiteJobsEvidenceProvider:
 class SQLiteIngestionReadAuthority:
     """Durable job reads with an explicit fail-closed mutation boundary."""
 
-    def __init__(self, ledger: SQLiteIngestionLedger, missing_seams: list[str]) -> None:
+    def __init__(
+        self,
+        ledger: SQLiteIngestionLedger,
+        missing_seams: list[str],
+        *,
+        source_observer: Callable[[], Mapping[str, Any]] | None = None,
+        active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
+        candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
+    ) -> None:
         self.ledger = ledger
         self.missing_seams = tuple(sorted(missing_seams))
+        self.source_observer = source_observer
+        self.active_manifest_observer = active_manifest_observer
+        self.candidate_manifest_observer = candidate_manifest_observer
         self.reason_code = "ADMIN_INGESTION_RUNTIME_SEAMS_UNQUALIFIED"
 
     def _unavailable(self) -> ReadObservation:
@@ -1077,7 +1229,13 @@ class SQLiteIngestionReadAuthority:
         )
 
     def current_index(self) -> ReadObservation:
-        return self._unavailable()
+        return _current_index_observation(
+            ledger=self.ledger,
+            source_observer=self.source_observer,
+            active_manifest_observer=self.active_manifest_observer,
+            candidate_manifest_observer=self.candidate_manifest_observer,
+            missing_seams=list(self.missing_seams),
+        )
 
     def list_audits(self) -> ReadObservation:
         return self._unavailable()
@@ -1119,6 +1277,7 @@ def build_sqlite_ingestion_adapter(
     *,
     source_observer: Callable[[], Mapping[str, Any]] | None = None,
     active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
+    candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
     candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
 ) -> SQLiteIngestionAdapter | SQLiteIngestionReadAuthority | None:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().lower() in {
@@ -1136,14 +1295,16 @@ def build_sqlite_ingestion_adapter(
             dynamic_source_observer_from_path(Path(source_root)) if source_root else None
         )
     active_observer = active_manifest_observer
+    candidate_observer = candidate_manifest_observer
     if active_observer is None:
         try:
             from .config import Settings
             from .storage import create_object_store
 
-            active_observer = active_manifest_observer_from_store(
-                create_object_store(Settings.from_env())
-            )
+            store = create_object_store(Settings.from_env())
+            active_observer = active_manifest_observer_from_store(store)
+            if candidate_observer is None:
+                candidate_observer = candidate_manifest_observer_from_store(store)
         except Exception:
             # The controller remains truthful and fails closed until an active
             # authority is configured; the durable job/read authority still works.
@@ -1159,11 +1320,18 @@ def build_sqlite_ingestion_adapter(
         if seam is None
     ]
     if missing:
-        return SQLiteIngestionReadAuthority(ledger, missing)
+        return SQLiteIngestionReadAuthority(
+            ledger,
+            missing,
+            source_observer=source_observer,
+            active_manifest_observer=active_observer,
+            candidate_manifest_observer=candidate_observer,
+        )
     return SQLiteIngestionAdapter(
         ledger,
         source_observer=source_observer,
         active_manifest_observer=active_observer,
+        candidate_manifest_observer=candidate_observer,
         candidate_executor=candidate_executor,
     )
 
@@ -1280,7 +1448,10 @@ def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str,
                 for item in active.candidate_manifest.get("artifacts", [])
                 if item.get("kind") == "lexical_index"
             )
-            payload = json.loads(store.get(str(lexical["key"])))
+            lexical_bytes = store.get(str(lexical["key"]))
+            if sha256_bytes(lexical_bytes) != lexical.get("sha256"):
+                raise ValueError("active lexical artifact digest mismatch")
+            payload = json.loads(lexical_bytes)
             documents = payload.get("documents", [])
             digest_map = {
                 str(item["document_id"]): str(
@@ -1292,14 +1463,105 @@ def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str,
             if len(digest_map) != len(documents):
                 raise ValueError("active lexical artifact has incomplete document identity")
             return {
+                "release_id": active.release_id,
                 "manifest_key": active.candidate_manifest_key,
                 "manifest_sha256": active.candidate_manifest_sha256,
+                "production_manifest_key": active.production_manifest_key,
+                "production_manifest_sha256": active.production_manifest_sha256,
                 "document_digests": digest_map,
+                "document_count": len(digest_map),
+                "lexical_chunk_count": len(documents),
+                "vector_chunk_count": active.semantic_point_count,
+                "parity_basis": "manifest_counts",
+                "source_revision": active.source_commit_sha,
+                "qdrant_collection": active.qdrant_collection,
             }
         except Exception as exc:
             raise _error(
                 "ADMIN_INGESTION_ACTIVE_MANIFEST_UNAVAILABLE",
                 "Active production manifest could not be resolved",
+            ) from exc
+
+    return observe
+
+
+def candidate_manifest_observer_from_store(
+    store: Any,
+) -> Callable[[str, str], Mapping[str, Any]]:
+    """Verify an exact immutable candidate manifest and optional source identities."""
+
+    def observe(manifest_key: str, manifest_sha256: str) -> Mapping[str, Any]:
+        try:
+            manifest_bytes = store.get(manifest_key)
+            if sha256_bytes(manifest_bytes) != manifest_sha256:
+                raise ValueError("candidate manifest digest mismatch")
+            manifest = json.loads(manifest_bytes)
+            if not isinstance(manifest, Mapping):
+                raise ValueError("candidate manifest is not an object")
+            release_id = manifest.get("release_id")
+            if (
+                manifest.get("schema_version") != "knowledge-engine-release/v1"
+                or manifest.get("status") != "candidate"
+                or not isinstance(release_id, str)
+                or manifest_key != f"releases/{release_id}/manifest.json"
+            ):
+                raise ValueError("candidate manifest identity is invalid")
+
+            artifacts = manifest.get("artifacts")
+            if not isinstance(artifacts, list):
+                raise ValueError("candidate manifest artifacts are unavailable")
+            source_entry = next(
+                (
+                    item
+                    for item in artifacts
+                    if isinstance(item, Mapping) and item.get("kind") == "source_documents"
+                ),
+                None,
+            )
+            if source_entry is None:
+                source_entry = next(
+                    (
+                        item
+                        for item in artifacts
+                        if isinstance(item, Mapping) and item.get("kind") == "lexical_index"
+                    ),
+                    None,
+                )
+            document_digests: dict[str, str] | None = None
+            if source_entry is not None:
+                source_bytes = store.get(str(source_entry["key"]))
+                if sha256_bytes(source_bytes) != source_entry.get("sha256"):
+                    raise ValueError("candidate source identity artifact digest mismatch")
+                payload = json.loads(source_bytes)
+                documents = payload.get("documents", []) if isinstance(payload, Mapping) else []
+                observed = {
+                    str(item["document_id"]): str(
+                        item.get("digest")
+                        or item.get("content_sha256")
+                        or item.get("source_digest")
+                    )
+                    for item in documents
+                    if isinstance(item, Mapping)
+                    and item.get("document_id")
+                    and (
+                        item.get("digest")
+                        or item.get("content_sha256")
+                        or item.get("source_digest")
+                    )
+                }
+                if len(observed) == len(documents):
+                    document_digests = observed
+            return {
+                "verified": True,
+                "manifest_key": manifest_key,
+                "manifest_sha256": manifest_sha256,
+                "manifest": dict(manifest),
+                "document_digests": document_digests,
+            }
+        except Exception as exc:
+            raise _error(
+                "ADMIN_INGESTION_CANDIDATE_MANIFEST_UNAVAILABLE",
+                "Candidate manifest could not be verified",
             ) from exc
 
     return observe
@@ -1313,6 +1575,7 @@ __all__ = [
     "SQLiteJobsEvidenceProvider",
     "active_manifest_observer_from_store",
     "build_sqlite_ingestion_adapter",
+    "candidate_manifest_observer_from_store",
     "candidate_executor_from_primitives",
     "dynamic_source_observer_from_path",
 ]

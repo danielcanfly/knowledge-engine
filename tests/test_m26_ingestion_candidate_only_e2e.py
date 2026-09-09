@@ -322,11 +322,17 @@ def test_active_observer_uses_read_only_production_pointer_resolver(tmp_path: Pa
 
     observed = active_manifest_observer_from_store(store)()
 
-    assert observed == {
-        "manifest_key": candidate_key,
-        "manifest_sha256": sha256_bytes(candidate_bytes),
-        "document_digests": {"article": "d" * 64},
-    }
+    assert observed["manifest_key"] == candidate_key
+    assert observed["manifest_sha256"] == sha256_bytes(candidate_bytes)
+    assert observed["document_digests"] == {"article": "d" * 64}
+    assert observed["release_id"] == release_id
+    assert observed["production_manifest_key"] == production_key
+    assert observed["production_manifest_sha256"] == sha256_bytes(production_bytes)
+    assert observed["document_count"] == 1
+    assert observed["lexical_chunk_count"] == 1
+    assert observed["vector_chunk_count"] == 1
+    assert observed["parity_basis"] == "manifest_counts"
+    assert observed["qdrant_collection"] == "m26_blog_active_production_fixture"
 
 
 def test_noop_is_durable_reconnectable_and_has_zero_candidate_mutation(tmp_path: Path) -> None:
