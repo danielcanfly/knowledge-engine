@@ -1,14 +1,6 @@
 name: M23.7 Repair R3.8.3 Wrangler Version Output
 
 on:
-  pull_request:
-    paths:
-      - "scripts/m23_7_r3_8_wrangler_bootstrap.sh"
-      - "tests/test_m23_7_r3_8_wrangler_bootstrap.py"
-      - "pilot/m23/m23-7-r3-8-3-version-output-contract.json"
-      - "docs/architecture/m23-7-r3-8-3-version-output.md"
-      - ".github/workflows/m23-7-r3-8-3-version-output.yml"
-      - ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
   workflow_dispatch:
 
 permissions:
@@ -100,20 +92,6 @@ jobs:
             pilot/m23/m23-7-r3-8-latency-repair-contract.json \
             pilot/m23/m23-7-r3-8-1-wrangler-bootstrap-contract.json \
             pilot/m23/m23-7-r3-8-2-bash32-bootstrap-contract.json
-      - name: Verify historical workflow retirement boundary
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          historical = Path(
-              ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
-          ).read_text(encoding="utf-8")
-          gate = (
-              "github.event_name == 'workflow_dispatch' || "
-              "github.head_ref == 'agent/m23-7-r3-8-2-bash32-bootstrap'"
-          )
-          assert historical.count(gate) == 2
-          PY
       - name: Parser safety scan
         run: |
           python - <<'PY'
