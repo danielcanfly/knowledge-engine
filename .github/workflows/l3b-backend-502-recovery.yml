@@ -50,7 +50,8 @@ jobs:
           env_backup="$DEPLOY_PATH/.env.l3b-502-recovery-$stamp.bak"
           nginx_path="$(readlink -f /etc/nginx/sites-enabled/llamaindex-demo 2>/dev/null || true)"
           test -n "$nginx_path" && test -f "$nginx_path"
-          nginx_backup="$nginx_path.l3b-502-recovery-$stamp.bak"
+          sudo -n install -d -m 700 /var/backups/l3b-backend-recovery
+          nginx_backup="/var/backups/l3b-backend-recovery/llamaindex-demo.$stamp.bak"
           cp -p .env "$env_backup"
           sudo -n cp -p "$nginx_path" "$nginx_backup"
           chmod 600 "$env_backup"
@@ -77,12 +78,13 @@ jobs:
           found = False
           out = []
           for line in lines:
-              if line.startswith("M26_CONSOLE_ACCESS_TEAM_DOMAIN="):
-                  value = line.split("=", 1)[1].strip()
+              candidate = line[7:] if line.startswith("export ") else line
+              if candidate.startswith("M26_CONSOLE_ACCESS_TEAM_DOMAIN="):
+                  value = candidate.split("=", 1)[1].strip()
                   if value.startswith("https://") and value.endswith(".cloudflareaccess.com"):
                       pass
                   elif value.endswith(".cloudflareaccess.com") and "://" not in value and "/" not in value:
-                      line = "M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://" + value
+                      line = ("export " if line.startswith("export ") else "") + "M26_CONSOLE_ACCESS_TEAM_DOMAIN=https://" + value
                   else:
                       raise SystemExit("unexpected team-domain binding shape")
                   found = True
@@ -92,7 +94,7 @@ jobs:
           path.write_text("\n".join(out) + "\n", encoding="utf-8")
           PY
 
-          python3 - "$nginx_path" <<'PY'
+          sudo -n python3 - "$nginx_path" <<'PY'
           from pathlib import Path
           import sys
 
@@ -125,6 +127,12 @@ jobs:
           text = text.replace(needle, block + needle, 1)
           path.write_text(text, encoding="utf-8")
           PY
+
+          sudo -n grep -F 'location ^~ /v1/admin/' "$nginx_path"
+          test "$(sudo -n nginx -T 2>/dev/null | grep -cF 'proxy_pass http://127.0.0.1:8080;' || true)" -ge 3 || {
+            echo 'RECOVERY_NGINX_ADMIN_ROUTE=NOT_ACTIVE'
+            exit 1
+          }
 
           sudo -n nginx -t
           sudo -n systemctl reload nginx
