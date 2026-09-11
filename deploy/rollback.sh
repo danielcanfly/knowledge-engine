@@ -57,8 +57,40 @@ rollback_locked() {
   cp -p "$ROLLBACK_ENV_FILE" .env.rollback-next
   chmod 600 .env.rollback-next
   mv .env.rollback-next .env
+
+  # The persistent predecessor backup can contain the build identity of the
+  # release that was deployed before it. Build a one-shot runtime env with the
+  # requested rollback identity instead of mutating that persistent backup or
+  # allowing a stale identity to reach the restored container.
+  rollback_runtime_env="$(mktemp "$DEPLOY_PATH/.env.rollback-runtime.XXXXXX")"
+  cleanup_runtime_env() {
+    rm -f "$rollback_runtime_env"
+  }
+  trap cleanup_runtime_env RETURN
+  ROLLBACK_ENV_FILE="$ROLLBACK_ENV_FILE" \
+  ROLLBACK_RUNTIME_ENV="$rollback_runtime_env" \
+  ROLLBACK_SHA="$ROLLBACK_SHA" \
+    python3 - <<'PY'
+import os
+from pathlib import Path
+
+source = Path(os.environ["ROLLBACK_ENV_FILE"])
+target = Path(os.environ["ROLLBACK_RUNTIME_ENV"])
+rollback_sha = os.environ["ROLLBACK_SHA"]
+lines = []
+for line in source.read_text(encoding="utf-8").splitlines():
+    stripped = line.lstrip()
+    if stripped.startswith("M26_QUERY_BUILD_SHA=") or stripped.startswith(
+        "export M26_QUERY_BUILD_SHA="
+    ):
+        continue
+    lines.append(line)
+lines.append(f"M26_QUERY_BUILD_SHA={rollback_sha}")
+target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+target.chmod(0o600)
+PY
+  export M26_RUNTIME_ENV_FILE="$rollback_runtime_env"
   export M26_RUNTIME_IMAGE="$rollback_tag"
-  unset M26_RUNTIME_ENV_FILE
   docker compose config >/dev/null
   docker compose up -d --no-build --remove-orphans
 

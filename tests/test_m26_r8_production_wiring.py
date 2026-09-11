@@ -347,6 +347,8 @@ def test_exact_image_rollback_restores_predecessor_without_build(tmp_path: Path)
     assert "ROLLBACK_EXACT_IMAGE_PASSED" in completed.stdout
     assert f"ROLLBACK_IMAGE_ID={image_id}" in completed.stdout
     assert (tmp_path / "deploy" / ".env").read_text() == "MODE=predecessor\n"
+    runtime_files = list((tmp_path / "deploy").glob(".env.rollback-runtime.*"))
+    assert runtime_files == []
     commands = log.read_text()
     assert "docker compose up -d --no-build --remove-orphans" in commands
     assert "compose build" not in commands
@@ -369,3 +371,33 @@ def test_exact_image_rollback_fails_closed_on_identity_drift(tmp_path: Path) -> 
     assert "ROLLBACK_IMAGE_ID_MISMATCH" in completed.stderr
     assert (tmp_path / "deploy" / ".env").read_text() == "MODE=failed-candidate\n"
     assert "docker compose up" not in log.read_text()
+
+
+def test_rollback_runtime_env_overrides_stale_build_identity_without_mutating_backup(
+    tmp_path: Path,
+) -> None:
+    env, _log, _image_id = _rollback_fixture(tmp_path)
+    backup = tmp_path / "deploy" / ".env.pre-deploy-20260910T010203Z"
+    backup.write_text(
+        "MODE=predecessor\nM26_QUERY_BUILD_SHA=" + "c" * 40 + "\n",
+        encoding="utf-8",
+    )
+    env["ROLLBACK_ENV_SHA256"] = hashlib.sha256(backup.read_bytes()).hexdigest()
+
+    completed = subprocess.run(
+        ["bash", "deploy/rollback.sh"],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "ROLLBACK_EXACT_IMAGE_PASSED" in completed.stdout
+    assert backup.read_text(encoding="utf-8") == (
+        "MODE=predecessor\nM26_QUERY_BUILD_SHA=" + "c" * 40 + "\n"
+    )
+    assert (tmp_path / "deploy" / ".env").read_text(encoding="utf-8") == (
+        "MODE=predecessor\nM26_QUERY_BUILD_SHA=" + "c" * 40 + "\n"
+    )
