@@ -422,7 +422,13 @@ class CombinedCapabilityProvider:
 def build_runtime_ingestion_adapter_from_env() -> Any:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().casefold()
     if enabled not in {"1", "true", "yes", "on"}:
-        return None
+        durable_path = (
+            os.getenv("M26_INGESTION_STATE_DB", "").strip()
+            or os.getenv("M26_ADMIN_CONTROL_DB_PATH", "").strip()
+        )
+        if not durable_path:
+            return None
+        return build_sqlite_ingestion_adapter(allow_read_only_when_disabled=True)
     required = {
         ENGINE_SHA_ENV: os.getenv(ENGINE_SHA_ENV, "").strip(),
         "QDRANT_URL": os.getenv("QDRANT_URL", "").strip(),

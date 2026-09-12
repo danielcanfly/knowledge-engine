@@ -1435,13 +1435,73 @@ class SQLiteJobsEvidenceProvider:
         return self._convert(self.adapter.get_job(job_id))
 
     def list_versions(self) -> EvidenceObservation:
-        return EvidenceObservation(
-            availability_status="unavailable",
-            reason_code="P09_PRODUCTION_POINTER_AUTHORITY_UNQUALIFIED",
-            detail="Version evidence remains fail-closed in BP5-R0",
-            source="sqlite_ingestion_ledger",
-            data=None,
-        )
+        observer = getattr(self.adapter, "active_manifest_observer", None)
+        if not callable(observer):
+            return EvidenceObservation(
+                availability_status="unavailable",
+                reason_code="P09_PRODUCTION_POINTER_AUTHORITY_UNQUALIFIED",
+                detail="Active immutable release evidence is not configured",
+                source="active_production_release",
+                data=None,
+            )
+        try:
+            active = dict(observer())
+            required = (
+                "release_id",
+                "manifest_key",
+                "manifest_sha256",
+                "production_manifest_key",
+                "production_manifest_sha256",
+                "qdrant_collection",
+                "source_revision",
+            )
+            if any(not active.get(field) for field in required):
+                raise ValueError("active immutable release identity is incomplete")
+            version = {
+                "version_id": str(active["release_id"]),
+                "release_id": str(active["release_id"]),
+                "active": True,
+                "lineage_state": "active",
+                "immutable_target": str(active["manifest_key"]),
+                "manifest_sha256": str(active["manifest_sha256"]),
+                "production_manifest_key": str(active["production_manifest_key"]),
+                "production_manifest_sha256": str(active["production_manifest_sha256"]),
+                "qdrant_collection": str(active["qdrant_collection"]),
+                "source_revision": str(active["source_revision"]),
+                "document_count": active.get("document_count"),
+                "lexical_chunk_count": active.get("lexical_chunk_count"),
+                "vector_chunk_count": active.get("vector_chunk_count"),
+                "eligibility": "unknown",
+                "activation_authorized": False,
+            }
+            data = {"versions": [version]}
+            digest = _hash(data)
+            observed_at = utc_now()
+            return EvidenceObservation(
+                availability_status="available",
+                reason_code=None,
+                detail=None,
+                source="active_production_release",
+                data=data,
+                observed_at=observed_at,
+                freshness="live",
+                resource_identity={
+                    "release_id": version["release_id"],
+                    "production_manifest_sha256": version["production_manifest_sha256"],
+                },
+                evidence_digest=digest,
+                source_observed_at=observed_at,
+            )
+        except Exception as exc:
+            return EvidenceObservation(
+                availability_status="unavailable",
+                reason_code=str(
+                    getattr(exc, "code", "P09_PRODUCTION_POINTER_AUTHORITY_UNQUALIFIED")
+                ),
+                detail="Active immutable release evidence could not be verified",
+                source="active_production_release",
+                data=None,
+            )
 
 
 class SQLiteIngestionReadAuthority:
@@ -1526,6 +1586,7 @@ def build_sqlite_ingestion_adapter(
     candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
     candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
     finalization_executor: Any | None = None,
+    allow_read_only_when_disabled: bool = False,
 ) -> SQLiteIngestionAdapter | SQLiteIngestionReadAuthority | None:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().lower() in {
         "1",
@@ -1533,9 +1594,15 @@ def build_sqlite_ingestion_adapter(
         "yes",
         "on",
     }
-    if not enabled:
+    if not enabled and not allow_read_only_when_disabled:
         return None
-    path = os.getenv("M26_INGESTION_STATE_DB", DEFAULT_INGESTION_STATE_DB)
+    if not enabled:
+        candidate_executor = None
+    path = (
+        os.getenv("M26_INGESTION_STATE_DB", "").strip()
+        or os.getenv("M26_ADMIN_CONTROL_DB_PATH", "").strip()
+        or DEFAULT_INGESTION_STATE_DB
+    )
     if source_observer is None:
         source_root = os.getenv("M26_SOURCE_ROOT", "").strip()
         source_observer = (

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any, Protocol
 
 from fastapi import APIRouter, FastAPI, Query, Request
 
-from .m26_admin_contract import AdminAPIError, new_request_id, redact
+from .m26_admin_contract import AdminAPIError, canonical_json_bytes, new_request_id, redact
+from .m26_production_answer_bundle import load_production_answer_bundle
 
 CONTRACT_VERSION = "1.1.0-gate-a-repair-a"
 CORPUS_SOURCE = "corpus_reconciliation_read_model"
@@ -33,6 +35,154 @@ class UnavailableCorpusAdapter:
             retryable=True,
             details={"availability": "unavailable"},
         )
+
+
+class ObjectStoreCorpusAdapter:
+    """Read a corpus view from the pointer-selected immutable release only."""
+
+    def __init__(self, store: Any) -> None:
+        self.store = store
+
+    @staticmethod
+    def _rows(value: Any, *keys: str) -> list[Mapping[str, Any]]:
+        if not isinstance(value, Mapping):
+            return []
+        for key in keys:
+            rows = value.get(key)
+            if isinstance(rows, list):
+                return [row for row in rows if isinstance(row, Mapping)]
+        return []
+
+    @staticmethod
+    def _source_id(row: Mapping[str, Any]) -> str | None:
+        for key in ("source_id", "document_id", "id"):
+            value = _text(row.get(key))
+            if value:
+                return value
+        return None
+
+    def read(self) -> Mapping[str, Any]:
+        bundle = load_production_answer_bundle(store=self.store)
+        active = bundle.active_release
+        source_rows = self._rows(bundle.source_documents, "documents", "sources", "entries")
+        if not source_rows:
+            source_rows = self._rows(
+                bundle.document_source_index,
+                "entries",
+                "sources",
+                "documents",
+                "rows",
+            )
+        lexical_rows = self._rows(bundle.lexical_index, "documents")
+        semantic_rows = self._rows(bundle.semantic_inputs, "documents")
+        provenance_rows = self._rows(bundle.provenance, "records")
+        if semantic_rows and len(semantic_rows) != active.semantic_point_count:
+            raise ValueError("active semantic artifact count does not match release authority")
+
+        source_by_id = {
+            source_id: dict(row)
+            for row in source_rows
+            if (source_id := self._source_id(row)) is not None
+        }
+        lexical_by_id: dict[str, list[Mapping[str, Any]]] = {}
+        for row in lexical_rows:
+            source_id = self._source_id(row)
+            if source_id:
+                lexical_by_id.setdefault(source_id, []).append(row)
+        semantic_by_id: dict[str, list[Mapping[str, Any]]] = {}
+        for row in semantic_rows:
+            source_id = self._source_id(row)
+            if source_id:
+                semantic_by_id.setdefault(source_id, []).append(row)
+        provenance_ids = {
+            source_id
+            for record in provenance_rows
+            for source in self._rows(record, "sources")
+            if (source_id := self._source_id(source)) is not None
+        }
+        source_ids = sorted(set(source_by_id) | set(lexical_by_id) | set(semantic_by_id))
+
+        sources: list[dict[str, Any]] = []
+        artifacts: list[dict[str, Any]] = []
+        vectors: list[dict[str, Any]] = []
+        for source_id in source_ids:
+            source = source_by_id.get(source_id, {})
+            lexical = lexical_by_id.get(source_id, [])
+            semantic = semantic_by_id.get(source_id, [])
+            sources.append(
+                {
+                    "source_id": source_id,
+                    "source_path": (
+                        _text(source.get("origin_path"))
+                        or _text(source.get("source_path"))
+                        or _text(source.get("uri"))
+                        or source_id
+                    ),
+                    "canonical_url": _text(source.get("canonical_url")) or "",
+                    "language": _text(source.get("language")),
+                    "source_revision": active.source_commit_sha,
+                }
+            )
+            artifacts.append(
+                {
+                    "source_id": source_id,
+                    "source_revision": active.source_commit_sha,
+                    "artifact_markdown": (
+                        bundle.artifact_keys.get("lexical_index") if lexical else None
+                    ),
+                    "embedding_text": (
+                        bundle.artifact_keys.get("semantic_inputs") if semantic else None
+                    ),
+                    "manifest_record": (
+                        bundle.artifact_keys.get("provenance")
+                        if source_id in provenance_ids
+                        else None
+                    ),
+                    "release_marker": active.release_id,
+                    "metadata_json": {
+                        "lexical_section_count": len(lexical),
+                        "semantic_section_count": len(semantic),
+                    },
+                    "materialized_at": bundle.loaded_at,
+                }
+            )
+            vectors.append(
+                {
+                    "source_id": source_id,
+                    "vector_backend": "qdrant",
+                    "vector_presence": bool(semantic),
+                    "release_marker": active.release_id,
+                    "indexed_at": bundle.loaded_at if semantic else None,
+                }
+            )
+
+        identity = {
+            "release_id": active.release_id,
+            "production_manifest_sha256": active.production_manifest_sha256,
+            "candidate_manifest_sha256": active.candidate_manifest_sha256,
+            "qdrant_collection": active.qdrant_collection,
+            "source_ids": source_ids,
+        }
+        return {
+            "sources": sources,
+            "artifacts": artifacts,
+            "vectors": vectors,
+            "active_release_marker": active.release_id,
+            "warnings": [],
+            "observed_at": bundle.loaded_at,
+            "freshness": "snapshot",
+            "evidence_digest": hashlib.sha256(canonical_json_bytes(identity)).hexdigest(),
+        }
+
+
+def object_store_corpus_adapter_from_env() -> ObjectStoreCorpusAdapter | None:
+    try:
+        from .config import Settings
+        from .storage import create_object_store
+
+        return ObjectStoreCorpusAdapter(create_object_store(Settings.from_env()))
+    except Exception:
+        return None
 
 
 def _text(value: Any) -> str | None:
@@ -347,7 +497,9 @@ def install_admin_corpus(
 __all__ = [
     "CONTRACT_VERSION",
     "CorpusReadService",
+    "ObjectStoreCorpusAdapter",
     "UnavailableCorpusAdapter",
     "install_admin_corpus",
+    "object_store_corpus_adapter_from_env",
     "reconcile_corpus",
 ]

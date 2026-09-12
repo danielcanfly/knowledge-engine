@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from .m26_admin_audit import install_admin_audit
 from .m26_admin_control_plane import install_admin_control_plane
-from .m26_admin_corpus import install_admin_corpus
+from .m26_admin_corpus import install_admin_corpus, object_store_corpus_adapter_from_env
 from .m26_admin_health import install_admin_health
 from .m26_admin_ingestion import install_admin_ingestion_routes
 from .m26_admin_overview import install_admin_overview
@@ -45,7 +45,7 @@ def create_app():
         app.state.m26_durable_ingestion_adapter = durable_adapter
     install_admin_overview(app)
     install_admin_ingestion_routes(app, adapter=durable_adapter, include_job_reads=True)
-    install_admin_corpus(app)
+    install_admin_corpus(app, adapter=object_store_corpus_adapter_from_env())
     install_qa_inbox(app)
     app.include_router(playground_router())
     install_suggested_questions_admin(app)
