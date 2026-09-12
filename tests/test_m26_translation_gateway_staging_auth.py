@@ -7,8 +7,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_engine.auth import Authenticator, Principal
 from knowledge_engine import m26_translation_gateway_public_api as gateway_module
+from knowledge_engine.auth import Authenticator, Principal
 from knowledge_engine.m26_translation_gateway_public_api import (
     create_app,
 )
@@ -35,6 +35,7 @@ def staging_client(
         "https://staging.danielcanfly.com",
     )
     monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setattr(gateway_module, "load_production_answer_bundle", lambda: None)
     app = create_app(root=Path("."), translation_provider=object())
     with TestClient(app) as client:
         yield client
@@ -220,9 +221,8 @@ def test_gateway_startup_prewarm_failure_blocks_readiness(
 
     app = create_app(root=Path("."), provider_factory=lambda: object())
 
-    with pytest.raises(RuntimeError, match="bundle prewarm failed"):
-        with TestClient(app):
-            pass
+    with pytest.raises(RuntimeError, match="bundle prewarm failed"), TestClient(app):
+        pass
 
 
 def test_gateway_first_query_after_startup_does_not_rewarm_bundle(

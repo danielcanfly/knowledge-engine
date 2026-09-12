@@ -1,13 +1,6 @@
 name: M23.7 Repair R3.8.2 Bash 3.2 Bootstrap
 
 on:
-  pull_request:
-    paths:
-      - "scripts/m23_7_r3_8_wrangler_bootstrap.sh"
-      - "tests/test_m23_7_r3_8_wrangler_bootstrap.py"
-      - "pilot/m23/m23-7-r3-8-2-bash32-bootstrap-contract.json"
-      - "docs/architecture/m23-7-r3-8-2-bash32-bootstrap.md"
-      - ".github/workflows/m23-7-r3-8-1-wrangler-bootstrap.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,7 +8,7 @@ permissions:
 
 jobs:
   wrangler-bootstrap-linux:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'agent/m23-7-r3-8-2-bash32-bootstrap'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -142,7 +135,7 @@ jobs:
         run: python -m py_compile tests/test_m23_7_r3_8_wrangler_bootstrap.py
 
   wrangler-bootstrap-macos-bash32:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'agent/m23-7-r3-8-2-bash32-bootstrap'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4

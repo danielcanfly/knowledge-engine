@@ -215,6 +215,7 @@ def install_jobs_rollback_routes(
     app: FastAPI,
     *,
     evidence_provider: JobsRollbackEvidenceProvider | None = None,
+    include_job_reads: bool = True,
 ) -> FastAPI:
     if getattr(app.state, "m26_jobs_rollback_installed", False):
         return app
@@ -223,7 +224,14 @@ def install_jobs_rollback_routes(
         P09_EVIDENCE_PROVIDER_STATE,
         evidence_provider or UnavailableJobsRollbackEvidenceProvider(),
     )
-    app.include_router(_router())
+    router = _router()
+    if not include_job_reads:
+        router.routes[:] = [
+            route
+            for route in router.routes
+            if getattr(route, "operation_id", None) not in {"listIngestionJobs", "getIngestionJob"}
+        ]
+    app.include_router(router)
     app.state.m26_jobs_rollback_installed = True
     return app
 

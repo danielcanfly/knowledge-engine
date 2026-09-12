@@ -13,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
 from .config import Settings
+from .m26_active_release_dense import active_release_dense_channel_from_env
 from .m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     CONTRACT_SCHEMA_VERSION,
@@ -91,9 +92,7 @@ def _owner_graph_runtime() -> Runtime:
         create_object_store(settings),
         settings.cache_dir,
         settings.channel,
-        relation_aware_expansion_enabled=(
-            settings.relation_aware_expansion_enabled
-        ),
+        relation_aware_expansion_enabled=(settings.relation_aware_expansion_enabled),
     )
 
 
@@ -136,6 +135,8 @@ def run_owner_query_for_web(
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    if dense_channel is None:
+        dense_channel = active_release_dense_channel_from_env(require_remote=require_remote_dense)
     if provider_client is None and not _should_use_default_provider_routing():
         runtime_response = run_owner_arbitrary_query(
             root=root,
@@ -318,9 +319,7 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "accounting": {
             "provider_invoked": bool(runtime_response.get("provider_invoked", False)),
             "provider_call_count": int(runtime_response.get("provider_call_count", 0)),
-            "payg_equivalent_cost_usd": str(
-                runtime_response.get("payg_equivalent_cost_usd", "0")
-            ),
+            "payg_equivalent_cost_usd": str(runtime_response.get("payg_equivalent_cost_usd", "0")),
             "latency_ms": int(runtime_response.get("latency_ms", 0)),
         },
         "provider_routing": dict(_mapping(runtime_response.get("provider_routing"))),
@@ -421,9 +420,7 @@ def build_owner_graph_dto(
         )
 
     payload = {
-        key: value
-        for key, value in graph.items()
-        if key not in {"nodes", "edges", "release_id"}
+        key: value for key, value in graph.items() if key not in {"nodes", "edges", "release_id"}
     }
     payload.update(
         {

@@ -16,9 +16,7 @@ concurrency:
 
 jobs:
   query_smoke_only:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.head_ref == 'gpt/m26-pa7-full-graph-title-normalization')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: m23-r3-diagnostic
