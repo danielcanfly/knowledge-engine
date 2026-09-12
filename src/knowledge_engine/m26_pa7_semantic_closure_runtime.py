@@ -49,9 +49,7 @@ SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 SEMANTIC_SEGMENT_ROLES = {"material_claim", "model_explanation"}
-PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
-    "provider_verified_runtime_bound_partial_semantic_closure"
-)
+PARTIAL_SEMANTIC_CLOSURE_SOURCE = "provider_verified_runtime_bound_partial_semantic_closure"
 FACET_CLOSURE_SCHEMA_VERSION = "m26-aqv2-r2-facet-closure/v1"
 
 
@@ -95,13 +93,16 @@ def _run_semantic_closure_internal(
             "public_request": public_request,
         },
     )
-    trace_id = "m26pa7aq_" + canonical_sha256(
-        {
-            "gate": validated_gate.get("self_sha256"),
-            "question_sha256": question_sha,
-            "owner_subject_hash": owner_subject_hash,
-        }
-    )[:32]
+    trace_id = (
+        "m26pa7aq_"
+        + canonical_sha256(
+            {
+                "gate": validated_gate.get("self_sha256"),
+                "question_sha256": question_sha,
+                "owner_subject_hash": owner_subject_hash,
+            }
+        )[:32]
+    )
 
     if not admission["admitted"]:
         return legacy._base_response(
@@ -199,9 +200,7 @@ def _run_semantic_closure_internal(
     if not evidence or not legacy._has_meaningful_overlap(normalized_question, evidence):
         verification = legacy._verified_abstention(
             reason_codes=(
-                ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"]
-                if not evidence
-                else ["LOW_RETRIEVAL_SUPPORT"]
+                ["NO_AUTHORIZED_PRODUCTION_EVIDENCE"] if not evidence else ["LOW_RETRIEVAL_SUPPORT"]
             ),
             calls=[],
             repair_attempted=False,
@@ -252,20 +251,68 @@ def _run_semantic_closure_internal(
 def _assert_full_production_graph(bundle: ProductionAnswerBundle) -> None:
     nodes = legacy._list(bundle.graph_v2.get("nodes"), "graph_v2 nodes")
     edges = legacy._list(bundle.graph_v2.get("edges"), "graph_v2 edges")
+    active = bundle.resolved_release
+    if active is not None:
+        if bundle.release_id != active.release_id:
+            raise PA7ArbitraryQueryError(
+                "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
+                "answer runtime release does not match the active pointer-selected release",
+            )
+        manifest_artifacts = active.candidate_manifest.get("artifacts", [])
+        graph_entry = next(
+            (
+                item
+                for item in manifest_artifacts
+                if isinstance(item, Mapping) and item.get("kind") == "graph_v2"
+            ),
+            None,
+        )
+        expected_digest = (
+            str(graph_entry.get("sha256"))
+            if isinstance(graph_entry, Mapping) and graph_entry.get("sha256")
+            else ""
+        )
+        if expected_digest and bundle.artifact_sha256.get("graph_v2") != expected_digest:
+            raise PA7ArbitraryQueryError(
+                "PA7_PRODUCTION_GRAPH_DIGEST_MISMATCH",
+                "answer runtime graph digest does not match the active release manifest",
+            )
+        counts = active.candidate_manifest.get("counts", {})
+        expected_nodes = counts.get("document_graph_nodes") if isinstance(counts, Mapping) else None
+        expected_edges = counts.get("document_graph_edges") if isinstance(counts, Mapping) else None
+        if expected_nodes is not None and len(nodes) != expected_nodes:
+            raise PA7ArbitraryQueryError(
+                "PA7_PRODUCTION_GRAPH_POPULATION_MISMATCH",
+                "answer runtime graph node population does not match the active release",
+            )
+        if expected_edges is not None and len(edges) != expected_edges:
+            raise PA7ArbitraryQueryError(
+                "PA7_PRODUCTION_GRAPH_POPULATION_MISMATCH",
+                "answer runtime graph edge population does not match the active release",
+            )
+        return
+
+    # Explicit historical fixture compatibility: real object-store bundles always
+    # carry resolved_release. This path remains for legacy synthetic tests only.
+    if bundle.production_pointer is not None or bundle.production_manifest is not None:
+        raise PA7ArbitraryQueryError(
+            "PA7_PRODUCTION_ACTIVE_RELEASE_UNAVAILABLE",
+            "answer runtime bundle is missing pointer-selected active-release authority",
+        )
     if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
         raise PA7ArbitraryQueryError(
             "PA7_PRODUCTION_BUNDLE_RELEASE_MISMATCH",
-            "answer runtime is not bound to the accepted full production release",
+            "historical compatibility fixture is not the accepted full production release",
         )
     if bundle.artifact_sha256.get("graph_v2") != FULL_PRODUCTION_GRAPH_V2_SHA256:
         raise PA7ArbitraryQueryError(
             "PA7_PRODUCTION_GRAPH_DIGEST_MISMATCH",
-            "answer runtime graph digest is not the accepted production graph",
+            "historical compatibility fixture graph digest is not the accepted production graph",
         )
     if len(nodes) != FULL_PRODUCTION_NODE_COUNT or len(edges) != FULL_PRODUCTION_EDGE_COUNT:
         raise PA7ArbitraryQueryError(
             "PA7_PRODUCTION_GRAPH_POPULATION_MISMATCH",
-            "answer runtime must use the 4,222-node / 8,525-edge production graph",
+            "historical compatibility fixture must use the accepted graph population",
         )
 
 
@@ -300,29 +347,19 @@ def _response_from_verification(
             reason_codes=verification.get("reason_codes", []),
             provider_invoked=int(verification.get("provider_call_count", 0)) > 0,
             provider_call_count=int(verification.get("provider_call_count", 0)),
-            payg_equivalent_cost_usd=str(
-                verification.get("payg_equivalent_cost_usd", "0")
-            ),
+            payg_equivalent_cost_usd=str(verification.get("payg_equivalent_cost_usd", "0")),
             material_claim_support_verified=bool(
                 verification.get("material_claim_support_verified", True)
             ),
-            citation_locator_valid=bool(
-                verification.get("citation_locator_valid", True)
-            ),
-            unsupported_accepted_claims=int(
-                verification.get("unsupported_accepted_claims", 0)
-            ),
+            citation_locator_valid=bool(verification.get("citation_locator_valid", True)),
+            unsupported_accepted_claims=int(verification.get("unsupported_accepted_claims", 0)),
             repair_attempted=bool(verification.get("repair_attempted", False)),
         ),
         "citations": list(verification.get("citations", [])),
         "answer_claims": list(verification.get("answer_claims", [])),
         "answer_source": str(verification.get("answer_source", "safe_abstention")),
-        "relationship_summary": dict(
-            verification.get("relationship_summary", {})
-        ),
-        "multi_evidence_verification": dict(
-            verification.get("multi_evidence_verification", {})
-        ),
+        "relationship_summary": dict(verification.get("relationship_summary", {})),
+        "multi_evidence_verification": dict(verification.get("multi_evidence_verification", {})),
         "semantic_closure": dict(semantic_closure),
     }
     if bundle is not None and dense_result is not None and lexical_result is not None:
@@ -336,9 +373,7 @@ def _response_from_verification(
                 intent_class=intent_class,
             )
         )
-        response["evidence_utilization_trace"] = legacy._evidence_utilization_trace(
-            response
-        )
+        response["evidence_utilization_trace"] = legacy._evidence_utilization_trace(response)
     response["latency_ms"] = max(
         int(response.get("latency_ms", 0)),
         int((time.monotonic() - started) * 1000),
@@ -352,9 +387,7 @@ def _mirror_verified_support_proof(
     semantic_closure: Mapping[str, Any],
 ) -> dict[str, Any]:
     closure = dict(semantic_closure)
-    citations = [
-        item for item in verification.get("citations", []) if isinstance(item, Mapping)
-    ]
+    citations = [item for item in verification.get("citations", []) if isinstance(item, Mapping)]
     if not citations:
         return closure
     existing = [item for item in closure.get("support_proof", []) if isinstance(item, Mapping)]
@@ -401,7 +434,9 @@ def _mirror_verified_support_proof(
                 or citation.get("provenance_record_sha256", "")
             ),
             "runtime_owned_locator": bool(
-                (proof or {}).get("runtime_owned_locator", citation.get("runtime_owned_locator", False))
+                (proof or {}).get(
+                    "runtime_owned_locator", citation.get("runtime_owned_locator", False)
+                )
             ),
             "supported": True,
         }
@@ -469,21 +504,15 @@ def _synthesize_and_verify(
         for item in support_classification
     }
     supported_requirements = [
-        item
-        for item in requirements
-        if support_by_id.get(item.requirement_id) == "SUPPORTED"
+        item for item in requirements if support_by_id.get(item.requirement_id) == "SUPPORTED"
     ]
     unresolved_required_ids = {
-        facet_id
-        for facet_id, state in support_by_id.items()
-        if state in {"UNSUPPORTED", "UNKNOWN"}
+        facet_id for facet_id, state in support_by_id.items() if state in {"UNSUPPORTED", "UNKNOWN"}
     }
 
     if not evidence or (requirements and not supported_requirements):
         final_failures = [
-            "NO_R1_SELECTED_EVIDENCE"
-            if not evidence
-            else "NO_SUPPORTED_REQUIRED_FACETS"
+            "NO_R1_SELECTED_EVIDENCE" if not evidence else "NO_SUPPORTED_REQUIRED_FACETS"
         ]
         abstention = legacy._verified_abstention(
             reason_codes=final_failures,
@@ -523,16 +552,10 @@ def _synthesize_and_verify(
         try:
             raw = provider_client.call(
                 compact_payload,
-                (
-                    "aq_semantic_closure_repair"
-                    if attempt == 2
-                    else "aq_semantic_closure"
-                ),
+                ("aq_semantic_closure_repair" if attempt == 2 else "aq_semantic_closure"),
             )
             try:
-                stop_reason = str(
-                    raw.get("stop_reason") or raw.get("finish_reason") or ""
-                )
+                stop_reason = str(raw.get("stop_reason") or raw.get("finish_reason") or "")
                 parsed = _parse_compact_provider_result(
                     str(raw.get("text", raw.get("provider_text", "")))
                 )
@@ -557,13 +580,9 @@ def _synthesize_and_verify(
             provider_status = str(parsed["status"])
             segments = _parsed_provider_segments(parsed)
             answer = _visible_answer_from_segments(segments)
-            unanswered_dimensions = _parsed_provider_unanswered_dimensions(
-                parsed, segments
-            )
+            unanswered_dimensions = _parsed_provider_unanswered_dimensions(parsed, segments)
             unanswered_ids = {
-                str(item).strip()
-                for item in unanswered_dimensions
-                if str(item).strip()
+                str(item).strip() for item in unanswered_dimensions if str(item).strip()
             }
             if unresolved_required_ids and provider_status not in {
                 "partial",
@@ -594,9 +613,7 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
-            candidate, bounded_support_ref_limit = _bounded_publication_candidate(
-                candidate
-            )
+            candidate, bounded_support_ref_limit = _bounded_publication_candidate(candidate)
             material_coverage = _material_claim_requirement_coverage(
                 candidate,
                 requirements=supported_requirements,
@@ -604,10 +621,7 @@ def _synthesize_and_verify(
             if _candidate_lacks_material_requirement_coverage(
                 candidate,
                 requirements=supported_requirements,
-            ) and not (
-                provider_status in {"partial", "partial_candidate"}
-                and material_coverage
-            ):
+            ) and not (provider_status in {"partial", "partial_candidate"} and material_coverage):
                 failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
                 if can_retry(attempt):
                     repair_attempted = True
@@ -735,9 +749,9 @@ def _synthesize_and_verify(
             }
             if partial_answer:
                 final_answer["multi_evidence_verification"]["partial_answer"] = True
-                final_answer["multi_evidence_verification"][
-                    "unanswered_dimensions"
-                ] = unanswered_dimensions
+                final_answer["multi_evidence_verification"]["unanswered_dimensions"] = (
+                    unanswered_dimensions
+                )
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
                 "requirements": [_requirement_public(item) for item in requirements],
@@ -845,8 +859,8 @@ def _verified_supported_review_partial(
     endpoint_proof: Mapping[str, Any],
     final_support_proof: Sequence[Mapping[str, Any]],
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    partial_candidate, partial_review, dropped_claim_ids = (
-        _supported_review_partial_candidate(candidate, semantic_review)
+    partial_candidate, partial_review, dropped_claim_ids = _supported_review_partial_candidate(
+        candidate, semantic_review
     )
     if partial_candidate is None:
         return None
@@ -856,9 +870,7 @@ def _verified_supported_review_partial(
     )
     supported_requirements = [
         requirement
-        for requirement, support in zip(
-            requirements, support_classification, strict=True
-        )
+        for requirement, support in zip(requirements, support_classification, strict=True)
         if support.get("support_state") == "SUPPORTED"
     ]
     if _candidate_lacks_material_requirement_coverage(
@@ -939,9 +951,7 @@ def _provider_partial_has_unresolved_material_gap(
     if not requirements:
         return bool(unresolved)
     requirement_ids = {item.requirement_id for item in requirements}
-    unresolved_requirement_ids = {
-        item for item in unresolved if item in requirement_ids
-    }
+    unresolved_requirement_ids = {item for item in unresolved if item in requirement_ids}
     covered_ids = _material_claim_requirement_coverage(
         candidate,
         requirements=requirements,
@@ -958,9 +968,7 @@ def _candidate_lacks_material_requirement_coverage(
         return False
     requirement_ids = {item.requirement_id for item in requirements}
     return not requirement_ids.issubset(
-        _material_claim_requirement_coverage(
-            candidate, requirements=requirements
-        )
+        _material_claim_requirement_coverage(candidate, requirements=requirements)
     )
 
 
@@ -977,16 +985,12 @@ def _material_claim_requirement_coverage(
             continue
         covered_ids.update(
             str(item)
-            for item in legacy._list(
-                claim.get("facet_ids", []), "partial claim facets"
-            )
+            for item in legacy._list(claim.get("facet_ids", []), "partial claim facets")
             if str(item)
         )
         covered_ids.update(
             str(item)
-            for item in legacy._list(
-                claim.get("covers", []), "partial claim covers"
-            )
+            for item in legacy._list(claim.get("covers", []), "partial claim covers")
             if str(item)
         )
     requirement_ids = {item.requirement_id for item in requirements}
@@ -999,30 +1003,19 @@ def _facet_support_classification(
     evidence: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     selected_ids = [
-        str(item.get("evidence_id", ""))
-        for item in evidence
-        if str(item.get("evidence_id", ""))
+        str(item.get("evidence_id", "")) for item in evidence if str(item.get("evidence_id", ""))
     ]
     inspectable = [item for item in evidence if _selected_evidence_is_inspectable(item)]
     classification: list[dict[str, Any]] = []
     for requirement in requirements:
-        scored = [
-            (_requirement_evidence_score(requirement, item), item)
-            for item in inspectable
-        ]
+        scored = [(_requirement_evidence_score(requirement, item), item) for item in inspectable]
         supporting = [
             item
             for _score, item in scored
             if _selected_evidence_supports_requirement(requirement, item)
         ]
-        if not supporting and _selected_evidence_set_supports_requirement(
-            requirement, inspectable
-        ):
-            supporting = [
-                item
-                for score, item in scored
-                if score > 0
-            ] or list(inspectable)
+        if not supporting and _selected_evidence_set_supports_requirement(requirement, inspectable):
+            supporting = [item for score, item in scored if score > 0] or list(inspectable)
         best_score = max((score for score, _item in scored), default=0.0)
         if supporting:
             state = "SUPPORTED"
@@ -1096,9 +1089,7 @@ def _selected_evidence_set_supports_requirement(
         return requirement.exact_phrase.casefold() in combined.casefold()
     requirement_id = requirement.requirement_id
     if requirement_id == "comparison_or_distinction":
-        contributing = sum(
-            _requirement_evidence_score(requirement, item) > 0 for item in evidence
-        )
+        contributing = sum(_requirement_evidence_score(requirement, item) > 0 for item in evidence)
         return contributing >= 2
     if requirement_id == "explanatory_answer":
         return bool(
@@ -1111,9 +1102,7 @@ def _selected_evidence_set_supports_requirement(
             )
         )
     if requirement_id == "multi_dimension_structure":
-        bullet_count = len(
-            re.findall(r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+", combined)
-        )
+        bullet_count = len(re.findall(r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+", combined))
         return bullet_count >= 2 or combined.count(",") >= 2
     if requirement_id == "non_entailment":
         return any(
@@ -1121,10 +1110,7 @@ def _selected_evidence_set_supports_requirement(
             and str(item.get("relation_type", "")).casefold() == "precedes"
             for item in evidence
         )
-    return any(
-        _selected_evidence_supports_requirement(requirement, item)
-        for item in evidence
-    )
+    return any(_selected_evidence_supports_requirement(requirement, item) for item in evidence)
 
 
 def _selected_evidence_text(item: Mapping[str, Any]) -> str:
@@ -1168,9 +1154,7 @@ def _facet_closure_trace(
         if candidate is not None
         else []
     )
-    material_claim_ids_by_facet: dict[str, list[str]] = {
-        facet_id: [] for facet_id in supported_ids
-    }
+    material_claim_ids_by_facet: dict[str, list[str]] = {facet_id: [] for facet_id in supported_ids}
     claim_local_evidence_ids_by_facet: dict[str, list[str]] = {
         facet_id: [] for facet_id in supported_ids
     }
@@ -1178,10 +1162,8 @@ def _facet_closure_trace(
         for raw_claim in legacy._list(candidate.get("claims"), "candidate claims"):
             claim = legacy._object(raw_claim, "candidate claim")
             if (
-                str(claim.get("claim_kind", "material")).casefold()
-                == "model_explanation"
-                or str(claim.get("claim_type", "")).upper()
-                == "MODEL_EXPLANATION"
+                str(claim.get("claim_kind", "material")).casefold() == "model_explanation"
+                or str(claim.get("claim_type", "")).upper() == "MODEL_EXPLANATION"
             ):
                 continue
             local_evidence_ids = _claim_local_evidence_ids(claim)
@@ -1197,9 +1179,7 @@ def _facet_closure_trace(
             for facet_id in declared_facets.intersection(supported_ids):
                 if claim_id:
                     material_claim_ids_by_facet[facet_id].append(claim_id)
-                claim_local_evidence_ids_by_facet[facet_id].extend(
-                    local_evidence_ids
-                )
+                claim_local_evidence_ids_by_facet[facet_id].extend(local_evidence_ids)
     material_claim_ids_by_facet = {
         facet_id: list(dict.fromkeys(claim_ids))
         for facet_id, claim_ids in material_claim_ids_by_facet.items()
@@ -1216,12 +1196,8 @@ def _facet_closure_trace(
         "unresolved_required_facet_ids": unresolved_ids,
         "grounded_material_claim_coverage": covered_ids,
         "material_claim_ids_by_facet": material_claim_ids_by_facet,
-        "claim_local_evidence_ids_by_facet": (
-            claim_local_evidence_ids_by_facet
-        ),
-        "supported_subset_of_grounded_coverage": set(supported_ids).issubset(
-            covered_ids
-        ),
+        "claim_local_evidence_ids_by_facet": (claim_local_evidence_ids_by_facet),
+        "supported_subset_of_grounded_coverage": set(supported_ids).issubset(covered_ids),
         "support_classification": [dict(item) for item in classification],
     }
 
@@ -1239,8 +1215,7 @@ def _claim_text_covers_requirement(
     return bool(
         requirement.visible_patterns
         and any(
-            re.search(pattern, normalized, flags=re.I)
-            for pattern in requirement.visible_patterns
+            re.search(pattern, normalized, flags=re.I) for pattern in requirement.visible_patterns
         )
     )
 
@@ -1323,9 +1298,7 @@ def _supported_review_partial_candidate(
                 dict.fromkeys(
                     str(ref.get("evidence_id", ""))
                     for claim in compact_claims
-                    for ref in legacy._list(
-                        claim.get("support_refs"), "partial support refs"
-                    )
+                    for ref in legacy._list(claim.get("support_refs"), "partial support refs")
                     if str(ref.get("evidence_id", ""))
                 )
             ),
@@ -1482,8 +1455,7 @@ def _verification_candidate(candidate: Mapping[str, Any]) -> dict[str, Any]:
     verification: dict[str, Any] | None = None
     for quote_limit in (MAX_VERIFICATION_SUPPORT_QUOTE_CHARS, *VERIFICATION_SUPPORT_QUOTE_LIMITS):
         compact_claims = [
-            _compact_partial_claim(claim, quote_limit=quote_limit)
-            for claim in raw_claims
+            _compact_partial_claim(claim, quote_limit=quote_limit) for claim in raw_claims
         ]
         verification = _verification_candidate_from_compact_claims(
             candidate,
@@ -1504,9 +1476,7 @@ def _verification_candidate_from_compact_claims(
         dict.fromkeys(
             str(ref.get("evidence_id", ""))
             for claim in compact_claims
-            for ref in legacy._list(
-                claim.get("support_refs"), "verification support refs"
-            )
+            for ref in legacy._list(claim.get("support_refs"), "verification support refs")
             if str(ref.get("evidence_id", ""))
         )
     )
@@ -1527,7 +1497,9 @@ def _verification_candidate_from_compact_claims(
         "claims": compact_claims,
         "missing_facets": [
             str(item)
-            for item in legacy._list(candidate.get("missing_facets", []), "verification missing facets")
+            for item in legacy._list(
+                candidate.get("missing_facets", []), "verification missing facets"
+            )
             if str(item)
         ],
         "abstention_reason": candidate.get("abstention_reason"),
@@ -1630,23 +1602,18 @@ def _compact_provider_payload(
             evidence=evidence,
         )
     )
-    support_by_id = {
-        str(item.get("facet_id", "")): dict(item) for item in classification
-    }
+    support_by_id = {str(item.get("facet_id", "")): dict(item) for item in classification}
     supported_requirements = [
         item
         for item in requirements
-        if support_by_id.get(item.requirement_id, {}).get("support_state")
-        == "SUPPORTED"
+        if support_by_id.get(item.requirement_id, {}).get("support_state") == "SUPPORTED"
     ]
     unresolved_ids = [
         str(item.get("facet_id", ""))
         for item in classification
         if item.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
     ]
-    ranked = _provider_evidence_order(
-        evidence, supported_requirements, question
-    )[
+    ranked = _provider_evidence_order(evidence, supported_requirements, question)[
         :MAX_PROVIDER_EVIDENCE
     ]
     label_map: dict[str, Mapping[str, Any]] = {}
@@ -1661,9 +1628,7 @@ def _compact_provider_payload(
             {
                 "id": label,
                 "type": str(item.get("evidence_type", "passage")),
-                "source": str(
-                    item.get("source_identity") or item.get("source_id") or ""
-                ),
+                "source": str(item.get("source_identity") or item.get("source_id") or ""),
                 "title": str(item.get("title", ""))[:120],
                 "section": str(item.get("section_title", ""))[:120],
                 "concept": str(item.get("concept_id", ""))[:120],
@@ -1680,8 +1645,7 @@ def _compact_provider_payload(
         facet_id: [
             label
             for label, item in label_map.items()
-            if str(item.get("evidence_id", ""))
-            in set(support.get("supporting_evidence_ids", []))
+            if str(item.get("evidence_id", "")) in set(support.get("supporting_evidence_ids", []))
         ]
         for facet_id, support in support_by_id.items()
     }
@@ -1825,9 +1789,7 @@ def _semantic_review_payload(
     for raw_claim in legacy._list(candidate.get("claims"), "semantic review claims"):
         claim = legacy._object(raw_claim, "semantic review claim")
         local_evidence: list[dict[str, Any]] = []
-        for raw_ref in legacy._list(
-            claim.get("support_refs"), "semantic review support refs"
-        ):
+        for raw_ref in legacy._list(claim.get("support_refs"), "semantic review support refs"):
             ref = legacy._object(raw_ref, "semantic review support ref")
             evidence_id = str(ref.get("evidence_id", ""))
             item = evidence_by_id.get(evidence_id, {})
@@ -1843,9 +1805,7 @@ def _semantic_review_payload(
                     "provenance": "graph_artifact_fact",
                     "relation_metadata": dict(item.get("relation_metadata", {}))
                     if isinstance(item.get("relation_metadata"), Mapping)
-                    else legacy._graph_relation_metadata(
-                        str(item.get("relation_type", ""))
-                    ),
+                    else legacy._graph_relation_metadata(str(item.get("relation_type", ""))),
                 }
             local_evidence.append(
                 {
@@ -1860,12 +1820,8 @@ def _semantic_review_payload(
                     "graph_fact": graph_fact,
                 }
             )
-        allowed_evidence_ids = [
-            str(item.get("evidence_id", "")) for item in local_evidence
-        ]
-        allowed_evidence_labels = [
-            str(item.get("evidence_label", "")) for item in local_evidence
-        ]
+        allowed_evidence_ids = [str(item.get("evidence_id", "")) for item in local_evidence]
+        allowed_evidence_labels = [str(item.get("evidence_label", "")) for item in local_evidence]
         claim_cases.append(
             {
                 "claim_id": str(claim.get("claim_id", "")),
@@ -1977,10 +1933,7 @@ def _semantic_review_blocking_failures(review: Mapping[str, Any]) -> list[str]:
         verdict = str(judgment.get("verdict", ""))
         if verdict in legacy.SEMANTIC_REVIEW_BLOCKING_VERDICTS:
             failures.append(
-                "SEMANTIC_REVIEW_BLOCKED:"
-                + str(judgment.get("claim_id", ""))
-                + ":"
-                + verdict
+                "SEMANTIC_REVIEW_BLOCKED:" + str(judgment.get("claim_id", "")) + ":" + verdict
             )
     coverage = review.get("visible_coverage")
     if not isinstance(coverage, Mapping) or coverage.get("verdict") != "COVERED":
@@ -2005,9 +1958,7 @@ def _call_semantic_entailment_review(
         ),
         SEMANTIC_REVIEW_CALL_CLASS,
     )
-    review = _parse_semantic_review_result(
-        str(raw.get("text", raw.get("provider_text", "")))
-    )
+    review = _parse_semantic_review_result(str(raw.get("text", raw.get("provider_text", ""))))
     if review.get("schema_version") != SEMANTIC_REVIEW_SCHEMA_VERSION:
         raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
     return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
@@ -2051,9 +2002,7 @@ def _validate_provider_segments(raw_segments: Sequence[Any]) -> None:
         claim_type = str(segment.get("claim_type") or "").strip()
         if role == "material_claim":
             if claim_type not in {"EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"}:
-                raise ValueError(
-                    f"provider segment {segment_id} has invalid claim_type"
-                )
+                raise ValueError(f"provider segment {segment_id} has invalid claim_type")
         else:
             if claim_type != "MODEL_EXPLANATION":
                 raise ValueError(
@@ -2070,13 +2019,9 @@ def _validate_provider_segments(raw_segments: Sequence[Any]) -> None:
             str(label).strip() for label in raw_evidence_labels if str(label).strip()
         ]
         if role == "material_claim" and not evidence_labels:
-            raise ValueError(
-                f"provider segment {segment_id} missing claim-local evidence labels"
-            )
+            raise ValueError(f"provider segment {segment_id} missing claim-local evidence labels")
         if role == "model_explanation" and evidence_labels:
-            raise ValueError(
-                f"provider segment {segment_id} model explanation has evidence labels"
-            )
+            raise ValueError(f"provider segment {segment_id} model explanation has evidence labels")
         raw_covers = segment.get("covers", [])
         if raw_covers is not None and not isinstance(raw_covers, list):
             raise ValueError(f"provider segment {segment_id} covers must be list")
@@ -2129,27 +2074,19 @@ def _parse_compact_provider_result(text: str) -> dict[str, Any]:
     return dict(value)
 
 
-def _compact_call_telemetry(
-    result: Mapping[str, Any], *, parse_ok: bool
-) -> dict[str, Any]:
+def _compact_call_telemetry(result: Mapping[str, Any], *, parse_ok: bool) -> dict[str, Any]:
     usage = result.get("usage") if isinstance(result.get("usage"), Mapping) else {}
     stop_reason = str(result.get("stop_reason") or result.get("finish_reason") or "")
     return {
         "provider_text": "",
-        "provider_text_char_count": len(
-            str(result.get("text", result.get("provider_text", "")))
-        ),
+        "provider_text_char_count": len(str(result.get("text", result.get("provider_text", "")))),
         "call_class": str(result.get("call_class", "")),
         "stop_reason": stop_reason,
         "truncation_detected": stop_reason == "max_tokens",
-        "content_block_types": [
-            str(item) for item in result.get("content_block_types", [])
-        ],
+        "content_block_types": [str(item) for item in result.get("content_block_types", [])],
         "parse_telemetry": {
             "parse_ok": parse_ok,
-            "parse_subtype": (
-                "compact_semantic_closure_json" if parse_ok else "invalid"
-            ),
+            "parse_subtype": ("compact_semantic_closure_json" if parse_ok else "invalid"),
         },
         "usage": {
             "input_tokens": int(usage.get("input_tokens", 0)),
@@ -2157,16 +2094,13 @@ def _compact_call_telemetry(
             "total_tokens": int(
                 usage.get(
                     "total_tokens",
-                    int(usage.get("input_tokens", 0))
-                    + int(usage.get("output_tokens", 0)),
+                    int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0)),
                 )
             ),
         },
         "cost_usd": str(result.get("cost_usd", "0")),
         "latency_ms": int(result.get("latency_ms", 0)),
-        "response_id_sha256": canonical_sha256(
-            str(result.get("response_id", ""))
-        ),
+        "response_id_sha256": canonical_sha256(str(result.get("response_id", ""))),
     }
 
 
@@ -2197,9 +2131,7 @@ def _claims_from_segments(
                 ],
                 "covers": [
                     str(item)
-                    for item in legacy._list(
-                        segment.get("covers", []), "segment covers"
-                    )
+                    for item in legacy._list(segment.get("covers", []), "segment covers")
                     if str(item)
                 ],
                 "claim_role": (
@@ -2242,11 +2174,7 @@ def _runtime_bound_candidate(
 ) -> dict[str, Any]:
     del used_items
     relation: str | None = None
-    source_claims = (
-        _claims_from_segments(segments)
-        if segments is not None
-        else list(claims or [])
-    )
+    source_claims = _claims_from_segments(segments) if segments is not None else list(claims or [])
     if not source_claims:
         raise ValueError("provider structured claims required for publication")
     selected_items: list[Mapping[str, Any]] = []
@@ -2284,24 +2212,16 @@ def _runtime_bound_candidate(
         if raw_evidence_labels is None:
             raw_evidence_labels = []
         if not isinstance(raw_evidence_labels, list):
-            raise ValueError(
-                f"provider claim {claim_id} has invalid claim-local evidence labels"
-            )
+            raise ValueError(f"provider claim {claim_id} has invalid claim-local evidence labels")
         evidence_labels = [str(label) for label in raw_evidence_labels if str(label)]
         if claim_type == "MODEL_EXPLANATION":
             support_items = []
         else:
             if not evidence_labels:
-                raise ValueError(
-                    f"provider claim {claim_id} missing claim-local evidence labels"
-                )
-            unknown_labels = [
-                label for label in evidence_labels if label not in label_map
-            ]
+                raise ValueError(f"provider claim {claim_id} missing claim-local evidence labels")
+            unknown_labels = [label for label in evidence_labels if label not in label_map]
             if unknown_labels:
-                raise ValueError(
-                    f"provider claim {claim_id} has unknown evidence labels"
-                )
+                raise ValueError(f"provider claim {claim_id} has unknown evidence labels")
             support_items = [label_map[label] for label in evidence_labels]
             for item in support_items:
                 remember_selected(item)
@@ -2328,9 +2248,7 @@ def _runtime_bound_candidate(
             or _infer_claim_role(intent_class=intent_class, claim_type=claim_type)
         )
         declared_covers = [
-            str(item)
-            for item in legacy._list(claim.get("covers", []), "claim covers")
-            if str(item)
+            str(item) for item in legacy._list(claim.get("covers", []), "claim covers") if str(item)
         ]
         allowed_facet_ids = {item.requirement_id for item in requirements}
         if allowed_facet_ids and set(declared_covers) - allowed_facet_ids:
@@ -2358,11 +2276,7 @@ def _runtime_bound_candidate(
         )
     if intent_class == "graph_relationship":
         edge = next(
-            (
-                item
-                for item in selected_items
-                if item.get("evidence_type") == "graph_edge"
-            ),
+            (item for item in selected_items if item.get("evidence_type") == "graph_edge"),
             None,
         )
         relation = str(edge.get("relation_type", "")) if edge is not None else None
@@ -2373,9 +2287,7 @@ def _runtime_bound_candidate(
             semantic_failures=semantic_failures,
         )
         if missing:
-            unanswered_dimensions = list(
-                dict.fromkeys([*unanswered_dimensions, *missing])
-            )
+            unanswered_dimensions = list(dict.fromkeys([*unanswered_dimensions, *missing]))
     return {
         "schema_version": "aq3-provider-candidate/v3",
         "status": (
@@ -2384,9 +2296,7 @@ def _runtime_bound_candidate(
             else "answer_candidate"
         ),
         "relation": relation,
-        "selected_evidence_ids": [
-            str(item.get("evidence_id", "")) for item in selected_items
-        ],
+        "selected_evidence_ids": [str(item.get("evidence_id", "")) for item in selected_items],
         "answer_text": answer.strip(),
         "claims": claim_records,
         "missing_facets": [],
@@ -2411,11 +2321,7 @@ def _runtime_bound_candidate(
 
 def _parsed_provider_segments(parsed: Mapping[str, Any]) -> list[dict[str, Any]]:
     segments = parsed.get("segments", [])
-    return [
-        dict(item)
-        for item in segments
-        if isinstance(item, Mapping)
-    ]
+    return [dict(item) for item in segments if isinstance(item, Mapping)]
 
 
 def _visible_answer_from_segments(segments: Sequence[Mapping[str, Any]]) -> str:
@@ -2512,14 +2418,17 @@ def _infer_claim_type(intent_class: str, claim: Mapping[str, Any]) -> str:
         return "EVIDENCE_SYNTHESIS"
     if claim.get("support_mode") == "model_explanation":
         return "MODEL_EXPLANATION"
-    if intent_class in {"cross_document_comparison", "complementary_synthesis", "graph_relationship", "temporal_conflict"}:
+    if intent_class in {
+        "cross_document_comparison",
+        "complementary_synthesis",
+        "graph_relationship",
+        "temporal_conflict",
+    }:
         return "EVIDENCE_SYNTHESIS"
     return "EVIDENCE_FACT"
 
 
-def _semantic_requirements(
-    question: str, intent_class: str
-) -> list[SemanticRequirement]:
+def _semantic_requirements(question: str, intent_class: str) -> list[SemanticRequirement]:
     q = question.casefold()
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
@@ -2600,8 +2509,7 @@ def _semantic_requirements(
             )
 
     if "production router" in q or (
-        "router" in q
-        and any(word in q for word in ("path", "downstream", "route"))
+        "router" in q and any(word in q for word in ("path", "downstream", "route"))
     ):
         add(
             "router_decision",
@@ -2628,9 +2536,7 @@ def _semantic_requirements(
                 "capability",
                 "guardrail",
             ],
-            [
-                r"\b(?:permission|safety|policy|risk|cost|latency|capability|guardrail)s?\b"
-            ],
+            [r"\b(?:permission|safety|policy|risk|cost|latency|capability|guardrail)s?\b"],
         )
 
     if "client disconnect" in q or "admission to completion" in q:
@@ -2642,10 +2548,7 @@ def _semantic_requirements(
         )
         add(
             "durable_state",
-            (
-                "Cover durable/persisted server-side run authority or state after "
-                "disconnect."
-            ),
+            ("Cover durable/persisted server-side run authority or state after disconnect."),
             ["durable", "persisted", "state", "authority", "disconnect"],
             [
                 r"\b(?:durable|persisted|server-side).{0,80}(?:state|authority|run)",
@@ -2660,28 +2563,16 @@ def _semantic_requirements(
         )
         add(
             "observability",
-            (
-            "Cover observability/status/reattachment for the headless continuing "
-            "run."
-        ),
+            ("Cover observability/status/reattachment for the headless continuing run."),
             ["observability", "status", "reattach", "headless", "resume"],
             [r"\b(?:observability|reattach|headless|status|resume)\b"],
         )
-    elif (
-        ("durable" in q or "persisted" in q or "run state" in q)
-        and (
-            "verification" in q
-            or "verified" in q
-            or "post-execution" in q
-            or "completion" in q
-        )
+    elif ("durable" in q or "persisted" in q or "run state" in q) and (
+        "verification" in q or "verified" in q or "post-execution" in q or "completion" in q
     ):
         add(
             "durable_state",
-            (
-                "Cover durable/persisted server-side run authority or state after "
-                "interruption."
-            ),
+            ("Cover durable/persisted server-side run authority or state after interruption."),
             ["durable", "persisted", "state", "authority", "disconnect", "interruption"],
             [
                 r"\b(?:durable|persisted|server-side).{0,80}(?:state|authority|run)",
@@ -2735,9 +2626,8 @@ def _semantic_requirements(
             ["risk", "risks"],
             [r"\brisks?\b"],
         )
-    if (
-        any(term in q for term in ("pain point", "pain", "痛點"))
-        and any(term in q for term in ("adopt", "adoption", "change", "願意改變", "願意採用", "市場"))
+    if any(term in q for term in ("pain point", "pain", "痛點")) and any(
+        term in q for term in ("adopt", "adoption", "change", "願意改變", "願意採用", "市場")
     ):
         add(
             "pain_acknowledgement",
@@ -2763,10 +2653,10 @@ def _semantic_requirements(
             ["market", "customer", "hospitality", "hotel", "市場", "旅宿"],
             [r"\b(?:market|customer|hospitality|hotel|市場|旅宿)\b"],
         )
-    if (
-        any(term in q for term in ("changes direction", "changed in the problem", "founder drift", "aimless"))
-        and any(term in q for term in ("problem", "constraint", "market reality"))
-    ):
+    if any(
+        term in q
+        for term in ("changes direction", "changed in the problem", "founder drift", "aimless")
+    ) and any(term in q for term in ("problem", "constraint", "market reality")):
         add(
             "problem_evidence_changed",
             "Focus on how the problem evidence changed rather than the pitch deck.",
@@ -2792,12 +2682,8 @@ def _semantic_requirements(
             [r"\b(?:drift|aimless|direction|change)\b"],
         )
 
-    if (
-        "where a request should go" in q and "remaining work" in q
-    ) or (
-        intent_class == "cross_document_comparison"
-        and "adaptive" in q
-        and "router" in q
+    if ("where a request should go" in q and "remaining work" in q) or (
+        intent_class == "cross_document_comparison" and "adaptive" in q and "router" in q
     ):
         add(
             "initial_routing_role",
@@ -2858,9 +2744,7 @@ def _semantic_requirements(
             ["precedes", "ordering", "sequence", "navigation"],
             [r"\b(?:ordering|sequence|navigation|comes before|precedes)\b"],
         )
-        if re.search(
-            r"\b(?:prove|infer|depend|dependency|require|causal|cause)\b", q
-        ):
+        if re.search(r"\b(?:prove|infer|depend|dependency|require|causal|cause)\b", q):
             add(
                 "non_entailment",
                 (
@@ -2874,24 +2758,16 @@ def _semantic_requirements(
                 ],
             )
 
-    if "state machine" in q and (
-        "adaptive replanning" in q or "replanner" in q or "replan" in q
-    ):
+    if "state machine" in q and ("adaptive replanning" in q or "replanner" in q or "replan" in q):
         add(
             "state_machine_authority",
-            (
-                "Explain the state machine as the legal transition/permission/approval "
-                "envelope."
-            ),
+            ("Explain the state machine as the legal transition/permission/approval envelope."),
             ["state machine", "legal transition", "permission", "approval", "guard"],
             [r"state machine.{0,160}(?:transition|permission|approval|guard|legal)"],
         )
         add(
             "adaptive_replan",
-            (
-                "Explain that replanning may change remaining steps when assumptions "
-                "become invalid."
-            ),
+            ("Explain that replanning may change remaining steps when assumptions become invalid."),
             ["replan", "remaining", "assumption", "invalid"],
             [r"\b(?:replan|replanning|replanner).{0,140}(?:remaining|assumption|invalid|plan)"],
         )
@@ -2984,10 +2860,10 @@ def _semantic_requirements(
             ],
         )
 
-    if (
-        any(term in q for term in ("pausing a venture", "pause a venture", "pausing", "survival decision"))
-        and any(term in q for term in ("runway", "timing", "people", "resource", "constraint"))
-    ):
+    if any(
+        term in q
+        for term in ("pausing a venture", "pause a venture", "pausing", "survival decision")
+    ) and any(term in q for term in ("runway", "timing", "people", "resource", "constraint")):
         add(
             "venture_pause_rationality",
             "Explain when pausing the venture is a rational survival/timing decision.",
@@ -2998,7 +2874,9 @@ def _semantic_requirements(
             "conviction_problem_boundary",
             "Separate conviction in the problem from whether now is executable.",
             ["conviction", "believe", "problem", "execute"],
-            [r"\b(?:conviction|belie(?:f|ve|ves)).{0,160}(?:problem|still|separate|execution|execute)"],
+            [
+                r"\b(?:conviction|belie(?:f|ve|ves)).{0,160}(?:problem|still|separate|execution|execute)"
+            ],
         )
         add(
             "runway_constraint",
@@ -3025,9 +2903,9 @@ def _semantic_requirements(
             [r"\bresources?\b|\bconstraints?\b"],
         )
 
-    if (
-        "demand" in q
-        and any(term in q for term in ("viable business", "value capture", "economics", "delivery", "repeatability"))
+    if "demand" in q and any(
+        term in q
+        for term in ("viable business", "value capture", "economics", "delivery", "repeatability")
     ):
         add(
             "demand_not_business_proof",
@@ -3057,12 +2935,17 @@ def _semantic_requirements(
             "business_repeatability",
             "Cover repeatability.",
             ["repeatability", "repeatable", "repeat", "again", "return", "retained"],
-            [r"\brepeatab(?:le|ility)\b", r"\bagain\b", r"\breturn\b", r"\bretained\b", r"\brepeat\b"],
+            [
+                r"\brepeatab(?:le|ility)\b",
+                r"\bagain\b",
+                r"\breturn\b",
+                r"\bretained\b",
+                r"\brepeat\b",
+            ],
         )
 
-    if (
-        "comfyui" in q
-        and any(term in q for term in ("red nodes", "out of memory", "memory", "workflow"))
+    if "comfyui" in q and any(
+        term in q for term in ("red nodes", "out of memory", "memory", "workflow")
     ):
         add(
             "comfyui_failure_modes",
@@ -3103,8 +2986,26 @@ def _semantic_requirements(
         add(
             "comfyui_requirements",
             "Cover missing custom node/package requirements.",
-            ["requirements", "required", "designed", "workflow", "release", "version", "matches", "stack"],
-            [r"\brequirements?\b", r"\brequired\b", r"\bdesigned\b", r"\bworkflow\b", r"\brelease\b", r"\bversion\b", r"\bmatches\b", r"\bstack\b"],
+            [
+                "requirements",
+                "required",
+                "designed",
+                "workflow",
+                "release",
+                "version",
+                "matches",
+                "stack",
+            ],
+            [
+                r"\brequirements?\b",
+                r"\brequired\b",
+                r"\bdesigned\b",
+                r"\bworkflow\b",
+                r"\brelease\b",
+                r"\bversion\b",
+                r"\bmatches\b",
+                r"\bstack\b",
+            ],
         )
         add(
             "comfyui_memory_debug_order",
@@ -3192,9 +3093,7 @@ def _coordinated_question_subjects(question: str) -> list[str]:
     subjects: list[str] = []
     seen: set[str] = set()
     for part in parts:
-        subject = re.sub(
-            r"^(?:a|an|the|and)\s+", "", part.strip(), flags=re.I
-        )
+        subject = re.sub(r"^(?:a|an|the|and)\s+", "", part.strip(), flags=re.I)
         if not subject or len(subject.split()) > 6:
             continue
         key = subject.casefold()
@@ -3263,10 +3162,7 @@ def _add_generic_answer_dimension_requirements(
 
     asks_process = bool(
         re.search(r"\b(?:process|steps?|workflow|sequence)\b", q)
-        or (
-            re.search(r"\bhow\s+(?:can|should|do|does)\b", q)
-            and not asks_comparison
-        )
+        or (re.search(r"\bhow\s+(?:can|should|do|does)\b", q) and not asks_comparison)
     )
     if asks_process:
         add(
@@ -3389,30 +3285,22 @@ def _visible_semantic_failures(
             requirement.exact_phrase
             and requirement.exact_phrase.casefold() not in normalized.casefold()
         ):
-            failures.append(
-                f"SEMANTIC_VISIBLE_MISSING:{requirement.requirement_id}"
-            )
+            failures.append(f"SEMANTIC_VISIBLE_MISSING:{requirement.requirement_id}")
             continue
         if requirement.visible_patterns and not any(
-            re.search(pattern, normalized, flags=re.I)
-            for pattern in requirement.visible_patterns
+            re.search(pattern, normalized, flags=re.I) for pattern in requirement.visible_patterns
         ):
-            failures.append(
-                f"SEMANTIC_VISIBLE_MISSING:{requirement.requirement_id}"
-            )
-    if (
-        legacy._question_requires_non_entailment_boundary(question)
-        and not legacy._has_non_entailment_boundary(normalized.casefold())
-    ):
+            failures.append(f"SEMANTIC_VISIBLE_MISSING:{requirement.requirement_id}")
+    if legacy._question_requires_non_entailment_boundary(
+        question
+    ) and not legacy._has_non_entailment_boundary(normalized.casefold()):
         failures.append("SEMANTIC_VISIBLE_MISSING:non_entailment")
     return sorted(set(failures))
 
 
 def _hard_visible_semantic_failures(failures: Sequence[str]) -> list[str]:
     return [
-        str(item)
-        for item in failures
-        if str(item) == "SEMANTIC_VISIBLE_MISSING:non_entailment"
+        str(item) for item in failures if str(item) == "SEMANTIC_VISIBLE_MISSING:non_entailment"
     ]
 
 
@@ -3433,25 +3321,19 @@ def _requirement_support_failures(
                 best = item
         supported = best is not None and best_score >= 1.0
         if not supported:
-            failures.append(
-                f"SEMANTIC_SUPPORT_MISSING:{requirement.requirement_id}"
-            )
+            failures.append(f"SEMANTIC_SUPPORT_MISSING:{requirement.requirement_id}")
         proof.append(
             {
                 "requirement_id": requirement.requirement_id,
                 "supported": supported,
                 "score": round(best_score, 4),
-                "evidence_id": (
-                    str(best.get("evidence_id", "")) if best is not None else ""
-                ),
+                "evidence_id": (str(best.get("evidence_id", "")) if best is not None else ""),
                 "source_identity": (
                     str(best.get("source_identity") or best.get("source_id") or "")
                     if best is not None
                     else ""
                 ),
-                "concept_id": (
-                    str(best.get("concept_id", "")) if best is not None else ""
-                ),
+                "concept_id": (str(best.get("concept_id", "")) if best is not None else ""),
             }
         )
     return sorted(set(failures)), proof
@@ -3483,11 +3365,7 @@ def _strengthen_evidence(
         if len(entities) >= 2:
             endpoint_proof["required"] = True
         edge = next(
-            (
-                item
-                for item in selected
-                if item.get("evidence_type") == "graph_edge"
-            ),
+            (item for item in selected if item.get("evidence_type") == "graph_edge"),
             None,
         )
         if edge is not None:
@@ -3495,12 +3373,8 @@ def _strengthen_evidence(
                 {
                     "matched": True,
                     "edge_id": str(edge.get("edge_id", "")),
-                    "edge_source": str(
-                        edge.get("edge_source") or edge.get("source") or ""
-                    ),
-                    "edge_target": str(
-                        edge.get("edge_target") or edge.get("target") or ""
-                    ),
+                    "edge_source": str(edge.get("edge_source") or edge.get("source") or ""),
+                    "edge_target": str(edge.get("edge_target") or edge.get("target") or ""),
                     "relation_type": str(edge.get("relation_type", "")),
                 }
             )
@@ -3530,11 +3404,7 @@ def _exact_named_graph_edge(
         target = str(edge.get("target", ""))
         if source in source_candidates and target in target_candidates:
             matches.append(edge)
-        elif (
-            not required_relation
-            and source in target_candidates
-            and target in source_candidates
-        ):
+        elif not required_relation and source in target_candidates and target in source_candidates:
             matches.append(edge)
     if not matches:
         return None
@@ -3570,9 +3440,7 @@ def _entity_concepts(bundle: ProductionAnswerBundle, entity: str) -> set[str]:
     for document in legacy._release_documents(bundle):
         title = str(document.get("title", ""))
         section_title = str(document.get("section_title", ""))
-        source_identity = str(
-            document.get("source_identity") or document.get("source_id") or ""
-        )
+        source_identity = str(document.get("source_identity") or document.get("source_id") or "")
         text = legacy._document_text(document)
         if strict_part_identity:
             text_match = _identity_phrase_matches(entity, text)
@@ -3606,11 +3474,7 @@ def _entity_concepts(bundle: ProductionAnswerBundle, entity: str) -> set[str]:
     if not scored:
         return set()
     best = max(score for score, _ in scored)
-    return {
-        concept
-        for score, concept in scored
-        if concept and score >= best - 0.5
-    }
+    return {concept for score, concept in scored if concept and score >= best - 0.5}
 
 
 def _force_required_support_items(
@@ -3632,29 +3496,19 @@ def _force_required_support_items(
             ids.add(evidence_id)
 
     for requirement in requirements:
-        if any(
-            _requirement_evidence_score(requirement, item) >= 1.0
-            for item in selected
-        ):
+        if any(_requirement_evidence_score(requirement, item) >= 1.0 for item in selected):
             continue
         candidate = max(
             evidence,
             key=lambda item: _requirement_evidence_score(requirement, item),
             default=None,
         )
-        if (
-            candidate is not None
-            and _requirement_evidence_score(requirement, candidate) >= 1.0
-        ):
+        if candidate is not None and _requirement_evidence_score(requirement, candidate) >= 1.0:
             add_item(candidate)
 
     if intent_class == "graph_relationship":
         graph_edge = next(
-            (
-                item
-                for item in evidence
-                if item.get("evidence_type") == "graph_edge"
-            ),
+            (item for item in evidence if item.get("evidence_type") == "graph_edge"),
             None,
         )
         if graph_edge is not None:
@@ -3691,11 +3545,7 @@ def _force_required_support_items(
     elif intent_class == "provenance_source_trace":
         for evidence_type in ("passage", "provenance"):
             item = next(
-                (
-                    x
-                    for x in evidence
-                    if x.get("evidence_type") == evidence_type
-                ),
+                (x for x in evidence if x.get("evidence_type") == evidence_type),
                 None,
             )
             if item is not None:
@@ -3757,9 +3607,7 @@ def _provider_evidence_order(
     qterms = legacy._meaningful_terms(question)
     definition_parts = legacy._contextual_definition_query_parts(question)
     definition_head_terms = (
-        legacy._coverage_terms(definition_parts["definition_head"])
-        if definition_parts
-        else set()
+        legacy._coverage_terms(definition_parts["definition_head"]) if definition_parts else set()
     )
     definition_predicate_terms = {
         "acceptance",
@@ -3836,13 +3684,7 @@ def _provider_evidence_order(
                     )
                 )
             ),
-            -max(
-                [
-                    _requirement_evidence_score(req, item)
-                    for req in requirements
-                ]
-                or [0.0]
-            ),
+            -max([_requirement_evidence_score(req, item) for req in requirements] or [0.0]),
             -legacy._text_term_overlap_score(
                 qterms,
                 str(item.get("passage_text", "")),
@@ -3867,9 +3709,7 @@ def _provider_snippet(
     target_terms = set(legacy._meaningful_terms(question))
     definition_parts = legacy._contextual_definition_query_parts(question)
     definition_head_terms = (
-        legacy._coverage_terms(definition_parts["definition_head"])
-        if definition_parts
-        else set()
+        legacy._coverage_terms(definition_parts["definition_head"]) if definition_parts else set()
     )
     definition_predicate_terms = {
         "acceptance",
@@ -3900,9 +3740,7 @@ def _provider_snippet(
         if definition_parts["context_modifier"]:
             target_terms |= legacy._coverage_terms(definition_parts["context_modifier"])
     for requirement in requirements:
-        target_terms |= legacy._meaningful_terms(
-            " ".join(requirement.evidence_terms)
-        )
+        target_terms |= legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     segments = legacy._exact_quote_segments(text)
     ranked = sorted(
         segments,
@@ -3936,9 +3774,7 @@ def _requirement_document_score(
         if not _identity_phrase_matches(requirement.exact_phrase, text):
             return 0.0
         score = 3.0
-        if _identity_phrase_matches(
-            requirement.exact_phrase, str(document.get("title", ""))
-        ):
+        if _identity_phrase_matches(requirement.exact_phrase, str(document.get("title", ""))):
             score += 4.0
         if _identity_phrase_matches(
             requirement.exact_phrase, str(document.get("section_title", ""))
@@ -3953,9 +3789,7 @@ def _requirement_document_score(
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     overlap = len(terms & legacy._meaningful_terms(text))
     phrase_bonus = sum(
-        1.0
-        for phrase in requirement.evidence_terms
-        if phrase.casefold() in text.casefold()
+        1.0 for phrase in requirement.evidence_terms if phrase.casefold() in text.casefold()
     )
     return overlap * 0.5 + phrase_bonus
 
@@ -3977,17 +3811,11 @@ def _requirement_evidence_score(
         )
     )
     if requirement.exact_phrase:
-        return (
-            3.0
-            if _identity_phrase_matches(requirement.exact_phrase, text)
-            else 0.0
-        )
+        return 3.0 if _identity_phrase_matches(requirement.exact_phrase, text) else 0.0
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     overlap = len(terms & legacy._meaningful_terms(text))
     phrase_bonus = sum(
-        1.0
-        for phrase in requirement.evidence_terms
-        if phrase.casefold() in text.casefold()
+        1.0 for phrase in requirement.evidence_terms if phrase.casefold() in text.casefold()
     )
     return overlap * 0.5 + phrase_bonus
 

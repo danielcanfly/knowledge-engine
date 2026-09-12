@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 import json
 from collections.abc import Callable, Mapping
@@ -274,6 +275,26 @@ def execute_promotion(
     if observed_candidate != plan.candidate:
         raise IntegrityError("M26-PROMOTE-003 candidate qualification drift")
 
+    predecessor_store = _PointerOverlay(store, plan.predecessor.raw)
+    predecessor_active = resolve_active_production_release(predecessor_store)
+    _match_active_pointer(predecessor_active, plan.predecessor, "promotion predecessor")
+    predecessor_artifacts = _validate_active_artifacts(store, predecessor_active)
+    observed_predecessor_qdrant = (
+        revalidate_predecessor_qdrant()
+        if revalidate_predecessor_qdrant
+        else plan.predecessor_qualification.qdrant
+    )
+    _validate_production_qdrant(observed_predecessor_qdrant, predecessor_active)
+    if (
+        _predecessor_from_active(
+            predecessor_active,
+            artifact_family=predecessor_artifacts,
+            qdrant=observed_predecessor_qdrant,
+        )
+        != plan.predecessor_qualification
+    ):
+        raise IntegrityError("M26-PROMOTE-007 predecessor qualification drift")
+
     _put_immutable(store, plan.production_manifest_key, plan.production_manifest_bytes)
     store.put(
         PRODUCTION_POINTER_KEY,
@@ -397,6 +418,168 @@ def rollback_plan_receipt(plan: RollbackPlan) -> dict[str, Any]:
             "read back exact predecessor and resolve active release",
         ],
     }
+
+
+def promotion_plan_to_payload(plan: PromotionPlan) -> dict[str, Any]:
+    """Serialize every byte and identity needed for exact restart-safe replay."""
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "kind": "durable_exact_promotion_plan",
+        "candidate": _jsonable_dataclass(plan.candidate),
+        "predecessor": {
+            **_pointer_receipt(plan.predecessor),
+            "raw_base64": base64.b64encode(plan.predecessor.raw).decode("ascii"),
+        },
+        "predecessor_qualification": _jsonable_dataclass(plan.predecessor_qualification),
+        "production_manifest_key": plan.production_manifest_key,
+        "production_manifest_base64": base64.b64encode(plan.production_manifest_bytes).decode(
+            "ascii"
+        ),
+        "production_manifest_sha256": plan.production_manifest_sha256,
+        "target_pointer_base64": base64.b64encode(plan.target_pointer_bytes).decode("ascii"),
+        "target_pointer_sha256": plan.target_pointer_sha256,
+        "promoted_at": plan.promoted_at,
+        "owner_authorization": plan.owner_authorization,
+    }
+
+
+def promotion_plan_from_payload(value: Mapping[str, Any]) -> PromotionPlan:
+    """Restore a durable plan without consulting latest-candidate state."""
+
+    payload = _mapping(value, "durable promotion plan")
+    if (
+        payload.get("schema_version") != SCHEMA_VERSION
+        or payload.get("kind") != "durable_exact_promotion_plan"
+    ):
+        raise IntegrityError("M26-PROMOTE-008 durable plan schema mismatch")
+
+    candidate_raw = _mapping(payload.get("candidate"), "durable candidate")
+    candidate_qdrant_raw = _mapping(candidate_raw.get("qdrant"), "durable candidate Qdrant")
+    candidate = CandidateQualification(
+        release_id=_required_string(candidate_raw, "release_id", "durable candidate"),
+        manifest_key=_required_string(candidate_raw, "manifest_key", "durable candidate"),
+        manifest_sha256=_hex(identity_value=candidate_raw.get("manifest_sha256"), length=64),
+        artifact_count=_positive_int(
+            candidate_raw.get("artifact_count"), "durable candidate artifact_count"
+        ),
+        artifact_family=_string_tuple(
+            candidate_raw.get("artifact_family"), "durable candidate artifact_family"
+        ),
+        source_commit_sha=_hex(identity_value=candidate_raw.get("source_commit_sha"), length=40),
+        admission_sha256=_hex(identity_value=candidate_raw.get("admission_sha256"), length=64),
+        semantic_point_count=_positive_int(
+            candidate_raw.get("semantic_point_count"),
+            "durable candidate semantic_point_count",
+        ),
+        qdrant=_candidate_qdrant_from_payload(candidate_qdrant_raw),
+    )
+
+    predecessor_raw = _mapping(payload.get("predecessor"), "durable predecessor")
+    predecessor_bytes = _base64_bytes(
+        predecessor_raw.get("raw_base64"), "durable predecessor raw bytes"
+    )
+    predecessor = _pointer_from_bytes(
+        predecessor_bytes,
+        _required_string(predecessor_raw, "etag", "durable predecessor"),
+    )
+    if predecessor.sha256 != _hex(identity_value=predecessor_raw.get("sha256"), length=64):
+        raise IntegrityError("M26-PROMOTE-009 durable predecessor digest mismatch")
+
+    predecessor_qualification_raw = _mapping(
+        payload.get("predecessor_qualification"), "durable predecessor qualification"
+    )
+    predecessor_qdrant_raw = _mapping(
+        predecessor_qualification_raw.get("qdrant"), "durable predecessor Qdrant"
+    )
+    predecessor_qualification = PredecessorQualification(
+        release_id=_required_string(
+            predecessor_qualification_raw,
+            "release_id",
+            "durable predecessor qualification",
+        ),
+        production_manifest_key=_required_string(
+            predecessor_qualification_raw,
+            "production_manifest_key",
+            "durable predecessor qualification",
+        ),
+        production_manifest_sha256=_hex(
+            identity_value=predecessor_qualification_raw.get("production_manifest_sha256"),
+            length=64,
+        ),
+        candidate_manifest_key=_required_string(
+            predecessor_qualification_raw,
+            "candidate_manifest_key",
+            "durable predecessor qualification",
+        ),
+        candidate_manifest_sha256=_hex(
+            identity_value=predecessor_qualification_raw.get("candidate_manifest_sha256"),
+            length=64,
+        ),
+        source_commit_sha=_hex(
+            identity_value=predecessor_qualification_raw.get("source_commit_sha"),
+            length=40,
+        ),
+        admission_sha256=_hex(
+            identity_value=predecessor_qualification_raw.get("admission_sha256"),
+            length=64,
+        ),
+        semantic_point_count=_positive_int(
+            predecessor_qualification_raw.get("semantic_point_count"),
+            "durable predecessor semantic_point_count",
+        ),
+        artifact_count=_positive_int(
+            predecessor_qualification_raw.get("artifact_count"),
+            "durable predecessor artifact_count",
+        ),
+        artifact_family=_string_tuple(
+            predecessor_qualification_raw.get("artifact_family"),
+            "durable predecessor artifact_family",
+        ),
+        qdrant=_production_qdrant_from_payload(predecessor_qdrant_raw),
+    )
+    if predecessor_qualification.release_id != predecessor.release_id:
+        raise IntegrityError("M26-PROMOTE-010 durable predecessor identity mismatch")
+
+    production_manifest_bytes = _base64_bytes(
+        payload.get("production_manifest_base64"), "durable production manifest"
+    )
+    production_manifest_sha256 = _hex(
+        identity_value=payload.get("production_manifest_sha256"), length=64
+    )
+    if sha256_bytes(production_manifest_bytes) != production_manifest_sha256:
+        raise IntegrityError("M26-PROMOTE-011 durable production manifest digest mismatch")
+    target_pointer_bytes = _base64_bytes(
+        payload.get("target_pointer_base64"), "durable target pointer"
+    )
+    target_pointer_sha256 = _hex(identity_value=payload.get("target_pointer_sha256"), length=64)
+    if sha256_bytes(target_pointer_bytes) != target_pointer_sha256:
+        raise IntegrityError("M26-PROMOTE-012 durable target pointer digest mismatch")
+    target = _pointer_from_bytes(target_pointer_bytes, etag="")
+    production_manifest_key = _required_string(
+        payload, "production_manifest_key", "durable promotion plan"
+    )
+    if (
+        target.release_id != candidate.release_id
+        or target.manifest_key != production_manifest_key
+        or target.manifest_sha256 != production_manifest_sha256
+    ):
+        raise IntegrityError("M26-PROMOTE-013 durable target pointer identity mismatch")
+
+    return PromotionPlan(
+        candidate=candidate,
+        predecessor=predecessor,
+        predecessor_qualification=predecessor_qualification,
+        production_manifest_key=production_manifest_key,
+        production_manifest_bytes=production_manifest_bytes,
+        production_manifest_sha256=production_manifest_sha256,
+        target_pointer_bytes=target_pointer_bytes,
+        target_pointer_sha256=target_pointer_sha256,
+        promoted_at=_required_string(payload, "promoted_at", "durable promotion plan"),
+        owner_authorization=_required_string(
+            payload, "owner_authorization", "durable promotion plan"
+        ),
+    )
 
 
 def _qualify_candidate(
@@ -791,6 +974,84 @@ def _jsonable_dataclass(value: Any) -> dict[str, Any]:
         return value
 
     return normalize(result)
+
+
+def _base64_bytes(value: Any, label: str) -> bytes:
+    if not isinstance(value, str) or not value:
+        raise IntegrityError(f"{label} is missing")
+    try:
+        return base64.b64decode(value.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise IntegrityError(f"{label} is not canonical base64") from exc
+
+
+def _string_tuple(value: Any, label: str) -> tuple[str, ...]:
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item for item in value)
+        or len(value) != len(set(value))
+    ):
+        raise IntegrityError(f"{label} is invalid")
+    return tuple(value)
+
+
+def _candidate_qdrant_from_payload(value: Mapping[str, Any]) -> QdrantQualification:
+    return QdrantQualification(
+        collection=_required_string(value, "collection", "durable candidate Qdrant"),
+        status=_required_string(value, "status", "durable candidate Qdrant"),
+        points_count=_positive_int(value.get("points_count"), "durable candidate points_count"),
+        filtered_point_count=_positive_int(
+            value.get("filtered_point_count"), "durable candidate filtered_point_count"
+        ),
+        vector_name=_required_string(value, "vector_name", "durable candidate Qdrant"),
+        vector_dimension=_positive_int(
+            value.get("vector_dimension"), "durable candidate vector_dimension"
+        ),
+        distance=_required_string(value, "distance", "durable candidate Qdrant"),
+        payload_indexes=_string_tuple(
+            value.get("payload_indexes"), "durable candidate payload_indexes"
+        ),
+        alias_count=int(value.get("alias_count", 0)),
+        point_ids_sha256=_hex(identity_value=value.get("point_ids_sha256"), length=64),
+        section_ids_sha256=_hex(identity_value=value.get("section_ids_sha256"), length=64),
+        aggregate_identity_sha256=_hex(
+            identity_value=value.get("aggregate_identity_sha256"), length=64
+        ),
+        vector_fingerprint_sha256=_hex(
+            identity_value=value.get("vector_fingerprint_sha256"), length=64
+        ),
+    )
+
+
+def _production_qdrant_from_payload(
+    value: Mapping[str, Any],
+) -> ProductionQdrantQualification:
+    aliases = value.get("aliases", [])
+    if not isinstance(aliases, list) or any(not isinstance(item, str) for item in aliases):
+        raise IntegrityError("durable predecessor Qdrant aliases are invalid")
+    return ProductionQdrantQualification(
+        collection=_required_string(value, "collection", "durable predecessor Qdrant"),
+        status=_required_string(value, "status", "durable predecessor Qdrant"),
+        points_count=_positive_int(value.get("points_count"), "durable predecessor points_count"),
+        full_identity_count=_positive_int(
+            value.get("full_identity_count"), "durable predecessor full_identity_count"
+        ),
+        vector_name=_required_string(value, "vector_name", "durable predecessor Qdrant"),
+        vector_dimension=_positive_int(
+            value.get("vector_dimension"), "durable predecessor vector_dimension"
+        ),
+        distance=_required_string(value, "distance", "durable predecessor Qdrant"),
+        aliases=tuple(aliases),
+        point_ids_sha256=_hex(identity_value=value.get("point_ids_sha256"), length=64),
+        section_ids_sha256=_hex(identity_value=value.get("section_ids_sha256"), length=64),
+        aggregate_identity_sha256=_hex(
+            identity_value=value.get("aggregate_identity_sha256"), length=64
+        ),
+        vector_fingerprint_sha256=_hex(
+            identity_value=value.get("vector_fingerprint_sha256"), length=64
+        ),
+    )
 
 
 def _json_object(data: bytes, label: str) -> dict[str, Any]:

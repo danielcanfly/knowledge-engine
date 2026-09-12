@@ -142,6 +142,7 @@ def _health(
     candidate_manifest: dict[str, Any] | None = None,
     candidate_error: dict[str, str] | None = None,
     missing_seams: list[str] | None = None,
+    finalization_authorized: bool = False,
 ) -> dict[str, Any]:
     observation = ReadObservation(
         availability="partial" if active_error or source_error or candidate_error else "available",
@@ -156,6 +157,7 @@ def _health(
             "candidate_manifest": candidate_manifest,
             "candidate_manifest_error": candidate_error,
             "missing_seams": missing_seams or [],
+            "finalization_authorized": finalization_authorized,
         },
         source="truth-fixture",
         observed_at="2026-09-09T00:02:00Z",
@@ -236,6 +238,45 @@ def test_verified_successful_candidate_is_ready_for_review_but_never_active() ->
         "active_pointer_authorized": False,
         "blockers": [],
     }
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        (None, "candidate_ready"),
+        ("FINALIZATION_READY", "finalization_ready"),
+        ("FINALIZATION_BLOCKED", "finalization_blocked"),
+        ("ACTIVE_SUCCESSOR", "active_successor"),
+    ],
+)
+def test_index_health_distinguishes_finalization_truth_states(
+    state: str | None,
+    expected: str,
+) -> None:
+    job = _candidate_job(status="FAILED" if state == "FINALIZATION_BLOCKED" else "SUCCEEDED")
+    job["finalization_state"] = state
+    if state == "FINALIZATION_BLOCKED":
+        job["candidate_release_id"] = "candidate-release"
+        job["candidate_manifest_key"] = "releases/candidate-release/manifest.json"
+        job["candidate_manifest_sha256"] = "c" * 64
+        job["candidate_receipt"] = _candidate_job()["result"]
+    active = _active()
+    if state == "ACTIVE_SUCCESSOR":
+        active["release_id"] = "candidate-release"
+    health = _health(
+        active=active,
+        jobs=[job],
+        candidate_job=job,
+        candidate_manifest=_candidate_manifest(),
+        finalization_authorized=True,
+    )
+    assert health["finalization"]["status"] == expected
+    assert health["finalization"]["public_production_traffic_authorized"] is False
+
+
+def test_index_health_finalization_unknown_is_explicit() -> None:
+    health = _health(finalization_authorized=True)
+    assert health["finalization"]["status"] == "unknown"
 
 
 def test_source_equal_to_active_is_current_with_deterministic_noop_diff() -> None:

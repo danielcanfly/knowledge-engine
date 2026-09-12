@@ -64,6 +64,7 @@ def _plan(
 ):
     return build_candidate_release_plan(
         release_id="m26blog-test-release-001",
+        engine_commit_sha="d" * 40,
         source_commit_sha="a" * 40,
         source_repository_head_sha="b" * 40,
         admission_sha256="c" * 64,

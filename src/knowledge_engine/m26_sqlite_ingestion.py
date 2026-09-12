@@ -152,6 +152,13 @@ class SQLiteIngestionLedger:
                     candidate_release_id TEXT,
                     candidate_manifest_key TEXT,
                     candidate_manifest_sha256 TEXT,
+                    candidate_receipt_json TEXT,
+                    predecessor_pointer_sha256 TEXT,
+                    finalization_state TEXT,
+                    finalization_plan_json TEXT,
+                    finalization_plan_digest TEXT,
+                    finalization_result_json TEXT,
+                    active_successor_release_id TEXT,
                     result_json TEXT,
                     error_code TEXT,
                     error_detail TEXT,
@@ -168,10 +175,19 @@ class SQLiteIngestionLedger:
                 str(row["name"])
                 for row in db.execute("PRAGMA table_info(ingestion_jobs)").fetchall()
             }
-            if "request_payload_json" not in columns:
-                db.execute(
-                    "ALTER TABLE ingestion_jobs ADD COLUMN request_payload_json TEXT NOT NULL DEFAULT '{}'"
-                )
+            migrations = {
+                "request_payload_json": "TEXT NOT NULL DEFAULT '{}'",
+                "candidate_receipt_json": "TEXT",
+                "predecessor_pointer_sha256": "TEXT",
+                "finalization_state": "TEXT",
+                "finalization_plan_json": "TEXT",
+                "finalization_plan_digest": "TEXT",
+                "finalization_result_json": "TEXT",
+                "active_successor_release_id": "TEXT",
+            }
+            for column, definition in migrations.items():
+                if column not in columns:
+                    db.execute(f"ALTER TABLE ingestion_jobs ADD COLUMN {column} {definition}")
 
     @staticmethod
     def _legacy(row: sqlite3.Row) -> IdempotencyRecord:
@@ -404,6 +420,13 @@ class SQLiteIngestionLedger:
             "candidate_release_id": row["candidate_release_id"],
             "candidate_manifest_key": row["candidate_manifest_key"],
             "candidate_manifest_sha256": row["candidate_manifest_sha256"],
+            "candidate_receipt": _decode(row["candidate_receipt_json"]),
+            "predecessor_pointer_sha256": row["predecessor_pointer_sha256"],
+            "finalization_state": row["finalization_state"],
+            "finalization_plan": _decode(row["finalization_plan_json"]),
+            "finalization_plan_digest": row["finalization_plan_digest"],
+            "finalization_result": _decode(row["finalization_result_json"]),
+            "active_successor_release_id": row["active_successor_release_id"],
             "result": _decode(row["result_json"]),
             "error_code": row["error_code"],
             "error_detail": row["error_detail"],
@@ -451,9 +474,13 @@ class SQLiteIngestionLedger:
                 )
             fields: dict[str, Any] = {}
             for key, value in patch.items():
-                column = {"manifest_diff": "manifest_diff_json", "result": "result_json"}.get(
-                    key, key
-                )
+                column = {
+                    "manifest_diff": "manifest_diff_json",
+                    "result": "result_json",
+                    "candidate_receipt": "candidate_receipt_json",
+                    "finalization_plan": "finalization_plan_json",
+                    "finalization_result": "finalization_result_json",
+                }.get(key, key)
                 if column in {
                     "status",
                     "phase",
@@ -470,6 +497,13 @@ class SQLiteIngestionLedger:
                     "candidate_release_id",
                     "candidate_manifest_key",
                     "candidate_manifest_sha256",
+                    "candidate_receipt_json",
+                    "predecessor_pointer_sha256",
+                    "finalization_state",
+                    "finalization_plan_json",
+                    "finalization_plan_digest",
+                    "finalization_result_json",
+                    "active_successor_release_id",
                     "error_code",
                     "error_detail",
                     "completed_at",
@@ -479,7 +513,15 @@ class SQLiteIngestionLedger:
                 }:
                     fields[column] = (
                         _json(value)
-                        if column in {"manifest_diff_json", "result_json", "request_payload_json"}
+                        if column
+                        in {
+                            "manifest_diff_json",
+                            "result_json",
+                            "request_payload_json",
+                            "candidate_receipt_json",
+                            "finalization_plan_json",
+                            "finalization_result_json",
+                        }
                         else value
                     )
             fields["version"] = expected_version + 1
@@ -616,6 +658,9 @@ class SQLiteIngestionLedger:
         candidate_release_id = None
         candidate_manifest_key = None
         candidate_manifest_sha256 = None
+        finalization_state = None
+        finalization_result = None
+        active_successor_release_id = None
         if success and result is not None:
             candidate_release_id = result.get("release_id") or result.get("candidate_release_id")
             candidate_manifest_key = result.get("manifest_key") or result.get(
@@ -624,6 +669,10 @@ class SQLiteIngestionLedger:
             candidate_manifest_sha256 = result.get("manifest_sha256") or result.get(
                 "candidate_manifest_sha256"
             )
+            if result.get("status") == "active_successor":
+                finalization_state = "ACTIVE_SUCCESSOR"
+                finalization_result = result
+                active_successor_release_id = candidate_release_id
         with self._lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             idem = db.execute(
@@ -653,7 +702,7 @@ class SQLiteIngestionLedger:
                 (target_idem, now, lease.scope, lease.key_fingerprint),
             )
             db.execute(
-                "UPDATE ingestion_jobs SET status=?, phase=?, progress=?, result_json=?, candidate_release_id=?, candidate_manifest_key=?, candidate_manifest_sha256=?, error_code=?, error_detail=?, lease_owner=NULL, lease_expires_at=NULL, completed_at=?, version=version+1, updated_at=? WHERE job_id=?",
+                "UPDATE ingestion_jobs SET status=?, phase=?, progress=?, result_json=?, candidate_release_id=COALESCE(?, candidate_release_id), candidate_manifest_key=COALESCE(?, candidate_manifest_key), candidate_manifest_sha256=COALESCE(?, candidate_manifest_sha256), finalization_state=COALESCE(?, finalization_state), finalization_result_json=COALESCE(?, finalization_result_json), active_successor_release_id=COALESCE(?, active_successor_release_id), error_code=?, error_detail=?, lease_owner=NULL, lease_expires_at=NULL, completed_at=?, version=version+1, updated_at=? WHERE job_id=?",
                 (
                     target_job,
                     "finalize" if success else "failed",
@@ -662,6 +711,9 @@ class SQLiteIngestionLedger:
                     candidate_release_id,
                     candidate_manifest_key,
                     candidate_manifest_sha256,
+                    finalization_state,
+                    _json(finalization_result) if finalization_result is not None else None,
+                    active_successor_release_id,
                     (error or {}).get("code"),
                     (error or {}).get("detail"),
                     now,
@@ -726,6 +778,7 @@ def _current_index_observation(
     active_manifest_observer: Callable[[], Mapping[str, Any]] | None,
     candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None,
     missing_seams: list[str],
+    finalization_authorized: bool = False,
 ) -> ReadObservation:
     evidence: dict[str, Any] = {
         "schema_version": "m26-index-health-evidence/v1",
@@ -738,6 +791,7 @@ def _current_index_observation(
         "candidate_manifest": None,
         "candidate_manifest_error": None,
         "missing_seams": sorted(missing_seams),
+        "finalization_authorized": finalization_authorized,
     }
     if source_observer is None:
         evidence["source_error"] = {
@@ -821,7 +875,7 @@ def _current_index_observation(
 
 
 class SQLiteIngestionAdapter:
-    """Durable orchestration adapter around dynamic observers and candidate executor."""
+    """Durable candidate orchestration with an optional isolated finalization seam."""
 
     def __init__(
         self,
@@ -831,12 +885,14 @@ class SQLiteIngestionAdapter:
         active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
         candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
         candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
+        finalization_executor: Any | None = None,
     ) -> None:
         self.ledger = ledger
         self.source_observer = source_observer
         self.active_manifest_observer = active_manifest_observer
         self.candidate_manifest_observer = candidate_manifest_observer
         self.candidate_executor = candidate_executor
+        self.finalization_executor = finalization_executor
 
     def _unavailable(self, reason: str) -> ReadObservation:
         return ReadObservation(
@@ -877,6 +933,7 @@ class SQLiteIngestionAdapter:
             active_manifest_observer=self.active_manifest_observer,
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=[],
+            finalization_authorized=self.finalization_executor is not None,
         )
 
     def list_audits(self) -> ReadObservation:
@@ -928,6 +985,149 @@ class SQLiteIngestionAdapter:
         )
         return self.candidate_executor(*args)
 
+    def _checkpoint_candidate(
+        self,
+        *,
+        job_id: str,
+        receipt: Mapping[str, Any],
+        predecessor_pointer_sha256: str | None,
+    ) -> dict[str, Any]:
+        current = self.ledger.get_job(job_id)
+        if current is None:
+            raise _error("ADMIN_INGESTION_JOB_NOT_FOUND", "No durable ingestion job exists", 404)
+        return self.ledger.update_job(
+            job_id,
+            expected_version=int(current["version"]),
+            patch={
+                "phase": "candidate_ready",
+                "progress": max(95, int(current.get("progress", 0))),
+                "candidate_release_id": receipt.get("release_id"),
+                "candidate_manifest_key": receipt.get("manifest_key"),
+                "candidate_manifest_sha256": receipt.get("manifest_sha256"),
+                "candidate_receipt": dict(receipt),
+                "predecessor_pointer_sha256": predecessor_pointer_sha256,
+                "finalization_state": "CANDIDATE_READY",
+            },
+        )
+
+    def _run_finalization(
+        self,
+        *,
+        lease: StatefulIdempotencyLease,
+        job_id: str,
+        owner: str,
+        candidate_receipt: Mapping[str, Any],
+        source_observation: Mapping[str, Any] | None,
+        predecessor_pointer_sha256: str | None,
+        durable_plan: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if self.finalization_executor is None:
+            raise _error(
+                "ADMIN_INGESTION_FINALIZATION_UNQUALIFIED",
+                "No qualified isolated finalization executor is bound",
+            )
+        try:
+            current = self.ledger.get_job(job_id)
+            if current is None:
+                raise _error(
+                    "ADMIN_INGESTION_JOB_NOT_FOUND", "No durable ingestion job exists", 404
+                )
+            if current.get("candidate_receipt") is None:
+                current = self._checkpoint_candidate(
+                    job_id=job_id,
+                    receipt=candidate_receipt,
+                    predecessor_pointer_sha256=predecessor_pointer_sha256,
+                )
+            if durable_plan is None:
+                if source_observation is None or not predecessor_pointer_sha256:
+                    raise _error(
+                        "ADMIN_INGESTION_FINALIZATION_IDENTITY_MISSING",
+                        "Exact source or predecessor pointer identity is unavailable",
+                        409,
+                    )
+                durable_plan = dict(
+                    self.finalization_executor.prepare(
+                        candidate_receipt=candidate_receipt,
+                        source_observation=source_observation,
+                        expected_predecessor_pointer_sha256=predecessor_pointer_sha256,
+                    )
+                )
+                current = self.ledger.get_job(job_id)
+                if current is None:
+                    raise _error(
+                        "ADMIN_INGESTION_JOB_NOT_FOUND",
+                        "No durable ingestion job exists",
+                        404,
+                    )
+                current = self.ledger.update_job(
+                    job_id,
+                    expected_version=int(current["version"]),
+                    patch={
+                        "phase": "finalization_ready",
+                        "progress": 97,
+                        "finalization_state": "FINALIZATION_READY",
+                        "finalization_plan": durable_plan,
+                        "finalization_plan_digest": _hash(durable_plan),
+                    },
+                )
+            elif _hash(durable_plan) != current.get("finalization_plan_digest"):
+                raise _error(
+                    "ADMIN_INGESTION_FINALIZATION_PLAN_CORRUPT",
+                    "Durable finalization plan digest mismatch",
+                    409,
+                )
+
+            current = self.ledger.get_job(job_id)
+            if current is None:
+                raise _error(
+                    "ADMIN_INGESTION_JOB_NOT_FOUND", "No durable ingestion job exists", 404
+                )
+            current = self.ledger.update_job(
+                job_id,
+                expected_version=int(current["version"]),
+                patch={
+                    "phase": "isolated_activation",
+                    "progress": 98,
+                    "finalization_state": "ACTIVATING",
+                },
+            )
+            result = dict(self.finalization_executor.execute(durable_plan))
+            return self.ledger.complete_terminal(
+                lease,
+                job_id=job_id,
+                success=True,
+                result=result,
+                expected_version=current["version"],
+                expected_lease_owner=owner,
+            )
+        except Exception as exc:
+            current = self.ledger.get_job(job_id)
+            if current and current["status"] == "RUNNING":
+                current = self.ledger.update_job(
+                    job_id,
+                    expected_version=int(current["version"]),
+                    patch={
+                        "phase": "finalization_blocked",
+                        "finalization_state": "FINALIZATION_BLOCKED",
+                    },
+                )
+                self.ledger.complete_terminal(
+                    lease,
+                    job_id=job_id,
+                    success=False,
+                    error={
+                        "code": getattr(
+                            exc,
+                            "code",
+                            "ADMIN_INGESTION_FINALIZATION_BLOCKED",
+                        ),
+                        "detail": "Isolated finalization failed closed",
+                    },
+                    expected_version=current["version"],
+                    expected_lease_owner=owner,
+                )
+            raise
+
     def sync_blog(
         self,
         operation_id: str,
@@ -965,6 +1165,23 @@ class SQLiteIngestionAdapter:
             now=time.time(),
             attempt=lease.attempt,
         )
+        if claimed.get("finalization_plan") is not None:
+            receipt = claimed.get("candidate_receipt")
+            if not isinstance(receipt, Mapping):
+                raise _error(
+                    "ADMIN_INGESTION_FINALIZATION_IDENTITY_MISSING",
+                    "Durable candidate receipt is unavailable",
+                    409,
+                )
+            return self._run_finalization(
+                lease=lease,
+                job_id=job_id,
+                owner=owner,
+                candidate_receipt=receipt,
+                source_observation=None,
+                predecessor_pointer_sha256=claimed.get("predecessor_pointer_sha256"),
+                durable_plan=claimed["finalization_plan"],
+            )
         try:
             source, active = self._observe()
             plan = build_sync_plan(
@@ -1082,14 +1299,42 @@ class SQLiteIngestionAdapter:
             )
 
         try:
-            result = dict(
-                self._invoke_executor(
-                    operation_id,
-                    request,
-                    progress,
-                    {"source": fresh_source, "active": fresh_active, "plan": plan},
+            saved_receipt = claimed.get("candidate_receipt")
+            result = (
+                dict(saved_receipt)
+                if isinstance(saved_receipt, Mapping)
+                else dict(
+                    self._invoke_executor(
+                        operation_id,
+                        request,
+                        progress,
+                        {"source": fresh_source, "active": fresh_active, "plan": plan},
+                    )
                 )
             )
+            predecessor_pointer_sha256 = fresh_active.get("pointer_sha256")
+            self._checkpoint_candidate(
+                job_id=job_id,
+                receipt=result,
+                predecessor_pointer_sha256=(
+                    str(predecessor_pointer_sha256)
+                    if predecessor_pointer_sha256 is not None
+                    else None
+                ),
+            )
+            if self.finalization_executor is not None:
+                return self._run_finalization(
+                    lease=lease,
+                    job_id=job_id,
+                    owner=owner,
+                    candidate_receipt=result,
+                    source_observation=fresh_source,
+                    predecessor_pointer_sha256=(
+                        str(predecessor_pointer_sha256)
+                        if predecessor_pointer_sha256 is not None
+                        else None
+                    ),
+                )
             current = self.ledger.get_job(job_id)
             return self.ledger.complete_terminal(
                 lease,
@@ -1235,6 +1480,7 @@ class SQLiteIngestionReadAuthority:
             active_manifest_observer=self.active_manifest_observer,
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=list(self.missing_seams),
+            finalization_authorized=False,
         )
 
     def list_audits(self) -> ReadObservation:
@@ -1279,6 +1525,7 @@ def build_sqlite_ingestion_adapter(
     active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
     candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
     candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
+    finalization_executor: Any | None = None,
 ) -> SQLiteIngestionAdapter | SQLiteIngestionReadAuthority | None:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().lower() in {
         "1",
@@ -1333,6 +1580,7 @@ def build_sqlite_ingestion_adapter(
         active_manifest_observer=active_observer,
         candidate_manifest_observer=candidate_observer,
         candidate_executor=candidate_executor,
+        finalization_executor=finalization_executor,
     )
 
 
@@ -1418,6 +1666,7 @@ def candidate_executor_from_primitives(
         progress("artifact_build", 20)
         plan = build_candidate_release_plan(
             release_id=str(inputs["release_id"]),
+            engine_commit_sha=str(inputs["engine_commit_sha"]),
             source_commit_sha=str(inputs["source_commit_sha"]),
             source_repository_head_sha=str(inputs["source_repository_head_sha"]),
             admission_sha256=str(inputs["admission_sha256"]),
@@ -1504,6 +1753,7 @@ def active_manifest_observer_from_store(store: Any) -> Callable[[], Mapping[str,
                 "manifest_sha256": active.candidate_manifest_sha256,
                 "production_manifest_key": active.production_manifest_key,
                 "production_manifest_sha256": active.production_manifest_sha256,
+                "pointer_sha256": active.pointer_sha256,
                 "document_digests": digest_map,
                 "document_count": len(digest_map),
                 "lexical_chunk_count": len(lexical_documents),

@@ -214,6 +214,7 @@ def _artifact_builder(
         source_sha = hashlib.sha256(str(source["source_revision"]).encode()).hexdigest()
         return {
             "release_id": release_id,
+            "engine_commit_sha": "d" * 40,
             "source_commit_sha": source_sha[:40],
             "source_repository_head_sha": source_sha[24:],
             "admission_sha256": str(source["source_identity_digest"]),

@@ -47,6 +47,7 @@ class CandidateVectorMaterializer(Protocol):
 @dataclass(frozen=True)
 class CandidateReleasePlan:
     release_id: str
+    engine_commit_sha: str
     source_commit_sha: str
     source_repository_head_sha: str
     admission_sha256: str
@@ -148,6 +149,7 @@ def _section_ids(
 def build_candidate_release_plan(
     *,
     release_id: str,
+    engine_commit_sha: str,
     source_commit_sha: str,
     source_repository_head_sha: str,
     admission_sha256: str,
@@ -156,6 +158,7 @@ def build_candidate_release_plan(
     created_at: str,
 ) -> CandidateReleasePlan:
     release = _release_id(release_id)
+    engine_sha = _git_sha(engine_commit_sha, "engine_commit_sha")
     source_sha = _git_sha(source_commit_sha, "source_commit_sha")
     source_head = _git_sha(source_repository_head_sha, "source_repository_head_sha")
     admission = _sha256(admission_sha256, "admission_sha256")
@@ -184,6 +187,11 @@ def build_candidate_release_plan(
     semantic_ids = _section_ids(semantic_documents, label="semantic_inputs")
     if lexical_ids != semantic_ids:
         raise CandidateWriteError("lexical and semantic section_id sets are not exactly equal")
+    graph_v2 = _json_object(artifact_bytes["graph_v2"], "graph_v2")
+    graph_nodes = graph_v2.get("nodes")
+    graph_edges = graph_v2.get("edges", [])
+    if not isinstance(graph_nodes, list) or not isinstance(graph_edges, list):
+        raise CandidateWriteError("graph_v2 nodes and edges must be arrays")
 
     collection = candidate_qdrant_collection(release)
     keys = {kind: f"releases/{release}/artifacts/{kind}.json" for kind in sorted(kinds)}
@@ -205,6 +213,7 @@ def build_candidate_release_plan(
         "channel": CANDIDATE_CHANNEL,
         "created_at": created_at,
         "identities": {
+            "engine_commit_sha": engine_sha,
             "source_commit_sha": source_sha,
             "source_repository_head_sha": source_head,
             "admission_sha256": admission,
@@ -213,11 +222,16 @@ def build_candidate_release_plan(
         "artifacts": manifest_artifacts,
         "counts": {
             "source_documents": sources,
+            "document_graph_nodes": len(graph_nodes),
+            "document_graph_edges": len(graph_edges),
             "lexical_documents": len(lexical_ids),
             "semantic_documents": len(semantic_ids),
         },
         "authority": {
             "candidate_only": True,
+            "source_admitted": True,
+            "candidate_release_authorized": True,
+            "semantic_serving_authorized": True,
             "production_pointer_authorized": False,
             "public_production_traffic_authorized": False,
             "production_pointer_writes": 0,
@@ -227,6 +241,7 @@ def build_candidate_release_plan(
     manifest_key = f"releases/{release}/manifest.json"
     return CandidateReleasePlan(
         release_id=release,
+        engine_commit_sha=engine_sha,
         source_commit_sha=source_sha,
         source_repository_head_sha=source_head,
         admission_sha256=admission,

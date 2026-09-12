@@ -454,6 +454,7 @@ def test_candidate_executor_seam_reuses_writer_and_manifest_last(tmp_path: Path)
         vector_materializer=Vector(),
         artifact_builder=lambda _context: {
             "release_id": "candidate-runtime-001",
+            "engine_commit_sha": "d" * 40,
             "source_commit_sha": "a" * 40,
             "source_repository_head_sha": "b" * 40,
             "admission_sha256": "c" * 64,

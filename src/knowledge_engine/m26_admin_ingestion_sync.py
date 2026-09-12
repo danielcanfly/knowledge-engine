@@ -222,6 +222,10 @@ def _job_summary(job: Mapping[str, Any] | None) -> dict[str, Any] | None:
             "candidate_release_id",
             "candidate_manifest_key",
             "candidate_manifest_sha256",
+            "predecessor_pointer_sha256",
+            "finalization_state",
+            "finalization_plan_digest",
+            "active_successor_release_id",
             "error_code",
             "created_at",
             "updated_at",
@@ -269,7 +273,13 @@ def _candidate_health(
         ]
         return result
 
-    receipt = job.get("result") if isinstance(job.get("result"), Mapping) else {}
+    receipt = (
+        job.get("candidate_receipt")
+        if isinstance(job.get("candidate_receipt"), Mapping)
+        else job.get("result")
+        if isinstance(job.get("result"), Mapping)
+        else {}
+    )
     manifest = (
         manifest_evidence.get("manifest")
         if isinstance(manifest_evidence.get("manifest"), Mapping)
@@ -341,6 +351,44 @@ def _candidate_health(
 
 def _has_changes(diff: Mapping[str, Any] | None) -> bool:
     return bool(diff and any(diff.get(key) for key in ("added", "changed", "removed")))
+
+
+def _finalization_health(
+    job: Mapping[str, Any] | None,
+    active: Mapping[str, Any] | None,
+    *,
+    authorized: bool,
+    candidate_status: str,
+) -> dict[str, Any]:
+    state = str((job or {}).get("finalization_state") or "").upper()
+    release_id = (job or {}).get("candidate_release_id")
+    active_release_id = (active or {}).get("release_id")
+    issues: list[str] = []
+    if state == "ACTIVE_SUCCESSOR":
+        if release_id and release_id == active_release_id:
+            status = "active_successor"
+        else:
+            status = "unknown"
+            issues.append("INDEX_FINALIZATION_ACTIVE_IDENTITY_MISMATCH")
+    elif state in {"FINALIZATION_READY", "ACTIVATING"}:
+        status = "finalization_ready"
+    elif state == "FINALIZATION_BLOCKED":
+        status = "finalization_blocked"
+        issues.append(str((job or {}).get("error_code") or "INDEX_FINALIZATION_BLOCKED"))
+    elif state == "CANDIDATE_READY" or candidate_status == "ready":
+        status = "candidate_ready"
+    else:
+        status = "unknown"
+    return {
+        "status": status,
+        "isolated_activation_authorized": authorized,
+        "public_production_traffic_authorized": False,
+        "candidate_release_id": release_id,
+        "active_release_id": active_release_id,
+        "predecessor_pointer_sha256": (job or {}).get("predecessor_pointer_sha256"),
+        "finalization_plan_digest": (job or {}).get("finalization_plan_digest"),
+        "issues": issues,
+    }
 
 
 def _source_health(
@@ -437,6 +485,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
     candidate_manifest = evidence.get("candidate_manifest") if rich else None
     candidate_error = evidence.get("candidate_manifest_error") if rich else None
     missing_seams = sorted(str(item) for item in evidence.get("missing_seams", [])) if rich else []
+    finalization_authorized = bool(evidence.get("finalization_authorized")) if rich else False
 
     active = _active_health(
         active_data if isinstance(active_data, Mapping) else None,
@@ -455,6 +504,12 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         candidate,
         candidate_manifest if isinstance(candidate_manifest, Mapping) else None,
     )
+    finalization = _finalization_health(
+        candidate_job if isinstance(candidate_job, Mapping) else None,
+        active_data if isinstance(active_data, Mapping) else None,
+        authorized=finalization_authorized,
+        candidate_status=str(candidate.get("status") or "unknown"),
+    )
     running = [
         _job_summary(job)
         for job in jobs
@@ -472,7 +527,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         1 for job in jobs if str(job.get("status", "")).upper() == "FAILED"
     )
 
-    blockers = list(candidate["issues"])
+    blockers = list(candidate["issues"]) + list(finalization["issues"])
     if missing_seams:
         blockers.extend("INDEX_RUNTIME_SEAM_UNQUALIFIED:" + seam for seam in missing_seams)
     if active["status"] != "healthy":
@@ -492,6 +547,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         set(
             active["issues"]
             + candidate["issues"]
+            + finalization["issues"]
             + source["issues"]
             + ["INDEX_RUNTIME_SEAM_UNQUALIFIED:" + seam for seam in missing_seams]
         )
@@ -502,6 +558,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         active["status"] == "degraded"
         or source["status"] == "drifted"
         or candidate["status"] in {"building", "failed"}
+        or finalization["status"] == "finalization_blocked"
     ):
         overall = "degraded"
     elif (
@@ -517,10 +574,11 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
 
     health = {
         "schema_version": "m26-index-health/v2",
-        "mode": "candidate_only",
+        "mode": "isolated_finalization" if finalization_authorized else "candidate_only",
         "overall_status": overall,
         "active_production_index": active,
         "candidate_index": candidate,
+        "finalization": finalization,
         "source_state": source,
         "jobs": {
             "running": running,

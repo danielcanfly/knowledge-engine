@@ -145,8 +145,32 @@ def _set_stage(
     )
 
 
-def _validate_release(release_id: str | None) -> None:
-    if release_id and release_id != FULL_PRODUCTION_RELEASE_ID:
+def _active_release_id(bundle: Any) -> str:
+    active = getattr(bundle, "resolved_release", None)
+    if active is None:
+        try:
+            active = getattr(bundle, "active_release", None)
+        except Exception:
+            active = None
+    if active is not None and isinstance(getattr(active, "release_id", None), str):
+        return str(active.release_id)
+    # Synthetic historical fixtures have no pointer fields. The real loader always
+    # supplies resolved_release, so this fallback cannot select a live release.
+    if (
+        getattr(bundle, "production_pointer", None) is None
+        and getattr(bundle, "production_manifest", None) is None
+        and getattr(bundle, "release_id", None) == FULL_PRODUCTION_RELEASE_ID
+    ):
+        return FULL_PRODUCTION_RELEASE_ID
+    raise AdminAPIError(
+        status_code=503,
+        code="PLAYGROUND_ACTIVE_RELEASE_UNAVAILABLE",
+        message="Pointer-selected active release authority is unavailable",
+    )
+
+
+def _validate_release(release_id: str | None, *, active_release_id: str | None = None) -> None:
+    if release_id and active_release_id and release_id != active_release_id:
         raise AdminAPIError(
             status_code=400,
             code="PLAYGROUND_RELEASE_NOT_ACTIVE",
@@ -252,7 +276,8 @@ def _retrieval_only_after_translation(
     )
     intent_class = _intent_class(normalized_question)
     bundle = load_production_answer_bundle()
-    if bundle.release_id != FULL_PRODUCTION_RELEASE_ID:
+    active_release_id = _active_release_id(bundle)
+    if bundle.release_id != active_release_id:
         raise AdminAPIError(
             status_code=503,
             code="PLAYGROUND_RELEASE_IDENTITY_MISMATCH",
@@ -418,7 +443,8 @@ def router() -> APIRouter:
     )
     async def inspect_retrieval(payload: PlaygroundRequest, request: Request) -> dict[str, Any]:
         require_capability(request, "playground.retrieve", mutation=False)
-        _validate_release(payload.release_id)
+        bundle = load_production_answer_bundle()
+        _validate_release(payload.release_id, active_release_id=_active_release_id(bundle))
         trace = _blank_trace()
         events: list[Mapping[str, Any]] = []
         root = request.app.state.root
@@ -558,7 +584,8 @@ def router() -> APIRouter:
     )
     async def full_ask(payload: PlaygroundRequest, request: Request) -> dict[str, Any]:
         require_capability(request, "playground.ask", mutation=False)
-        _validate_release(payload.release_id)
+        bundle = load_production_answer_bundle()
+        _validate_release(payload.release_id, active_release_id=_active_release_id(bundle))
         trace = _blank_trace()
         events: list[Mapping[str, Any]] = []
         root = request.app.state.root

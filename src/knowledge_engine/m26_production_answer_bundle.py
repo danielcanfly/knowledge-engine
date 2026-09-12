@@ -155,7 +155,7 @@ def build_production_answer_compatibility_report(
     qdrant_mismatches = [
         dict(sample)
         for sample in qdrant_samples
-        if not _qdrant_payload_matches_production(sample)
+        if not _qdrant_payload_matches_production(sample, bundle)
         or (
             sample.get("section_id")
             and semantic_section_ids
@@ -166,6 +166,13 @@ def build_production_answer_compatibility_report(
     outside_old_20_count = len(graph_v2_nodes - old_m24_concepts) if old_m24_concepts else None
     artifact_family = _artifact_family_report(bundle)
     expected_counts = _expected_counts(bundle)
+    active = bundle.resolved_release
+    expected_qdrant_points = (
+        active.semantic_point_count if active is not None else FULL_PRODUCTION_SEMANTIC_POINT_COUNT
+    )
+    expected_collection = (
+        active.qdrant_collection if active is not None else FULL_PRODUCTION_QDRANT_COLLECTION
+    )
     status = "compatible"
     mismatch_counts = {
         "graph_v1_v2_node_mismatch": len(graph_nodes ^ graph_v2_nodes),
@@ -189,8 +196,7 @@ def build_production_answer_compatibility_report(
         else 0,
         "qdrant_payload_sample_mismatches": len(qdrant_mismatches),
         "qdrant_point_count_mismatch": int(
-            qdrant_point_count is not None
-            and qdrant_point_count != FULL_PRODUCTION_SEMANTIC_POINT_COUNT
+            qdrant_point_count is not None and qdrant_point_count != expected_qdrant_points
         ),
         "artifact_family_mismatches": len(artifact_family["mismatches"]),
         "manifest_count_mismatches": len(expected_counts["mismatches"]),
@@ -202,9 +208,17 @@ def build_production_answer_compatibility_report(
         "status": status,
         "release": {
             "release_id": bundle.release_id,
-            "manifest_key": FULL_PRODUCTION_MANIFEST_KEY,
+            "manifest_key": (
+                active.candidate_manifest_key
+                if active is not None
+                else FULL_PRODUCTION_MANIFEST_KEY
+            ),
             "manifest_sha256": bundle.manifest_sha256,
-            "promotion_manifest_key": FULL_PRODUCTION_PROMOTION_MANIFEST_KEY,
+            "promotion_manifest_key": (
+                active.production_manifest_key
+                if active is not None
+                else FULL_PRODUCTION_PROMOTION_MANIFEST_KEY
+            ),
             "promotion_manifest_sha256": _promotion_manifest_sha(bundle),
             "pointer_key": FULL_PRODUCTION_POINTER_KEY,
             "pointer_sha256": _pointer_sha(bundle),
@@ -227,16 +241,23 @@ def build_production_answer_compatibility_report(
             "manifest_expected": expected_counts["observed"],
         },
         "expected": {
-            "release_id": FULL_PRODUCTION_RELEASE_ID,
-            "graph_v2_sha256": FULL_PRODUCTION_GRAPH_V2_SHA256,
-            "graph_nodes": FULL_PRODUCTION_NODE_COUNT,
-            "graph_edges": FULL_PRODUCTION_EDGE_COUNT,
-            "qdrant_collection": FULL_PRODUCTION_QDRANT_COLLECTION,
-            "qdrant_points": FULL_PRODUCTION_SEMANTIC_POINT_COUNT,
+            "authority": (
+                "resolved_production_pointer_chain"
+                if active is not None
+                else "explicit_legacy_baseline"
+            ),
+            "release_id": active.release_id if active is not None else FULL_PRODUCTION_RELEASE_ID,
+            "graph_v2_sha256": bundle.artifact_sha256.get(
+                "graph_v2", FULL_PRODUCTION_GRAPH_V2_SHA256
+            ),
+            "graph_nodes": len(graph_v2_nodes),
+            "graph_edges": len(graph_v2_edges),
+            "qdrant_collection": expected_collection,
+            "qdrant_points": expected_qdrant_points,
         },
         "mismatch_counts": mismatch_counts,
         "qdrant": {
-            "collection": FULL_PRODUCTION_QDRANT_COLLECTION,
+            "collection": expected_collection,
             "observed_point_count": qdrant_point_count,
             "payload_required_fields": _qdrant_required_fields(root),
             "payload_sample_count": len(qdrant_samples),
@@ -539,20 +560,42 @@ def _expected_counts(bundle: ProductionAnswerBundle) -> dict[str, Any]:
     counts = bundle.manifest.get("counts")
     if not isinstance(counts, Mapping):
         return {"observed": {}, "mismatches": ["counts_missing"]}
-    expected = {
-        "document_graph_nodes": FULL_PRODUCTION_NODE_COUNT,
-        "document_graph_edges": FULL_PRODUCTION_EDGE_COUNT,
-        "semantic_documents": FULL_PRODUCTION_SEMANTIC_POINT_COUNT,
-    }
+    actual = (
+        {
+            "document_graph_nodes": FULL_PRODUCTION_NODE_COUNT,
+            "document_graph_edges": FULL_PRODUCTION_EDGE_COUNT,
+            "semantic_documents": FULL_PRODUCTION_SEMANTIC_POINT_COUNT,
+        }
+        if bundle.resolved_release is None
+        else {
+            "document_graph_nodes": len(_graph_v2_node_ids(bundle.graph_v2)),
+            "document_graph_edges": len(_list(bundle.graph_v2.get("edges"), "graph_v2 edges")),
+            "lexical_documents": len(
+                _list(bundle.lexical_index.get("documents"), "lexical documents")
+            ),
+            "semantic_documents": bundle.resolved_release.semantic_point_count,
+        }
+    )
+    expected = {key: value for key, value in actual.items() if key in counts}
     mismatches = [key for key, value in expected.items() if counts.get(key) != value]
     return {"observed": dict(counts), "mismatches": mismatches}
 
 
-def _qdrant_payload_matches_production(payload: Mapping[str, Any]) -> bool:
+def _qdrant_payload_matches_production(
+    payload: Mapping[str, Any], bundle: ProductionAnswerBundle
+) -> bool:
+    active = bundle.resolved_release
+    release_id = active.release_id if active is not None else FULL_PRODUCTION_RELEASE_ID
+    source_commit_sha = (
+        active.source_commit_sha if active is not None else FULL_PRODUCTION_SOURCE_SHA
+    )
+    admission_sha256 = (
+        active.admission_sha256 if active is not None else FULL_PRODUCTION_ADMISSION_SHA256
+    )
     return (
-        payload.get("release_id") == FULL_PRODUCTION_RELEASE_ID
-        and payload.get("source_commit_sha") == FULL_PRODUCTION_SOURCE_SHA
-        and payload.get("admission_sha256") == FULL_PRODUCTION_ADMISSION_SHA256
+        payload.get("release_id") == release_id
+        and payload.get("source_commit_sha") == source_commit_sha
+        and payload.get("admission_sha256") == admission_sha256
         and payload.get("candidate_release_eligible") is True
         and payload.get("production_authority") is False
     )
@@ -597,9 +640,16 @@ def _artifact_family_report(bundle: ProductionAnswerBundle) -> dict[str, Any]:
                 kind, {}
             ).get("sha256"):
                 mismatches.append(kind)
+    active = bundle.resolved_release
     return {
-        "direct_manifest_key": FULL_PRODUCTION_MANIFEST_KEY,
-        "production_manifest_key": FULL_PRODUCTION_PROMOTION_MANIFEST_KEY,
+        "direct_manifest_key": (
+            active.candidate_manifest_key if active is not None else FULL_PRODUCTION_MANIFEST_KEY
+        ),
+        "production_manifest_key": (
+            active.production_manifest_key
+            if active is not None
+            else FULL_PRODUCTION_PROMOTION_MANIFEST_KEY
+        ),
         "runtime_required_kinds": sorted(RUNTIME_REQUIRED_KINDS),
         "compatibility_required_kinds": sorted(COMPATIBILITY_REQUIRED_KINDS),
         "mismatches": mismatches,

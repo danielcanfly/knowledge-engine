@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -99,9 +101,7 @@ class RecordingRetriever:
 
     def __call__(self, query: RetrievalQuery) -> RetrievalChannelResult:
         self.calls.append(query)
-        return RetrievalChannelResult(
-            hits=(RetrievalHit(candidate_id="doc-a", rank=1),)
-        )
+        return RetrievalChannelResult(hits=(RetrievalHit(candidate_id="doc-a", rank=1),))
 
 
 def test_default_app_is_wired_by_staging_factory() -> None:
@@ -195,9 +195,7 @@ def test_staging_runtime_dependencies_do_not_require_remote_dense_by_default(
     ):
         monkeypatch.delenv(key, raising=False)
 
-    deps = build_track2_staging_runtime_dependencies(
-        env_file=tmp_path / "missing.env"
-    )
+    deps = build_track2_staging_runtime_dependencies(env_file=tmp_path / "missing.env")
 
     assert isinstance(deps.dense_retriever, StagingDenseRetriever)
     assert isinstance(
@@ -234,6 +232,38 @@ def test_staging_runtime_dependencies_require_remote_dense_when_gate_enabled(
     assert "cloudflare_api_token" in message
     assert "qdrant_api_key" in message
     assert "qdrant_url" in message
+
+
+def test_staging_remote_dense_collection_is_pointer_selected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("M26_TRACK2_REQUIRE_REMOTE_DENSE", "true")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "acct")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "token")
+    monkeypatch.setenv("QDRANT_URL", "https://example.invalid")
+    monkeypatch.setenv("QDRANT_API_KEY_READ", "qdrant-key")
+    monkeypatch.setenv("M26_PA7_DENSE_COLLECTION", "historical-full-collection")
+    monkeypatch.setattr(
+        "knowledge_engine.m26_multilingual_staging_dependencies.load_production_answer_bundle",
+        lambda: SimpleNamespace(
+            active_release=SimpleNamespace(qdrant_collection="successor-collection")
+        ),
+    )
+    observed: dict[str, object] = {}
+
+    def dense_factory(*, require_remote: bool):
+        observed["require_remote"] = require_remote
+        observed["collection"] = os.environ.get("M26_PA7_DENSE_COLLECTION")
+        return RecordingDenseChannel()
+
+    monkeypatch.setattr(
+        "knowledge_engine.m26_multilingual_staging_dependencies.legacy.dense_channel_from_env",
+        dense_factory,
+    )
+    monkeypatch.setenv("MINIMAX_API_KEY", "test-key")
+    build_track2_staging_runtime_dependencies()
+
+    assert observed == {"require_remote": True, "collection": "successor-collection"}
 
 
 def test_health_exposes_sanitized_runtime_readiness() -> None:
@@ -703,23 +733,17 @@ def test_selector_dense_projection_excludes_non_dense_channels() -> None:
             FusedRetrievalCandidate(
                 candidate_id="lexical-doc",
                 fusion_score=8.0,
-                contributions=(
-                    CandidateContribution("lexical", "canonical_en", 1, 4.0, 0.5),
-                ),
+                contributions=(CandidateContribution("lexical", "canonical_en", 1, 4.0, 0.5),),
             ),
             FusedRetrievalCandidate(
                 candidate_id="graph-doc",
                 fusion_score=7.0,
-                contributions=(
-                    CandidateContribution("graph", "canonical_en", 1, 3.0, 0.5),
-                ),
+                contributions=(CandidateContribution("graph", "canonical_en", 1, 3.0, 0.5),),
             ),
             FusedRetrievalCandidate(
                 candidate_id="identifier-doc",
                 fusion_score=6.0,
-                contributions=(
-                    CandidateContribution("identifier", "original", 1, 3.0, 0.5),
-                ),
+                contributions=(CandidateContribution("identifier", "original", 1, 3.0, 0.5),),
             ),
         ),
     )
@@ -820,9 +844,7 @@ def test_selector_projection_summary_reports_option_a_invariants() -> None:
             FusedRetrievalCandidate(
                 candidate_id="doc-a",
                 fusion_score=1.0,
-                contributions=(
-                    CandidateContribution("dense", "canonical_en", 1, 0.9, 0.5),
-                ),
+                contributions=(CandidateContribution("dense", "canonical_en", 1, 0.9, 0.5),),
             ),
         ),
     )
@@ -938,15 +960,12 @@ def test_frozen_evidence_selector_invokes_frozen_selector_seam(
     assert recorded["kwargs"]["question"] == "How does API-42 work?"
     assert recorded["kwargs"]["dense_result"]["candidates"][0]["score"] == 0.25
     assert (
-        recorded["kwargs"]["dense_result"]["candidates"][0]["point_id_sha256"]
-        == "real-dense-point"
+        recorded["kwargs"]["dense_result"]["candidates"][0]["point_id_sha256"] == "real-dense-point"
     )
     assert evidence[0]["section_id"] == "doc-a"
     assert trace.endpoint_proof == {"required": False, "matched": False}
     assert trace.selector_projection_summary["fusion_score_is_not_dense_score"] is True
-    assert trace.selector_provenance_trace[0]["real_channel_contributions"][0][
-        "channel"
-    ] == "dense"
+    assert trace.selector_provenance_trace[0]["real_channel_contributions"][0]["channel"] == "dense"
 
 
 def test_build_track2_staging_runtime_dependencies_uses_accepted_closure_runner(

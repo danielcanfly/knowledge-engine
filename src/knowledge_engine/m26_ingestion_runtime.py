@@ -357,6 +357,7 @@ def _artifact_builder(source: Any, engine_commit_sha: str) -> Any:
         }
         return {
             "release_id": release_id,
+            "engine_commit_sha": engine_commit_sha,
             "source_commit_sha": snapshot.commit_sha,
             "source_repository_head_sha": snapshot.commit_sha,
             "admission_sha256": snapshot.source_identity_digest,
