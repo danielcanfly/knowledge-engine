@@ -609,7 +609,22 @@ def test_production_post_cas_failure_retries_exact_target_without_second_pointer
 ) -> None:
     original_store, predecessor, candidate_receipt, _isolated = _fixture(tmp_path)
     store = _StoreProtocolProxy(original_store)
-    authority = {"endpoint": "https://r2.example", "bucket": "production"}
+    authority = {
+        "schema_version": "knowledge-engine-m26-production-runtime-authority/v1",
+        "object_store_backend": "r2",
+        "r2_endpoint_url": "https://account.r2.cloudflarestorage.com",
+        "r2_bucket": "production",
+        "r2_region": "auto",
+        "source": {
+            "mode": "local_git",
+            "root": "/tmp/blog",
+            "repository": "danielcanfly/daniel-blog",
+        },
+        "qdrant_url": "https://qdrant.example",
+        "cloudflare_account_id": "account",
+        "engine_commit_sha": ENGINE,
+        "durable_state_path": str(tmp_path / "ingestion.sqlite3"),
+    }
     finalizer = ProductionIngestionFinalizer(
         store=store,  # type: ignore[arg-type]
         source_observer=_source,

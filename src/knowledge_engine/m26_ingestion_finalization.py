@@ -277,7 +277,23 @@ class ProductionIngestionFinalizer:
 
     def self_check(self) -> dict[str, Any]:
         runtime_authority = dict(self.authority_check())
-        if not runtime_authority:
+        required_authority_keys = {
+            "schema_version",
+            "object_store_backend",
+            "r2_endpoint_url",
+            "r2_bucket",
+            "source",
+            "qdrant_url",
+            "cloudflare_account_id",
+            "engine_commit_sha",
+            "durable_state_path",
+        }
+        if (
+            not required_authority_keys.issubset(runtime_authority)
+            or runtime_authority.get("object_store_backend") != "r2"
+            or not isinstance(runtime_authority.get("source"), Mapping)
+            or not str(runtime_authority.get("qdrant_url") or "").startswith("https://")
+        ):
             raise IntegrityError("F8-AUTH-007 runtime authority identity is unavailable")
         source = dict(self.source_observer())
         revision = str(source.get("source_revision") or "")

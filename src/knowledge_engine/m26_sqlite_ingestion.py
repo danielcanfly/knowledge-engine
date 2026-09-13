@@ -950,13 +950,24 @@ class SQLiteIngestionAdapter:
         )
 
     def current_index(self) -> ReadObservation:
+        finalization_authorized = self.finalization_executor is not None and (
+            self.finalization_mode == "isolated_finalization"
+            or (
+                self.finalization_mode == "production_activation"
+                and isinstance(self.finalization_authority_evidence, Mapping)
+                and self.finalization_authority_evidence.get(
+                    "production_activation_authorized"
+                )
+                is True
+            )
+        )
         return _current_index_observation(
             ledger=self.ledger,
             source_observer=self.source_observer,
             active_manifest_observer=self.active_manifest_observer,
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=[],
-            finalization_authorized=self.finalization_executor is not None,
+            finalization_authorized=finalization_authorized,
             finalization_mode=self.finalization_mode,
         )
 

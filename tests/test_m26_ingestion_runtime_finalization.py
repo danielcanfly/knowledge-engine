@@ -12,7 +12,11 @@ from knowledge_engine.m26_ingestion_runtime import (
     _production_authority_missing,
     build_runtime_ingestion_adapter_from_env,
 )
-from knowledge_engine.m26_sqlite_ingestion import SQLiteIngestionReadAuthority
+from knowledge_engine.m26_sqlite_ingestion import (
+    SQLiteIngestionAdapter,
+    SQLiteIngestionLedger,
+    SQLiteIngestionReadAuthority,
+)
 
 
 def _clear_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -109,6 +113,24 @@ def test_read_credential_must_be_distinct_from_candidate_write_credential(
     monkeypatch.setenv("CLOUDFLARE_AI_TOKEN", "token")
 
     assert "QDRANT_READ_CREDENTIAL_DISTINCT" in _production_authority_missing()
+
+
+def test_production_executor_without_self_check_evidence_is_not_authorized(
+    tmp_path: Path,
+) -> None:
+    class FakeProductionExecutor:
+        mode = "production_activation"
+
+    adapter = SQLiteIngestionAdapter(
+        SQLiteIngestionLedger(tmp_path / "missing-evidence.sqlite3"),
+        finalization_executor=FakeProductionExecutor(),
+        finalization_mode="production_activation",
+    )
+
+    evidence = adapter.current_index().data
+
+    assert evidence["finalization_authorized"] is False
+    assert evidence["production_activation_authorized"] is False
 
 
 def test_invalid_qdrant_url_returns_read_only_authority(
