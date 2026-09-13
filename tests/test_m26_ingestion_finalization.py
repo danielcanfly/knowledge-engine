@@ -31,6 +31,7 @@ from knowledge_engine.m26_ingestion_candidate_writer import (
 from knowledge_engine.m26_ingestion_finalization import (
     AskEquivalentSpec,
     IsolatedIngestionFinalizer,
+    ProductionIngestionFinalizer,
 )
 from knowledge_engine.m26_production_answer_bundle import (
     build_production_answer_compatibility_report,
@@ -561,3 +562,76 @@ def test_predecessor_qdrant_drift_is_revalidated_before_pointer_write(
         finalizer.execute(prepared)
 
     assert store.get(PRODUCTION_POINTER_KEY) == predecessor
+
+
+class _StoreProtocolProxy:
+    def __init__(self, store: FileObjectStore) -> None:
+        self.store = store
+        self.pointer_puts = 0
+
+    def get(self, key: str) -> bytes:
+        return self.store.get(key)
+
+    def head(self, key: str):
+        return self.store.head(key)
+
+    def put(self, key: str, data: bytes, **kwargs: Any):
+        if key == PRODUCTION_POINTER_KEY:
+            self.pointer_puts += 1
+        return self.store.put(key, data, **kwargs)
+
+    def delete(self, key: str) -> None:
+        self.store.delete(key)
+
+
+class _ProductionQdrantObserver:
+    def qualify_candidate(self, manifest: Mapping[str, Any]) -> QdrantQualification:
+        return _candidate_qdrant(str(manifest["release_id"]), str(manifest["qdrant_collection"]))
+
+    def qualify_production(self, active: Any) -> ProductionQdrantQualification:
+        return _production_qdrant(active)
+
+
+class _FailOnceDense:
+    def __init__(self) -> None:
+        self.failed = False
+        self.delegate = _DenseChannel()
+
+    def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+        if not self.failed:
+            self.failed = True
+            raise RuntimeError("post-CAS successor probe failed")
+        return self.delegate.search(question=question, bundle=bundle, top_k=top_k)
+
+
+def test_production_post_cas_failure_retries_exact_target_without_second_pointer_write(
+    tmp_path: Path,
+) -> None:
+    original_store, predecessor, candidate_receipt, _isolated = _fixture(tmp_path)
+    store = _StoreProtocolProxy(original_store)
+    authority = {"endpoint": "https://r2.example", "bucket": "production"}
+    finalizer = ProductionIngestionFinalizer(
+        store=store,  # type: ignore[arg-type]
+        source_observer=_source,
+        qdrant_observer=_ProductionQdrantObserver(),
+        dense_channel=_FailOnceDense(),
+        ask_probe_question="What proves the successor is active?",
+        owner_authorization="production-owner",
+        promoted_at_factory=lambda: PROMOTED_AT,
+        authority_check=lambda: authority,
+    )
+    prepared = finalizer.prepare(
+        candidate_receipt=candidate_receipt,
+        source_observation=_source(),
+        expected_predecessor_pointer_sha256=sha256_bytes(predecessor),
+    )
+
+    with pytest.raises(RuntimeError, match="post-CAS successor probe failed"):
+        finalizer.execute(prepared)
+    assert store.pointer_puts == 1
+    assert resolve_active_production_release(original_store).release_id == "release-b-successor"
+
+    retry = finalizer.execute(prepared)
+    assert retry["status"] == "active_successor"
+    assert retry["activation"]["status"] == "already_promoted"
+    assert store.pointer_puts == 1

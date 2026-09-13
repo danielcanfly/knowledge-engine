@@ -598,6 +598,79 @@ def test_noop_and_success_replay_do_zero_candidate_work(tmp_path: Path) -> None:
     assert calls == 0
 
 
+class _ProductionNoopVerifier:
+    mode = "production_activation"
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+        self.calls = 0
+
+    def verify_noop(self, source: dict[str, object]) -> dict[str, object]:
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("active readback proof failed")
+        return {
+            "status": "noop",
+            "activation_status": "already_active_noop",
+            "release_id": "active-release",
+            "production_activation_claimed": False,
+        }
+
+
+def test_production_noop_requires_active_readback_proof_and_never_claims_activation(
+    tmp_path: Path,
+) -> None:
+    source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
+    active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {"a": "a"}}
+    verifier = _ProductionNoopVerifier()
+    ledger = SQLiteIngestionLedger(tmp_path / "production-noop.sqlite3")
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: source,
+        active_manifest_observer=lambda: active,
+        candidate_executor=lambda *_args: pytest.fail("true no-op must not build candidate"),
+        finalization_executor=verifier,
+        finalization_mode="production_activation",
+        finalization_authority_evidence={"production_activation_authorized": True},
+    )
+    lease = _lease(ledger, "production-noop-key")
+
+    result = adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+
+    assert result["status"] == "SUCCEEDED"
+    assert result["result"]["activation_status"] == "already_active_noop"
+    assert result["result"]["production_activation_claimed"] is False
+    assert verifier.calls == 1
+    assert result["active_successor_release_id"] is None
+    assert result["finalization_state"] == "ACTIVE_NOOP"
+
+
+def test_production_noop_readback_failure_is_durable_blocked_truth(tmp_path: Path) -> None:
+    source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
+    active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {"a": "a"}}
+    verifier = _ProductionNoopVerifier(fail=True)
+    ledger = SQLiteIngestionLedger(tmp_path / "production-noop-failed.sqlite3")
+    adapter = SQLiteIngestionAdapter(
+        ledger,
+        source_observer=lambda: source,
+        active_manifest_observer=lambda: active,
+        candidate_executor=lambda *_args: pytest.fail("true no-op must not build candidate"),
+        finalization_executor=verifier,
+        finalization_mode="production_activation",
+        finalization_authority_evidence={"production_activation_authorized": True},
+    )
+    lease = _lease(ledger, "production-noop-failed-key")
+
+    with pytest.raises(RuntimeError, match="active readback proof failed"):
+        adapter.sync_blog_with_lease(lease.operation_id, SyncBlogRequest(), lease)
+
+    job = ledger.get_job("syncjob_" + lease.operation_id.removeprefix("admop_"))
+    assert job is not None
+    assert job["status"] == "FAILED"
+    assert job["finalization_state"] == "FINALIZATION_BLOCKED"
+    assert job["active_successor_release_id"] is None
+
+
 def test_route_and_p09_reads_share_sqlite_authority_and_retry_route(tmp_path: Path) -> None:
     source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
     active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {}}

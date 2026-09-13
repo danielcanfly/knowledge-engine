@@ -358,6 +358,8 @@ def _finalization_health(
     active: Mapping[str, Any] | None,
     *,
     authorized: bool,
+    mode: str,
+    production_authorized: bool,
     candidate_status: str,
 ) -> dict[str, Any]:
     state = str((job or {}).get("finalization_state") or "").upper()
@@ -370,6 +372,12 @@ def _finalization_health(
         else:
             status = "unknown"
             issues.append("INDEX_FINALIZATION_ACTIVE_IDENTITY_MISMATCH")
+    elif state == "ACTIVE_NOOP":
+        if release_id and release_id == active_release_id:
+            status = "active_noop"
+        else:
+            status = "unknown"
+            issues.append("INDEX_FINALIZATION_ACTIVE_NOOP_IDENTITY_MISMATCH")
     elif state in {"FINALIZATION_READY", "ACTIVATING"}:
         status = "finalization_ready"
     elif state == "FINALIZATION_BLOCKED":
@@ -381,8 +389,11 @@ def _finalization_health(
         status = "unknown"
     return {
         "status": status,
-        "isolated_activation_authorized": authorized,
+        "mode": mode,
+        "isolated_activation_authorized": authorized and mode == "isolated_finalization",
+        "production_activation_authorized": production_authorized,
         "public_production_traffic_authorized": False,
+        "deployment_authorized": False,
         "candidate_release_id": release_id,
         "active_release_id": active_release_id,
         "predecessor_pointer_sha256": (job or {}).get("predecessor_pointer_sha256"),
@@ -472,7 +483,7 @@ def _source_health(
 
 
 def build_index_health(observation: ReadObservation) -> ReadObservation:
-    """Build the candidate-only v2 truth model without upgrading missing evidence."""
+    """Build finalization truth without upgrading missing evidence or authority."""
 
     evidence = dict(observation.data) if isinstance(observation.data, Mapping) else {}
     rich = evidence.get("schema_version") == "m26-index-health-evidence/v1"
@@ -486,6 +497,20 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
     candidate_error = evidence.get("candidate_manifest_error") if rich else None
     missing_seams = sorted(str(item) for item in evidence.get("missing_seams", [])) if rich else []
     finalization_authorized = bool(evidence.get("finalization_authorized")) if rich else False
+    finalization_mode = str(evidence.get("finalization_mode") or "") if rich else ""
+    if finalization_mode not in {
+        "blocked",
+        "candidate_only",
+        "isolated_finalization",
+        "production_activation",
+    }:
+        finalization_mode = "isolated_finalization" if finalization_authorized else "candidate_only"
+    production_activation_authorized = bool(
+        rich
+        and finalization_authorized
+        and finalization_mode == "production_activation"
+        and evidence.get("production_activation_authorized") is True
+    )
 
     active = _active_health(
         active_data if isinstance(active_data, Mapping) else None,
@@ -508,6 +533,8 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         candidate_job if isinstance(candidate_job, Mapping) else None,
         active_data if isinstance(active_data, Mapping) else None,
         authorized=finalization_authorized,
+        mode=finalization_mode,
+        production_authorized=production_activation_authorized,
         candidate_status=str(candidate.get("status") or "unknown"),
     )
     running = [
@@ -574,7 +601,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
 
     health = {
         "schema_version": "m26-index-health/v2",
-        "mode": "isolated_finalization" if finalization_authorized else "candidate_only",
+        "mode": finalization_mode,
         "overall_status": overall,
         "active_production_index": active,
         "candidate_index": candidate,
@@ -588,8 +615,8 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         },
         "promotion_readiness": {
             "status": readiness,
-            "candidate_only": True,
-            "active_pointer_authorized": False,
+            "candidate_only": finalization_mode != "production_activation",
+            "active_pointer_authorized": production_activation_authorized,
             "blockers": sorted(set(blockers)),
         },
         "issues": issues if rich else active["issues"],

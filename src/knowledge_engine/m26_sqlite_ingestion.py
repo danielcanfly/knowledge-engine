@@ -673,6 +673,12 @@ class SQLiteIngestionLedger:
                 finalization_state = "ACTIVE_SUCCESSOR"
                 finalization_result = result
                 active_successor_release_id = candidate_release_id
+            elif (
+                result.get("status") == "noop"
+                and result.get("activation_status") == "already_active_noop"
+            ):
+                finalization_state = "ACTIVE_NOOP"
+                finalization_result = result
         with self._lock, self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             idem = db.execute(
@@ -779,6 +785,7 @@ def _current_index_observation(
     candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None,
     missing_seams: list[str],
     finalization_authorized: bool = False,
+    finalization_mode: str = "blocked",
 ) -> ReadObservation:
     evidence: dict[str, Any] = {
         "schema_version": "m26-index-health-evidence/v1",
@@ -792,6 +799,10 @@ def _current_index_observation(
         "candidate_manifest_error": None,
         "missing_seams": sorted(missing_seams),
         "finalization_authorized": finalization_authorized,
+        "finalization_mode": finalization_mode,
+        "production_activation_authorized": (
+            finalization_authorized and finalization_mode == "production_activation"
+        ),
     }
     if source_observer is None:
         evidence["source_error"] = {
@@ -886,6 +897,8 @@ class SQLiteIngestionAdapter:
         candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
         candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
         finalization_executor: Any | None = None,
+        finalization_mode: str | None = None,
+        finalization_authority_evidence: Mapping[str, Any] | None = None,
     ) -> None:
         self.ledger = ledger
         self.source_observer = source_observer
@@ -893,6 +906,16 @@ class SQLiteIngestionAdapter:
         self.candidate_manifest_observer = candidate_manifest_observer
         self.candidate_executor = candidate_executor
         self.finalization_executor = finalization_executor
+        self.finalization_mode = finalization_mode or (
+            str(getattr(finalization_executor, "mode", "isolated_finalization"))
+            if finalization_executor is not None
+            else "candidate_only"
+        )
+        self.finalization_authority_evidence = (
+            dict(finalization_authority_evidence)
+            if finalization_authority_evidence is not None
+            else None
+        )
 
     def _unavailable(self, reason: str) -> ReadObservation:
         return ReadObservation(
@@ -934,6 +957,7 @@ class SQLiteIngestionAdapter:
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=[],
             finalization_authorized=self.finalization_executor is not None,
+            finalization_mode=self.finalization_mode,
         )
 
     def list_audits(self) -> ReadObservation:
@@ -1086,7 +1110,7 @@ class SQLiteIngestionAdapter:
                 job_id,
                 expected_version=int(current["version"]),
                 patch={
-                    "phase": "isolated_activation",
+                    "phase": self.finalization_mode,
                     "progress": 98,
                     "finalization_state": "ACTIVATING",
                 },
@@ -1121,7 +1145,7 @@ class SQLiteIngestionAdapter:
                             "code",
                             "ADMIN_INGESTION_FINALIZATION_BLOCKED",
                         ),
-                        "detail": "Isolated finalization failed closed",
+                        "detail": "Finalization failed closed",
                     },
                     expected_version=current["version"],
                     expected_lease_owner=owner,
@@ -1271,15 +1295,55 @@ class SQLiteIngestionAdapter:
             )
 
         if not plan["plan"]["actions"]:
+            result: dict[str, Any] = {
+                "status": "noop",
+                "plan_id": plan["plan_id"],
+                "plan_digest": plan["plan_digest"],
+            }
+            verify_noop = getattr(self.finalization_executor, "verify_noop", None)
+            if self.finalization_mode == "production_activation":
+                if not callable(verify_noop):
+                    raise _error(
+                        "ADMIN_INGESTION_FINALIZATION_UNAVAILABLE",
+                        "Production no-op verification is unavailable",
+                        503,
+                    )
+                try:
+                    result.update(dict(verify_noop(fresh_source)))
+                    result["plan_id"] = plan["plan_id"]
+                    result["plan_digest"] = plan["plan_digest"]
+                except Exception as exc:
+                    current = self.ledger.get_job(job_id)
+                    if current and current["status"] == "RUNNING":
+                        current = self.ledger.update_job(
+                            job_id,
+                            expected_version=int(current["version"]),
+                            patch={
+                                "phase": "finalization_blocked",
+                                "finalization_state": "FINALIZATION_BLOCKED",
+                            },
+                        )
+                        self.ledger.complete_terminal(
+                            lease,
+                            job_id=job_id,
+                            success=False,
+                            error={
+                                "code": getattr(
+                                    exc,
+                                    "code",
+                                    "ADMIN_INGESTION_FINALIZATION_BLOCKED",
+                                ),
+                                "detail": "Production no-op verification failed closed",
+                            },
+                            expected_version=current["version"],
+                            expected_lease_owner=owner,
+                        )
+                    raise
             return self.ledger.complete_terminal(
                 lease,
                 job_id=job_id,
                 success=True,
-                result={
-                    "status": "noop",
-                    "plan_id": plan["plan_id"],
-                    "plan_digest": plan["plan_digest"],
-                },
+                result=result,
                 expected_version=claimed["version"],
                 expected_lease_owner=owner,
             )
@@ -1515,12 +1579,15 @@ class SQLiteIngestionReadAuthority:
         source_observer: Callable[[], Mapping[str, Any]] | None = None,
         active_manifest_observer: Callable[[], Mapping[str, Any]] | None = None,
         candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
+        finalization_mode: str = "blocked",
     ) -> None:
         self.ledger = ledger
         self.missing_seams = tuple(sorted(missing_seams))
         self.source_observer = source_observer
         self.active_manifest_observer = active_manifest_observer
         self.candidate_manifest_observer = candidate_manifest_observer
+        self.finalization_mode = finalization_mode
+        self.production_activation_authorized = False
         self.reason_code = "ADMIN_INGESTION_RUNTIME_SEAMS_UNQUALIFIED"
 
     def _unavailable(self) -> ReadObservation:
@@ -1541,6 +1608,7 @@ class SQLiteIngestionReadAuthority:
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=list(self.missing_seams),
             finalization_authorized=False,
+            finalization_mode=self.finalization_mode,
         )
 
     def list_audits(self) -> ReadObservation:
@@ -1586,6 +1654,8 @@ def build_sqlite_ingestion_adapter(
     candidate_manifest_observer: Callable[[str, str], Mapping[str, Any]] | None = None,
     candidate_executor: Callable[..., Mapping[str, Any]] | None = None,
     finalization_executor: Any | None = None,
+    finalization_mode: str | None = None,
+    finalization_authority_evidence: Mapping[str, Any] | None = None,
     allow_read_only_when_disabled: bool = False,
 ) -> SQLiteIngestionAdapter | SQLiteIngestionReadAuthority | None:
     enabled = os.getenv("M26_INGESTION_ENABLED", "false").strip().lower() in {
@@ -1648,6 +1718,8 @@ def build_sqlite_ingestion_adapter(
         candidate_manifest_observer=candidate_observer,
         candidate_executor=candidate_executor,
         finalization_executor=finalization_executor,
+        finalization_mode=finalization_mode,
+        finalization_authority_evidence=finalization_authority_evidence,
     )
 
 

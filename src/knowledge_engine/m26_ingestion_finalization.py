@@ -30,10 +30,12 @@ from .m26_production_promotion import (
     promotion_plan_receipt,
     promotion_plan_to_payload,
 )
-from .storage import FileObjectStore, sha256_bytes
+from .storage import FileObjectStore, ObjectStore, sha256_bytes
 
 SCHEMA_VERSION = "knowledge-engine-m26-ingestion-finalization/v1"
 ISOLATED_AUTHORITY_SCOPE = "l3_isolated_test"
+PRODUCTION_SCHEMA_VERSION = "knowledge-engine-m26-ingestion-production-finalization/v1"
+PRODUCTION_AUTHORITY_SCOPE = "production_runtime"
 
 
 class DenseReadChannel(Protocol):
@@ -57,6 +59,14 @@ class AskEquivalentSpec:
 
 CandidateQdrantObserver = Callable[[str, str], QdrantQualification]
 PredecessorQdrantObserver = Callable[[ActiveProductionRelease], ProductionQdrantQualification]
+
+
+class ProductionQdrantObserver(Protocol):
+    def qualify_candidate(self, manifest: Mapping[str, Any]) -> QdrantQualification: ...
+
+    def qualify_production(
+        self, active: ActiveProductionRelease
+    ) -> ProductionQdrantQualification: ...
 
 
 def _hash(value: Any) -> str:
@@ -185,6 +195,349 @@ def run_successor_only_ask_equivalent(
         "authority_source": "resolved_production_pointer_chain",
         "read_only": True,
     }
+
+
+def run_production_successor_probe(
+    *,
+    bundle: ProductionAnswerBundle,
+    dense_channel: DenseReadChannel,
+    question: str,
+) -> dict[str, Any]:
+    """Require a pointer-bound read-only dense result from the active successor."""
+
+    active = bundle.active_release
+    dense = dict(dense_channel.search(question=question, bundle=bundle, top_k=8))
+    backend = dense.get("backend_identity")
+    candidates = dense.get("candidates")
+    if not isinstance(backend, Mapping) or not isinstance(candidates, Sequence):
+        raise IntegrityError("F8-ASK-001 production successor probe is malformed")
+    if (
+        backend.get("authority_source") != "resolved_production_pointer_chain"
+        or backend.get("release_id") != active.release_id
+        or backend.get("qdrant_collection") != active.qdrant_collection
+        or backend.get("production_pointer_sha256") != active.pointer_sha256
+        or backend.get("read_only") is not True
+    ):
+        raise IntegrityError("F8-ASK-002 dense authority is not the active successor")
+    evidence = [
+        dict(item)
+        for item in candidates
+        if isinstance(item, Mapping)
+        and item.get("payload_release_id") == active.release_id
+        and isinstance(item.get("section_id"), str)
+        and item.get("section_id")
+    ]
+    if not evidence:
+        raise IntegrityError("F8-ASK-003 dense read returned no active-successor evidence")
+    return {
+        "schema_version": PRODUCTION_SCHEMA_VERSION,
+        "status": "production_successor_probe_proven",
+        "question_sha256": sha256_bytes(question.encode("utf-8")),
+        "release_id": active.release_id,
+        "production_pointer_sha256": active.pointer_sha256,
+        "qdrant_collection": active.qdrant_collection,
+        "evidence": evidence,
+        "authority_source": "resolved_production_pointer_chain",
+        "read_only": True,
+    }
+
+
+class ProductionIngestionFinalizer:
+    """Production finalizer that reuses the qualified promotion and resolver primitives."""
+
+    mode = "production_activation"
+    production_activation_authorized = True
+
+    def __init__(
+        self,
+        *,
+        store: ObjectStore,
+        source_observer: Callable[[], Mapping[str, Any]],
+        qdrant_observer: ProductionQdrantObserver,
+        dense_channel: DenseReadChannel,
+        ask_probe_question: str,
+        owner_authorization: str,
+        promoted_at_factory: Callable[[], str],
+        authority_check: Callable[[], Mapping[str, Any]],
+        authority_scope: str = PRODUCTION_AUTHORITY_SCOPE,
+    ) -> None:
+        if isinstance(store, FileObjectStore) or authority_scope != PRODUCTION_AUTHORITY_SCOPE:
+            raise IntegrityError("F8-AUTH-001 production finalization requires non-file authority")
+        if not ask_probe_question.strip() or not owner_authorization.strip():
+            raise ValueError("production finalization probe and owner authorization are required")
+        self.store = store
+        self.source_observer = source_observer
+        self.qdrant_observer = qdrant_observer
+        self.dense_channel = dense_channel
+        self.ask_probe_question = ask_probe_question
+        self.owner_authorization = owner_authorization
+        self.promoted_at_factory = promoted_at_factory
+        self.authority_check = authority_check
+        self.authority_scope = authority_scope
+
+    def self_check(self) -> dict[str, Any]:
+        runtime_authority = dict(self.authority_check())
+        if not runtime_authority:
+            raise IntegrityError("F8-AUTH-007 runtime authority identity is unavailable")
+        source = dict(self.source_observer())
+        revision = str(source.get("source_revision") or "")
+        identity = str(source.get("source_identity_digest") or "")
+        documents = source.get("documents")
+        if (
+            not revision.startswith("git:")
+            or len(revision) != 44
+            or any(character not in "0123456789abcdef" for character in revision[4:])
+            or len(identity) != 64
+            or any(character not in "0123456789abcdef" for character in identity)
+            or not isinstance(documents, list)
+            or not documents
+        ):
+            raise IntegrityError("F8-AUTH-006 source authority self-check failed")
+        active = resolve_active_production_release(self.store)
+        metadata = self.store.head(PRODUCTION_POINTER_KEY)
+        if metadata is None or not metadata.etag:
+            raise IntegrityError("F8-AUTH-002 predecessor pointer ETag is unavailable")
+        raw = self.store.get(PRODUCTION_POINTER_KEY)
+        if sha256_bytes(raw) != active.pointer_sha256:
+            raise IntegrityError("F8-AUTH-003 predecessor pointer readback mismatch")
+        qdrant = self.qdrant_observer.qualify_production(active)
+        return {
+            "schema_version": PRODUCTION_SCHEMA_VERSION,
+            "mode": self.mode,
+            "production_activation_authorized": True,
+            "release_id": active.release_id,
+            "pointer_sha256": active.pointer_sha256,
+            "pointer_etag_sha256": sha256_bytes(metadata.etag.encode("utf-8")),
+            "predecessor_qdrant_sha256": _hash(qdrant),
+            "owner_authorization_sha256": _hash(self.owner_authorization),
+            "ask_probe_sha256": sha256_bytes(self.ask_probe_question.encode("utf-8")),
+            "source_observation_sha256": _hash(source),
+            "runtime_authority_sha256": _hash(runtime_authority),
+        }
+
+    def verify_noop(self, source_observation: Mapping[str, Any]) -> dict[str, Any]:
+        """Prove an exact active read path before declaring a production no-op."""
+
+        authority = self.self_check()
+        active = resolve_active_production_release(self.store)
+        if (
+            source_observation.get("source_revision")
+            not in {active.source_commit_sha, "git:" + active.source_commit_sha}
+            or source_observation.get("source_identity_digest") != active.admission_sha256
+        ):
+            raise IntegrityError("F8-NOOP-001 source is not the exact active release")
+        observed_source = dict(self.source_observer())
+        if _hash(observed_source) != _hash(source_observation):
+            raise IntegrityError("F8-NOOP-002 source changed before active readback proof")
+        qdrant = self.qdrant_observer.qualify_production(active)
+        bundle = load_production_answer_bundle(store=self.store)
+        if bundle.release_id != active.release_id:
+            raise IntegrityError("F8-NOOP-003 answer bundle is not the active release")
+        ask_result = run_production_successor_probe(
+            bundle=bundle,
+            dense_channel=self.dense_channel,
+            question=self.ask_probe_question,
+        )
+        return {
+            "schema_version": PRODUCTION_SCHEMA_VERSION,
+            "status": "noop",
+            "activation_status": "already_active_noop",
+            "release_id": active.release_id,
+            "production_pointer_sha256": active.pointer_sha256,
+            "production_manifest_sha256": active.production_manifest_sha256,
+            "qdrant_qualification_sha256": _hash(qdrant),
+            "ask_equivalent": ask_result,
+            "authority": authority,
+            "production_activation_claimed": False,
+            "public_production_traffic_authorized": False,
+        }
+
+    def _candidate_manifest(self, key: str) -> dict[str, Any]:
+        return _json_object(self.store.get(key), "F8 candidate manifest")
+
+    def _validate_source(
+        self,
+        candidate: CandidateQualification,
+        source_observation: Mapping[str, Any],
+    ) -> None:
+        revision = str(source_observation.get("source_revision") or "")
+        identity = str(source_observation.get("source_identity_digest") or "")
+        if revision not in {candidate.source_commit_sha, "git:" + candidate.source_commit_sha}:
+            raise IntegrityError("F8-SOURCE-001 source revision drift")
+        if identity != candidate.admission_sha256:
+            raise IntegrityError("F8-SOURCE-002 source identity drift")
+
+    @staticmethod
+    def _validate_active_authority(
+        plan: PromotionPlan,
+        active: ActiveProductionRelease,
+        bundle: ProductionAnswerBundle,
+    ) -> None:
+        if (
+            active.release_id != plan.candidate.release_id
+            or active.pointer_sha256 != plan.target_pointer_sha256
+            or active.production_manifest_sha256 != plan.production_manifest_sha256
+            or active.candidate_manifest_sha256 != plan.candidate.manifest_sha256
+            or active.qdrant_collection != plan.candidate.qdrant.collection
+            or bundle.release_id != plan.candidate.release_id
+        ):
+            raise IntegrityError("F8-FINALIZE-001 active successor identity mismatch")
+
+    def prepare(
+        self,
+        *,
+        candidate_receipt: Mapping[str, Any],
+        source_observation: Mapping[str, Any],
+        expected_predecessor_pointer_sha256: str,
+    ) -> dict[str, Any]:
+        authority = self.self_check()
+        if authority["source_observation_sha256"] != _hash(source_observation):
+            raise IntegrityError("F8-SOURCE-004 prepared source differs from authority self-check")
+        if candidate_receipt.get("status") != "candidate_release_finalized":
+            raise IntegrityError("F8-FINALIZE-002 candidate is not verified")
+        candidate_key = str(candidate_receipt.get("manifest_key") or "")
+        candidate_sha = str(candidate_receipt.get("manifest_sha256") or "")
+        candidate_manifest = self._candidate_manifest(candidate_key)
+        candidate_qdrant = self.qdrant_observer.qualify_candidate(candidate_manifest)
+        predecessor = resolve_active_production_release(self.store)
+        predecessor_qdrant = self.qdrant_observer.qualify_production(predecessor)
+        promoted_at = self.promoted_at_factory()
+        if not isinstance(promoted_at, str) or not promoted_at:
+            raise IntegrityError("F8-FINALIZE-003 promotion timestamp is unavailable")
+        plan = build_promotion_plan(
+            store=self.store,
+            candidate_manifest_key=candidate_key,
+            candidate_manifest_sha256=candidate_sha,
+            expected_predecessor_pointer_sha256=expected_predecessor_pointer_sha256,
+            promoted_at=promoted_at,
+            owner_authorization=self.owner_authorization,
+            qdrant=candidate_qdrant,
+            predecessor_qdrant=predecessor_qdrant,
+        )
+        if (
+            candidate_receipt.get("release_id") != plan.candidate.release_id
+            or candidate_receipt.get("qdrant_collection") != plan.candidate.qdrant.collection
+        ):
+            raise IntegrityError("F8-FINALIZE-004 candidate receipt identity mismatch")
+        self._validate_source(plan.candidate, source_observation)
+        source_sha = _hash(source_observation)
+        ask_sha = sha256_bytes(self.ask_probe_question.encode("utf-8"))
+        return {
+            "schema_version": PRODUCTION_SCHEMA_VERSION,
+            "status": "finalization_ready",
+            "mode": self.mode,
+            "authority_scope": self.authority_scope,
+            "production_activation_authorized": True,
+            "public_production_traffic_authorized": False,
+            "owner_authorization_sha256": _hash(self.owner_authorization),
+            "runtime_authority_sha256": authority["runtime_authority_sha256"],
+            "source_observation": dict(source_observation),
+            "source_observation_sha256": source_sha,
+            "candidate_receipt_sha256": _hash(candidate_receipt),
+            "predecessor_authority": authority,
+            "promotion_plan": promotion_plan_to_payload(plan),
+            "promotion_plan_receipt": promotion_plan_receipt(plan),
+            "ask_probe": {
+                "question": self.ask_probe_question,
+                "question_sha256": ask_sha,
+            },
+        }
+
+    def execute(self, durable_plan: Mapping[str, Any]) -> dict[str, Any]:
+        runtime_authority = dict(self.authority_check())
+        if (
+            durable_plan.get("schema_version") != PRODUCTION_SCHEMA_VERSION
+            or durable_plan.get("mode") != self.mode
+            or durable_plan.get("authority_scope") != self.authority_scope
+            or durable_plan.get("production_activation_authorized") is not True
+            or durable_plan.get("public_production_traffic_authorized") is not False
+            or durable_plan.get("owner_authorization_sha256") != _hash(self.owner_authorization)
+            or durable_plan.get("runtime_authority_sha256") != _hash(runtime_authority)
+        ):
+            raise IntegrityError("F8-AUTH-004 durable production authority mismatch")
+        ask = durable_plan.get("ask_probe")
+        expected_ask = {
+            "question": self.ask_probe_question,
+            "question_sha256": sha256_bytes(self.ask_probe_question.encode("utf-8")),
+        }
+        if not isinstance(ask, Mapping) or dict(ask) != expected_ask:
+            raise IntegrityError("F8-ASK-004 durable production probe mismatch")
+        source = durable_plan.get("source_observation")
+        if not isinstance(source, Mapping) or _hash(source) != durable_plan.get(
+            "source_observation_sha256"
+        ):
+            raise IntegrityError("F8-FINALIZE-005 durable source identity mismatch")
+        plan_payload = durable_plan.get("promotion_plan")
+        if not isinstance(plan_payload, Mapping):
+            raise IntegrityError("F8-FINALIZE-006 durable promotion plan missing")
+        plan = promotion_plan_from_payload(plan_payload)
+        if plan.owner_authorization != self.owner_authorization:
+            raise IntegrityError("F8-AUTH-005 promotion owner authorization mismatch")
+        observed_source = dict(self.source_observer())
+        if _hash(observed_source) != durable_plan.get("source_observation_sha256"):
+            raise IntegrityError("F8-SOURCE-003 exact source observation drift")
+        self._validate_source(plan.candidate, observed_source)
+
+        def candidate_qdrant() -> QdrantQualification:
+            return self.qdrant_observer.qualify_candidate(
+                self._candidate_manifest(plan.candidate.manifest_key)
+            )
+
+        def predecessor_qdrant() -> ProductionQdrantQualification:
+            return self.qdrant_observer.qualify_production(
+                resolve_active_production_release(
+                    _ExactPointerView(self.store, plan.predecessor.raw)
+                )
+            )
+
+        activation = execute_promotion(
+            store=self.store,
+            plan=plan,
+            revalidate_qdrant=candidate_qdrant,
+            revalidate_predecessor_qdrant=predecessor_qdrant,
+        )
+        active = resolve_active_production_release(self.store)
+        bundle = load_production_answer_bundle(store=self.store)
+        self._validate_active_authority(plan, active, bundle)
+        ask_result = run_production_successor_probe(
+            bundle=bundle,
+            dense_channel=self.dense_channel,
+            question=self.ask_probe_question,
+        )
+        return {
+            "schema_version": PRODUCTION_SCHEMA_VERSION,
+            "status": "active_successor",
+            "release_id": plan.candidate.release_id,
+            "manifest_key": plan.candidate.manifest_key,
+            "manifest_sha256": plan.candidate.manifest_sha256,
+            "candidate_release_id": plan.candidate.release_id,
+            "candidate_manifest_key": plan.candidate.manifest_key,
+            "candidate_manifest_sha256": plan.candidate.manifest_sha256,
+            "predecessor_pointer_sha256": plan.predecessor.sha256,
+            "production_pointer_sha256": active.pointer_sha256,
+            "production_manifest_key": active.production_manifest_key,
+            "production_manifest_sha256": active.production_manifest_sha256,
+            "activation": activation,
+            "active_resolver": {
+                "release_id": active.release_id,
+                "qdrant_collection": active.qdrant_collection,
+                "source_commit_sha": active.source_commit_sha,
+                "admission_sha256": active.admission_sha256,
+            },
+            "answer_bundle": {
+                "release_id": bundle.release_id,
+                "artifact_keys": dict(sorted(bundle.artifact_keys.items())),
+                "artifact_sha256": dict(sorted(bundle.artifact_sha256.items())),
+            },
+            "ask_equivalent": ask_result,
+            "authority": {
+                "scope": self.authority_scope,
+                "mode": self.mode,
+                "production_activation_authorized": True,
+                "public_production_traffic_authorized": False,
+                "public_production_traffic_mutated": False,
+            },
+        }
 
 
 class IsolatedIngestionFinalizer:
@@ -442,7 +795,7 @@ class IsolatedIngestionFinalizer:
 
 
 class _ExactPointerView:
-    def __init__(self, store: FileObjectStore, pointer: bytes) -> None:
+    def __init__(self, store: ObjectStore, pointer: bytes) -> None:
         self.store = store
         self.pointer = pointer
 
@@ -454,5 +807,9 @@ __all__ = [
     "AskEquivalentSpec",
     "ISOLATED_AUTHORITY_SCOPE",
     "IsolatedIngestionFinalizer",
+    "PRODUCTION_AUTHORITY_SCOPE",
+    "PRODUCTION_SCHEMA_VERSION",
+    "ProductionIngestionFinalizer",
+    "run_production_successor_probe",
     "run_successor_only_ask_equivalent",
 ]
