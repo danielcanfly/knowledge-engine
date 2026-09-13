@@ -51,11 +51,7 @@ from .m26_multilingual_retrieval_adapter import (
 from .m26_multilingual_runtime import MultilingualRuntimeDependencies
 from .m26_multilingual_semantic_spine import DEFAULT_SEMANTIC_AUTHORITIES
 from .m26_pa5_v8_live import ENDPOINT, LiveGateError, prepare_minimax_http_client
-from .m26_production_answer_bundle import (
-    FULL_PRODUCTION_QDRANT_COLLECTION,
-    ProductionAnswerBundle,
-    load_production_answer_bundle,
-)
+from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
 
 DEFAULT_STAGING_ENV_FILE = Path("/Users/huaihsuanhuang/Desktop/.env")
@@ -64,9 +60,7 @@ _TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 LANGUAGE_MODEL_MAX_TOKENS = 900
 LANGUAGE_PROVIDER_CALL_CLASSES = {
     "multilingual_canonicalization": "m26_track2_multilingual_canonicalization",
-    "multilingual_requested_language_realization": (
-        "m26_track2_requested_language_realization"
-    ),
+    "multilingual_requested_language_realization": ("m26_track2_requested_language_realization"),
     "multilingual_equivalence_review": "m26_track2_multilingual_equivalence_review",
 }
 
@@ -88,8 +82,9 @@ class Track2ClosureProviderFallbackReplayRunner:
 
     def __init__(
         self,
-        closure_runner: Callable[..., tuple[Mapping[str, Any], Mapping[str, Any]]]
-        = synthesize_and_verify,
+        closure_runner: Callable[
+            ..., tuple[Mapping[str, Any], Mapping[str, Any]]
+        ] = synthesize_and_verify,
     ) -> None:
         self._closure_runner = closure_runner
         self.calls = 0
@@ -161,10 +156,7 @@ def _closure_replay_input_digest(kwargs: Mapping[str, Any]) -> str:
         for item in kwargs.get("evidence", ())
         if isinstance(item, Mapping)
     ]
-    requirements = [
-        _requirement_replay_projection(item)
-        for item in kwargs.get("requirements", ())
-    ]
+    requirements = [_requirement_replay_projection(item) for item in kwargs.get("requirements", ())]
     endpoint_proof = kwargs.get("endpoint_proof", {})
     return canonical_sha256(
         {
@@ -173,9 +165,7 @@ def _closure_replay_input_digest(kwargs: Mapping[str, Any]) -> str:
             "intent_class": str(kwargs.get("intent_class", "")),
             "selected_evidence_ids": evidence_ids,
             "requirements": requirements,
-            "endpoint_proof": dict(endpoint_proof)
-            if isinstance(endpoint_proof, Mapping)
-            else {},
+            "endpoint_proof": dict(endpoint_proof) if isinstance(endpoint_proof, Mapping) else {},
         }
     )
 
@@ -211,9 +201,7 @@ def _update_provider_routing_replay_telemetry(
         return
     telemetry["primary_route"] = str(snapshot.get("closure_provider_initial", ""))
     telemetry["fallback_route"] = str(snapshot.get("closure_provider_final", ""))
-    telemetry["fallback_evidence_digest_match"] = snapshot.get(
-        "fallback_evidence_digest_match"
-    )
+    telemetry["fallback_evidence_digest_match"] = snapshot.get("fallback_evidence_digest_match")
 
 
 class SingleAttemptMiniMaxLanguageClient:
@@ -346,9 +334,7 @@ class LiveCanonicalizationProvider:
             telemetry={
                 "provider": MINIMAX_PROVIDER,
                 "model": MINIMAX_MODEL,
-                "call_class": LANGUAGE_PROVIDER_CALL_CLASSES[
-                    "multilingual_canonicalization"
-                ],
+                "call_class": LANGUAGE_PROVIDER_CALL_CLASSES["multilingual_canonicalization"],
             },
         )
 
@@ -402,9 +388,7 @@ class LiveEquivalenceReviewer:
             {
                 "claim_id": claim.canonical_claim_id,
                 "canonical_surface_text_en": claim.canonical_surface_text_en,
-                "requested_language_text_zh_tw": (
-                    claim.requested_language_text_zh_tw
-                ),
+                "requested_language_text_zh_tw": (claim.requested_language_text_zh_tw),
                 "marker_preservation_status": claim.marker_preservation_status,
                 "preservation_markers": list(claim.preservation_markers),
             }
@@ -501,13 +485,16 @@ class FrozenEvidenceSelectorAdapter:
         self.calls += 1
         question = _semantic_question_from_envelope(envelope)
         intent_class = legacy._intent_class(question)
-        trace_id = "m26t2sel_" + canonical_sha256(
-            {
-                "question": question,
-                "mode": union.mode,
-                "candidate_ids": [candidate.candidate_id for candidate in union.candidates],
-            }
-        )[:32]
+        trace_id = (
+            "m26t2sel_"
+            + canonical_sha256(
+                {
+                    "question": question,
+                    "mode": union.mode,
+                    "candidate_ids": [candidate.candidate_id for candidate in union.candidates],
+                }
+            )[:32]
+        )
         lexical_result = self.trace.lexical_results.get("canonical_en")
         if lexical_result is None:
             lexical_result = _accepted_lexical(
@@ -564,10 +551,21 @@ def build_track2_staging_runtime_dependencies(
     del gate_path
     _load_env_file(env_file or _env_file_from_env())
     _normalize_r2_endpoint_for_staging()
-    os.environ.setdefault("M26_PA7_DENSE_COLLECTION", FULL_PRODUCTION_QDRANT_COLLECTION)
-    dense_channel = legacy.dense_channel_from_env(
-        require_remote=_track2_remote_dense_required()
-    )
+    remote_dense_required = _track2_remote_dense_required()
+    configured_collection = os.environ.get("M26_PA7_DENSE_COLLECTION", "").strip()
+    if remote_dense_required:
+        active_bundle = load_production_answer_bundle()
+        active = getattr(active_bundle, "active_release", None)
+        if active is None:
+            active = getattr(active_bundle, "resolved_release", None)
+        if active is not None and getattr(active, "qdrant_collection", None):
+            os.environ["M26_PA7_DENSE_COLLECTION"] = str(active.qdrant_collection)
+        elif not configured_collection:
+            raise legacy.PA7ArbitraryQueryError(
+                "PA7_ACTIVE_RELEASE_COLLECTION_UNAVAILABLE",
+                "staging remote dense requires pointer-selected active release collection",
+            )
+    dense_channel = legacy.dense_channel_from_env(require_remote=remote_dense_required)
     trace = Track2StagingTrace(
         dense_channel=dense_channel,
         endpoint_proof={"required": False, "matched": False},
@@ -629,10 +627,7 @@ def track2_runtime_readiness(
 
 
 def _track2_remote_dense_required() -> bool:
-    return (
-        os.environ.get(TRACK2_REQUIRE_REMOTE_DENSE_ENV, "").strip().lower()
-        in _TRUE_ENV_VALUES
-    )
+    return os.environ.get(TRACK2_REQUIRE_REMOTE_DENSE_ENV, "").strip().lower() in _TRUE_ENV_VALUES
 
 
 def _env_file_from_env() -> Path:
@@ -660,9 +655,7 @@ def _normalize_r2_endpoint_for_staging() -> None:
         return
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     if account_id:
-        os.environ["R2_ENDPOINT_URL"] = (
-            f"https://{account_id}.r2.cloudflarestorage.com"
-        )
+        os.environ["R2_ENDPOINT_URL"] = f"https://{account_id}.r2.cloudflarestorage.com"
 
 
 def _unquote_env_value(value: str) -> str:
@@ -726,10 +719,7 @@ def _dense_result_from_union(
             "track2_dense_projection": {
                 "projection_authority": "dense_contributions_only",
                 "source_representations": sorted(
-                    {
-                        contribution.query_representation
-                        for contribution in dense_contributions
-                    }
+                    {contribution.query_representation for contribution in dense_contributions}
                 ),
                 "dense_ranks": [
                     {
@@ -842,9 +832,7 @@ def _selector_projection_summary(
 ) -> dict[str, Any]:
     dense_candidates = _sequence(dense_result.get("candidates"))
     projected_ids = {
-        str(item.get("section_id", ""))
-        for item in dense_candidates
-        if isinstance(item, Mapping)
+        str(item.get("section_id", "")) for item in dense_candidates if isinstance(item, Mapping)
     }
     dense_contribution_ids = {
         candidate.candidate_id
@@ -890,14 +878,10 @@ def _selector_provenance_trace(
             {
                 "evidence_id": str(item.get("evidence_id", "")),
                 "section_id": section_id,
-                "selector_channels": [
-                    str(channel) for channel in item.get("channels", [])
-                ],
+                "selector_channels": [str(channel) for channel in item.get("channels", [])],
                 "used_as_frozen_selector_dense_score": section_id in dense_ids,
                 "phase2_fusion_score_observability_only": (
-                    round(float(candidate.fusion_score), 6)
-                    if candidate is not None
-                    else None
+                    round(float(candidate.fusion_score), 6) if candidate is not None else None
                 ),
                 "real_channel_contributions": (
                     [
@@ -905,9 +889,7 @@ def _selector_provenance_trace(
                             "channel": contribution.channel,
                             "query_representation": contribution.query_representation,
                             "rank": contribution.rank,
-                            "raw_score_if_available": (
-                                contribution.raw_score_if_available
-                            ),
+                            "raw_score_if_available": (contribution.raw_score_if_available),
                             "rank_fusion_score": round(
                                 contribution.rank_fusion_score,
                                 6,
@@ -1023,12 +1005,8 @@ def _strict_review_items(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "no_contradiction": review.no_contradiction,
                 "negation_preserved": review.negation_preserved,
                 "modality_preserved": review.modality_preserved,
-                "comparison_direction_preserved": (
-                    review.comparison_direction_preserved
-                ),
-                "relationship_direction_preserved": (
-                    review.relationship_direction_preserved
-                ),
+                "comparison_direction_preserved": (review.comparison_direction_preserved),
+                "relationship_direction_preserved": (review.relationship_direction_preserved),
                 "numeric_identity_preserved": review.numeric_identity_preserved,
                 "entity_identity_preserved": review.entity_identity_preserved,
             }
@@ -1060,9 +1038,7 @@ def _realization_response_skeleton(
         "claims": [
             {
                 "claim_id": str(claim.get("claim_id", "")),
-                "requested_language_text": (
-                    f"<translated {claim.get('claim_id', '')} text>"
-                ),
+                "requested_language_text": (f"<translated {claim.get('claim_id', '')} text>"),
             }
             for claim in claims
         ]

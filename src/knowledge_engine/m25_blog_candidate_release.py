@@ -73,10 +73,7 @@ def _canonical(value: Any) -> bytes:
 def _write(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(
-        (
-            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True)
-            + "\n"
-        ).encode()
+        (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
     )
 
 
@@ -90,9 +87,7 @@ def _load(path: Path) -> Any:
 def _jsonl(path: Path) -> list[dict[str, Any]]:
     try:
         values = [
-            json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line
+            json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line
         ]
     except (OSError, json.JSONDecodeError) as exc:
         raise IntegrityError(f"M25-BLOG-LIVE-002 invalid JSONL: {path}") from exc
@@ -109,9 +104,7 @@ def _excerpt(value: str, limit: int = 320) -> str:
 def _body_lines(raw: bytes, start: int, end: int) -> str:
     lines = raw.decode("utf-8").splitlines()
     if not 1 <= start <= end <= len(lines):
-        raise IntegrityError(
-            "M25-BLOG-LIVE-004 source locator is outside immutable bytes"
-        )
+        raise IntegrityError("M25-BLOG-LIVE-004 source locator is outside immutable bytes")
     return "\n".join(lines[start - 1 : end]).strip()
 
 
@@ -143,9 +136,7 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
         raise IntegrityError("M25-BLOG-LIVE-006 admission authority digest mismatch")
     for field, digest in EXPECTED.items():
         if admission.get(field) != digest:
-            raise IntegrityError(
-                f"M25-BLOG-LIVE-007 accepted identity drift: {field}"
-            )
+            raise IntegrityError(f"M25-BLOG-LIVE-007 accepted identity drift: {field}")
     if admission.get("production_pointer_authorized") is not False:
         raise IntegrityError("M25-BLOG-LIVE-008 production pointer authority drift")
     if (
@@ -159,15 +150,9 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
     batch_b = _load(pack_root / "batch-b-inventory.json")
     if master.get("inventory_sha256") != EXPECTED["master_inventory_sha256"]:
         raise IntegrityError("M25-BLOG-LIVE-010 master inventory mismatch")
-    if (
-        batch_a.get("batch_inventory_sha256")
-        != EXPECTED["batch_a_inventory_sha256"]
-    ):
+    if batch_a.get("batch_inventory_sha256") != EXPECTED["batch_a_inventory_sha256"]:
         raise IntegrityError("M25-BLOG-LIVE-011 Batch A inventory mismatch")
-    if (
-        batch_b.get("batch_inventory_sha256")
-        != EXPECTED["batch_b_inventory_sha256"]
-    ):
+    if batch_b.get("batch_inventory_sha256") != EXPECTED["batch_b_inventory_sha256"]:
         raise IntegrityError("M25-BLOG-LIVE-012 Batch B inventory mismatch")
 
     nodes_path = pack_root / "candidate-nodes.jsonl"
@@ -181,9 +166,7 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
     node_counts = Counter(node.get("node_type") for node in nodes)
     if node_counts != Counter({"Series": 25, "Article": 156, "Section": 4041}):
         raise IntegrityError("M25-BLOG-LIVE-015 node population drift")
-    if len(edges) != COUNTS["edges"] or len(
-        {edge.get("edge_id") for edge in edges}
-    ) != len(edges):
+    if len(edges) != COUNTS["edges"] or len({edge.get("edge_id") for edge in edges}) != len(edges):
         raise IntegrityError("M25-BLOG-LIVE-016 edge population drift")
 
     articles = master.get("articles")
@@ -197,9 +180,7 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
         path = pack_root / "sources" / f"{article['slug']}.md"
         raw = path.read_bytes()
         if sha256_bytes(raw) != article.get("content_sha256"):
-            raise IntegrityError(
-                f"M25-BLOG-LIVE-019 immutable source mismatch: {article['slug']}"
-            )
+            raise IntegrityError(f"M25-BLOG-LIVE-019 immutable source mismatch: {article['slug']}")
         source_bytes[article["article_id"]] = raw
         article_by_id[article["article_id"]] = article
     if len(source_bytes) != COUNTS["sources"]:
@@ -214,15 +195,19 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
     }
 
 
-def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, Any]:
+def build_pack_artifacts(
+    pack: Mapping[str, Any],
+    release_id: str,
+    *,
+    document_namespace: str = "daniel-blog-en-156",
+    expected_semantic_count: int | None = COUNTS["semantic_documents"],
+) -> dict[str, Any]:
     article_by_id = pack["article_by_id"]
     source_bytes = pack["source_bytes"]
     nodes = pack["nodes"]
     edges = pack["edges"]
     article_nodes = {
-        node["source_article_id"]: node
-        for node in nodes
-        if node["node_type"] == "Article"
+        node["source_article_id"]: node for node in nodes if node["node_type"] == "Article"
     }
     graph_nodes: list[dict[str, Any]] = []
     graph_v2_nodes: list[dict[str, Any]] = []
@@ -234,7 +219,7 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
     for article_id, article in sorted(article_by_id.items()):
         raw = source_bytes[article_id]
         article_node = article_nodes[article_id]
-        path = f"_documents/daniel-blog-en-156/sources/{article['slug']}.md"
+        path = f"_documents/{document_namespace}/sources/{article['slug']}.md"
         description = article.get("description") or article["title"]
         source_index.append(
             {
@@ -321,9 +306,9 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
         source_id = node.get("source_article_id")
         article = article_by_id.get(source_id) if source_id else None
         path = (
-            f"_documents/daniel-blog-en-156/sources/{article['slug']}.md"
+            f"_documents/{document_namespace}/sources/{article['slug']}.md"
             if article
-            else "_documents/daniel-blog-en-156/master-inventory.json"
+            else f"_documents/{document_namespace}/master-inventory.json"
         )
         graph_nodes.append(
             {
@@ -348,17 +333,13 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
                 "tags": ["daniel-blog", node_type.lower()],
                 "aliases": [],
                 "path": path,
-                "provenance_record": (
-                    "_documents/daniel-blog-en-156/admission.json"
-                ),
+                "provenance_record": (f"_documents/{document_namespace}/admission.json"),
             }
         )
         if node_type != "Section":
             continue
         if article is None:
-            raise IntegrityError(
-                "M25-BLOG-LIVE-021 Section node lacks article inventory"
-            )
+            raise IntegrityError("M25-BLOG-LIVE-021 Section node lacks article inventory")
         locator = node["source_locator"]
         body = _body_lines(
             source_bytes[source_id],
@@ -366,9 +347,7 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
             locator["end_line"],
         )
         description = article.get("description") or article["title"]
-        searchable = " ".join(
-            (article["title"], node["title"], str(description), body)
-        )
+        searchable = " ".join((article["title"], node["title"], str(description), body))
         lexical.append(
             {
                 "concept_id": node["parent_article_node_id"],
@@ -434,9 +413,7 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
             "qualifiers": {},
             "review_status": "approved",
             "review_id": "m25-10-blog-source-admission",
-            "provenance_record": (
-                "_documents/daniel-blog-en-156/admission.json"
-            ),
+            "provenance_record": (f"_documents/{document_namespace}/admission.json"),
             "provenance_ref": "structural-source-layout",
             "generated_inverse": False,
         }
@@ -444,10 +421,8 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
     ]
     lexical.sort(key=lambda item: (item["concept_id"], item["section_id"]))
     semantic.sort(key=lambda item: item["section_id"])
-    if len(semantic) != COUNTS["semantic_documents"]:
-        raise IntegrityError(
-            "M25-BLOG-LIVE-022 semantic document population drift"
-        )
+    if expected_semantic_count is not None and len(semantic) != expected_semantic_count:
+        raise IntegrityError("M25-BLOG-LIVE-022 semantic document population drift")
     return {
         "graph_nodes": graph_nodes,
         "graph_edges": graph_edges,
@@ -484,9 +459,7 @@ def augment_release(
             manifest=compiled.manifest,
         )
     release_root = compiled.release_root
-    bundle_documents = (
-        release_root / "bundle" / "_documents" / "daniel-blog-en-156"
-    )
+    bundle_documents = release_root / "bundle" / "_documents" / "daniel-blog-en-156"
     shutil.copytree(pack_root, bundle_documents)
 
     artifacts = build_pack_artifacts(pack, release_id)
@@ -514,9 +487,7 @@ def augment_release(
 
     lexical = _load(artifact_root / "lexical-index.json")
     lexical["documents"].extend(artifacts["lexical_documents"])
-    lexical["documents"].sort(
-        key=lambda item: (item["concept_id"], item["section_id"])
-    )
+    lexical["documents"].sort(key=lambda item: (item["concept_id"], item["section_id"]))
     _write(artifact_root / "lexical-index.json", lexical)
 
     provenance = _load(artifact_root / "provenance.json")
@@ -576,9 +547,7 @@ def augment_release(
         "provenance",
         "source_snapshot",
     }
-    manifest["artifacts"] = [
-        item for item in manifest["artifacts"] if item["kind"] not in replaced
-    ]
+    manifest["artifacts"] = [item for item in manifest["artifacts"] if item["kind"] not in replaced]
     specs = [
         ("graph", "artifacts/graph.json"),
         ("graph_v2", "artifacts/graph-v2.json"),
@@ -641,8 +610,7 @@ def create_candidate_collection(
         )
         if response.status_code not in {200, 201}:
             raise IntegrityError(
-                "M25-BLOG-LIVE-023 Qdrant collection create failed: "
-                f"{response.status_code}"
+                f"M25-BLOG-LIVE-023 Qdrant collection create failed: {response.status_code}"
             )
     finally:
         if owned:
@@ -692,9 +660,7 @@ def deploy_candidate(
             account_id=os.environ["CLOUDFLARE_ACCOUNT_ID"],
             api_token=os.environ["CLOUDFLARE_API_TOKEN"],
         )
-        collection_name = (
-            f"m25_blog_{augmented['release_id'].replace('-', '_').lower()}"
-        )
+        collection_name = f"m25_blog_{augmented['release_id'].replace('-', '_').lower()}"
         qd = QdrantConfig(
             base_url=os.environ["QDRANT_URL"],
             api_key=os.environ["QDRANT_API_KEY"],
@@ -716,9 +682,7 @@ def deploy_candidate(
         response = upsert_qdrant_points(points, qd, allow_write=True)
         readback = preflight_qdrant_collection(qd)
         if readback.get("points_count") != len(points):
-            raise IntegrityError(
-                "M25-BLOG-LIVE-025 Qdrant point count readback mismatch"
-            )
+            raise IntegrityError("M25-BLOG-LIVE-025 Qdrant point count readback mismatch")
         qdrant_receipt = {
             "executed": True,
             "collection": collection_name,
@@ -736,10 +700,7 @@ def deploy_candidate(
         compiled=compiled,
         channel=channel,
         promoted_at=(
-            release_time.astimezone(UTC)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
+            release_time.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         ),
     )
     receipt = {

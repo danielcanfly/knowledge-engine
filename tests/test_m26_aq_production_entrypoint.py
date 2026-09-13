@@ -22,8 +22,9 @@ def _read(path: str) -> str:
 
 def test_docker_has_one_canonical_production_app() -> None:
     dockerfile = _read("Dockerfile")
-    assert "knowledge_engine.m26_production_api:app" in dockerfile
-    assert dockerfile.count("knowledge_engine.m26_production_api:app") == 1
+    assert "knowledge_engine.m26_console_api:app" in dockerfile
+    assert dockerfile.count("knowledge_engine.m26_console_api:app") == 1
+    assert "knowledge_engine.m26_production_api:app" not in dockerfile
 
 
 def test_ask_api_directly_binds_canonical_runtime() -> None:

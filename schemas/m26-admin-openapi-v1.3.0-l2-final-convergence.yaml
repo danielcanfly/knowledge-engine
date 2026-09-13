@@ -1,0 +1,2376 @@
+openapi: 3.1.0
+info:
+  title: M26 LLM-Wiki Admin API
+  version: 1.3.0-l2-final-convergence
+  description: Owner-only M26 LLM-Wiki control-plane contract converged by Gate A Repair-A. B01 remains
+    authoritative for transport/security/request/error/idempotency/audit semantics; B02 is authoritative
+    for shared read availability/provenance/observation/freshness semantics; B03 is authoritative for
+    qualification evidence/status facts. Public /v1/answers* remains a separate contract. L2 Final Convergence
+    adds the accepted L3A index-health, one-click sync, and retry operations without changing predecessor
+    L3B or public contract surfaces.
+servers:
+- url: https://api.danielcanfly.com
+security:
+- cloudflareAccessAssertion: []
+tags:
+- name: Overview
+- name: Ingestion
+- name: Corpus
+- name: QA
+- name: Playground
+- name: SuggestedQuestions
+- name: Usage
+- name: Health
+- name: Jobs
+- name: Evaluation
+- name: Settings
+- name: Audit
+paths:
+  /v1/admin/session:
+    get:
+      tags:
+      - Settings
+      operationId: getAdminSession
+      summary: Validated owner session/actor context
+      responses:
+        '200':
+          description: Validated admin actor and backend auth posture
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: admin.session.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/capabilities:
+    get:
+      tags:
+      - Settings
+      operationId: getAdminCapabilities
+      summary: Evidence-backed capability gates
+      responses:
+        '200':
+          description: Capability matrix projection. Missing capability means unavailable, never enabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: admin.capabilities.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/overview:
+    get:
+      tags:
+      - Overview
+      operationId: getOverview
+      responses:
+        '200':
+          description: Operational snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: overview.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/index/current:
+    get:
+      tags:
+      - Corpus
+      operationId: getCurrentIndex
+      responses:
+        '200':
+          description: Active release/index identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.current.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/index/audits:
+    post:
+      tags:
+      - Corpus
+      operationId: startIndexAudit
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '202':
+          description: Audit accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.audit.start
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+    get:
+      tags:
+      - Corpus
+      operationId: listIndexAudits
+      responses:
+        '200':
+          description: Audit history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.audit.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/ingestion/scan:
+    post:
+      tags:
+      - Ingestion
+      operationId: scanCorpus
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '202':
+          description: Scan accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.scan
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/ingestion/dry-runs:
+    post:
+      tags:
+      - Ingestion
+      operationId: createDryRun
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - scope
+              properties:
+                scope:
+                  type: string
+                  enum:
+                  - single_document
+                  - stale_documents
+                  - explicit_documents
+                document_ids:
+                  type: array
+                  items:
+                    type: string
+                  maxItems: 100
+      responses:
+        '202':
+          description: Dry-run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.dry_run.start
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/ingestion/jobs:
+    get:
+      tags:
+      - Jobs
+      operationId: listIngestionJobs
+      responses:
+        '200':
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.jobs.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+    post:
+      tags:
+      - Ingestion
+      operationId: confirmIngestionJob
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - dry_run_id
+              - dry_run_digest
+              - confirmation
+              properties:
+                dry_run_id:
+                  type: string
+                dry_run_digest:
+                  type: string
+                  pattern: ^[a-f0-9]{64}$
+                confirmation:
+                  type: boolean
+                  const: true
+      responses:
+        '202':
+          description: Job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '409':
+          description: Dry-run stale or source revision changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.job.confirm
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/ingestion/jobs/{job_id}:
+    get:
+      tags:
+      - Jobs
+      operationId: getIngestionJob
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Job detail/evidence
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.job.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/index/versions:
+    get:
+      tags:
+      - Jobs
+      operationId: listIndexVersions
+      responses:
+        '200':
+          description: Version lineage and rollback eligibility
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.versions.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/index/versions/{version_id}/rollback-preflight:
+    post:
+      tags:
+      - Jobs
+      operationId: rollbackPreflight
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Eligibility/preflight result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.rollback.preflight
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/index/versions/{version_id}/activate:
+    post:
+      tags:
+      - Jobs
+      operationId: activateVersion
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - name: version_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - preflight_token
+              - confirmation
+              properties:
+                preflight_token:
+                  type: string
+                confirmation:
+                  type: boolean
+                  const: true
+      responses:
+        '202':
+          description: Activation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '409':
+          description: Preflight expired or state changed
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.activate
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/corpus:
+    get:
+      tags:
+      - Corpus
+      operationId: listCorpus
+      parameters:
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: state
+        in: query
+        schema:
+          type: string
+      - name: language
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Corpus rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: corpus.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/corpus/{document_id}:
+    get:
+      tags:
+      - Corpus
+      operationId: getCorpusDocument
+      parameters:
+      - name: document_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Document/source/index detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: corpus.document.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/qa/events:
+    get:
+      tags:
+      - QA
+      operationId: listQaEvents
+      parameters:
+      - name: class
+        in: query
+        schema:
+          type: string
+      - name: release_id
+        in: query
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Normalized answer/QA events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: qa.events.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      description: Generic QA review events. No canonical generic numeric QA score exists; filter only
+        by contract-backed fields.
+  /v1/admin/qa/events/{trace_id}:
+    get:
+      tags:
+      - QA
+      operationId: getQaEvent
+      parameters:
+      - name: trace_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '200':
+          description: Trace detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: qa.event.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/qa/export-markdown:
+    post:
+      tags:
+      - QA
+      operationId: exportQaMarkdown
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - trace_ids
+              properties:
+                trace_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Redacted Markdown review packet
+          content:
+            text/markdown:
+              schema:
+                type: string
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: qa.export_markdown
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/playground/retrieve:
+    post:
+      tags:
+      - Playground
+      operationId: inspectRetrieval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaygroundRequest'
+      responses:
+        '200':
+          description: Retrieval-only trace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: playground.retrieve
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/playground/ask:
+    post:
+      tags:
+      - Playground
+      operationId: runFullAsk
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaygroundRequest'
+      responses:
+        '200':
+          description: Full owner-only answer trace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: playground.ask
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+  /v1/admin/suggested-questions:
+    get:
+      tags:
+      - SuggestedQuestions
+      operationId: listSuggestedQuestions
+      responses:
+        '200':
+          description: Published/candidate/disabled questions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: suggested_questions.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+    put:
+      tags:
+      - SuggestedQuestions
+      operationId: updateSuggestedQuestions
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - base_revision
+              - operations
+              properties:
+                base_revision:
+                  type: string
+                operations:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+      responses:
+        '202':
+          description: Governed update accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '409':
+          description: Revision conflict
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: suggested_questions.publish
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/usage:
+    get:
+      tags:
+      - Usage
+      operationId: getUsage
+      responses:
+        '200':
+          description: Rate-limit and AI usage with provenance/freshness
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: usage.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/health:
+    get:
+      tags:
+      - Health
+      operationId: getAdminHealth
+      responses:
+        '200':
+          description: Aggregated dependency health
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: health.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/evaluations/golden:
+    get:
+      tags:
+      - Evaluation
+      operationId: listGoldenSets
+      responses:
+        '200':
+          description: Golden datasets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: evaluation.golden.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/evaluations/runs:
+    get:
+      tags:
+      - Evaluation
+      operationId: listEvaluationRuns
+      responses:
+        '200':
+          description: Evaluation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: evaluation.runs.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+    post:
+      tags:
+      - Evaluation
+      operationId: startEvaluationRun
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartEvaluationRunRequest'
+      responses:
+        '202':
+          description: Evaluation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: evaluation.run.start
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/settings:
+    get:
+      tags:
+      - Settings
+      operationId: getAdminSettings
+      description: Returns non-secret effective policy/configuration needed by the console. Secret values
+        are omitted; account credentials are never exposed.
+      responses:
+        '200':
+          description: Non-secret admin settings and capability flags
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: settings.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/audit-log:
+    get:
+      tags:
+      - Audit
+      operationId: listAuditLog
+      responses:
+        '200':
+          description: Append-only admin audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: audit.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/translation-gateway/health:
+    get:
+      summary: Health
+      operationId: health_v1_translation_gateway_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health V1 Translation Gateway Health Get
+  /v1/translation-gateway/query:
+    post:
+      summary: Query
+      operationId: query_v1_translation_gateway_query_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Query V1 Translation Gateway Query Post
+  /v1/answers/health:
+    get:
+      summary: Public Health
+      operationId: public_health_v1_answers_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Public Health V1 Answers Health Get
+  /v1/answers:
+    post:
+      summary: Public Answers
+      operationId: public_answers_v1_answers_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                title: Response Public Answers V1 Answers Post
+  /v1/admin/qa/inbox/events:
+    get:
+      tags:
+      - QAInbox
+      summary: List Inbox Events
+      operationId: listQaInboxEvents
+      parameters:
+      - name: range_name
+        in: query
+        required: false
+        schema:
+          type: string
+          default: 24h
+          title: Range Name
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Ts
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Search
+      - name: result
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Result
+      - name: evaluation_status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Evaluation Status
+      - name: country
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Country
+      - name: lifecycle
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lifecycle
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 100
+          title: Limit
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Listqainboxevents
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/qa/inbox/events/{event_id}:
+    get:
+      tags:
+      - QAInbox
+      summary: Get Inbox Event
+      operationId: getQaInboxEvent
+      parameters:
+      - name: event_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Event Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Getqainboxevent
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/qa/inbox/summary:
+    get:
+      tags:
+      - QAInbox
+      summary: Get Inbox Summary
+      operationId: getQaInboxSummary
+      parameters:
+      - name: range_name
+        in: query
+        required: false
+        schema:
+          type: string
+          default: 24h
+          title: Range Name
+      - name: from_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: From Ts
+      - name: to_ts
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: To Ts
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Getqainboxsummary
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/qa/inbox/clusters:
+    get:
+      tags:
+      - QAInbox
+      summary: List Clusters
+      operationId: listQaFailureClusters
+      parameters:
+      - name: lifecycle
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lifecycle
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Listqafailureclusters
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/qa/inbox/clusters/{cluster_id}/lifecycle:
+    post:
+      tags:
+      - QAInbox
+      summary: Update Lifecycle
+      operationId: updateQaFailureClusterLifecycle
+      parameters:
+      - name: cluster_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Cluster Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QaLifecycleRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Updateqafailureclusterlifecycle
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/qa/inbox/export-jsonl:
+    post:
+      tags:
+      - QAInbox
+      summary: Export Jsonl
+      operationId: exportQaNewFailuresJsonl
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/knowledge_engine__m26_qa_inbox_integration__QaExportRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          headers:
+            X-QA-Export-Mode:
+              description: Applied export mode.
+              schema:
+                type: string
+                enum:
+                - new
+                - selected
+                - current_filter
+            X-QA-Export-Reused:
+              description: Whether an existing export batch was reused.
+              schema:
+                type: string
+                enum:
+                - 'true'
+                - 'false'
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/suggested-questions/promotions/preview:
+    post:
+      tags:
+      - SuggestedQuestions
+      summary: Preview Suggested Questions Promotion
+      operationId: previewSuggestedQuestionsPromotion
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestedQuestionsPromotionPreviewRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Previewsuggestedquestionspromotion
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/suggested-questions/promotions/{promotion_id}:
+    get:
+      tags:
+      - SuggestedQuestions
+      summary: Get Suggested Questions Promotion
+      operationId: getSuggestedQuestionsPromotion
+      parameters:
+      - name: promotion_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Promotion Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Getsuggestedquestionspromotion
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/suggested-questions/promotions/{promotion_id}/publish:
+    post:
+      tags:
+      - SuggestedQuestions
+      summary: Publish Suggested Questions Promotion
+      operationId: publishSuggestedQuestionsPromotion
+      parameters:
+      - name: promotion_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Promotion Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestedQuestionsPromotionPublishRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Publishsuggestedquestionspromotion
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /v1/admin/index/health:
+    get:
+      tags:
+      - Health
+      operationId: getIndexHealth
+      summary: Truthful active-index health and finalization evidence
+      responses:
+        '200':
+          description: Active index health observation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Envelope'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: index.health.read
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: false
+      parameters:
+      - $ref: '#/components/parameters/ClientRequestId'
+  /v1/admin/ingestion/sync:
+    post:
+      tags:
+      - Ingestion
+      operationId: syncBlog
+      summary: Start one-click blog synchronization against an exact plan
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncBlogRequest'
+      responses:
+        '202':
+          description: Sync operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '409':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.job.confirm
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+  /v1/admin/ingestion/jobs/{job_id}/retry:
+    post:
+      tags:
+      - Jobs
+      operationId: retryIngestionJob
+      summary: Retry a failed durable ingestion job
+      parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/ClientRequestId'
+      responses:
+        '202':
+          description: Retry operation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAccepted'
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/AdminError'
+        '401':
+          $ref: '#/components/responses/AdminError'
+        '403':
+          $ref: '#/components/responses/AdminError'
+        '422':
+          $ref: '#/components/responses/AdminError'
+        '503':
+          $ref: '#/components/responses/AdminError'
+      x-m26-capability-id: ingestion.job.confirm
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+components:
+  securitySchemes:
+    cloudflareAccessAssertion:
+      type: apiKey
+      in: header
+      name: Cf-Access-Jwt-Assertion
+      description: Cloudflare Access injects this JWT at the origin. Clients must not fabricate it. The
+        backend validates RS256 signature, exact team-domain issuer, exact application AUD, expiry, subject
+        and owner allowlist on every /v1/admin/* request.
+      x-m26-client-injection: false
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Required only for state-changing admin operations. Scoped to actor + method + normalized
+        path. Same key + same canonical request replays the same operation identity; same key + different
+        request returns 409.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+        pattern: ^[A-Za-z0-9._:/\-]{16,128}$
+    ClientRequestId:
+      name: X-Client-Request-Id
+      in: header
+      required: false
+      description: Optional client correlation hint. It is never the authoritative server request_id.
+      schema:
+        type: string
+        maxLength: 128
+  schemas:
+    Availability:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      - reason_code
+      properties:
+        status:
+          type: string
+          enum:
+          - available
+          - partial
+          - unavailable
+        reason_code:
+          type:
+          - string
+          - 'null'
+        detail:
+          type:
+          - string
+          - 'null'
+      description: Read-model availability. Unavailable/partial must be explicit and must never be represented
+        by fabricated zero/empty observations.
+    Provenance:
+      type: object
+      additionalProperties: true
+      required:
+      - source
+      properties:
+        source:
+          type: string
+        resource_identity:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        evidence_digest:
+          type:
+          - string
+          - 'null'
+        source_observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Envelope:
+      type: object
+      additionalProperties: false
+      required:
+      - request_id
+      - availability
+      - provenance
+      - data
+      properties:
+        request_id:
+          type: string
+        availability:
+          $ref: '#/components/schemas/Availability'
+        provenance:
+          $ref: '#/components/schemas/Provenance'
+        observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Authoritative data observation time. Null when no observation occurred or none
+            is available; never synthesized from response time.
+        freshness:
+          type: string
+          enum:
+          - live
+          - near_live
+          - delayed
+          - snapshot
+          - stale
+          - unknown
+        data: {}
+      description: Canonical shared read envelope. Transport success does not imply source availability.
+        Unavailable/partial/stale states are explicit and non-fabricated.
+    OperationAccepted:
+      type: object
+      additionalProperties: false
+      required:
+      - request_id
+      - operation_id
+      - status
+      - replayed
+      properties:
+        request_id:
+          type: string
+        operation_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - accepted
+        replayed:
+          type: boolean
+    GoldenDatasetIdentity:
+      type: object
+      additionalProperties: false
+      required:
+      - dataset_id
+      - version
+      - dataset_hash
+      properties:
+        dataset_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        version:
+          type: string
+          minLength: 1
+          maxLength: 256
+        dataset_hash:
+          type: string
+          minLength: 1
+          maxLength: 512
+    EvaluationScoringIdentity:
+      type: object
+      additionalProperties: false
+      required:
+      - version
+      - hash
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 256
+        hash:
+          type: string
+          minLength: 1
+          maxLength: 512
+    EvaluationReleaseIdentity:
+      type: object
+      additionalProperties: false
+      required:
+      - release_id
+      - index_identity
+      - config_identity
+      - runtime_sha256
+      - collection
+      - manifest_sha256
+      properties:
+        release_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        index_identity:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        config_identity:
+          type: string
+          minLength: 1
+          maxLength: 512
+        runtime_sha256:
+          type: string
+          minLength: 1
+          maxLength: 512
+        collection:
+          type: string
+          minLength: 1
+          maxLength: 512
+        manifest_sha256:
+          type: string
+          minLength: 1
+          maxLength: 512
+        provider_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        model_id:
+          type: string
+          minLength: 1
+          maxLength: 512
+        provider_config_hash:
+          type: string
+          minLength: 1
+          maxLength: 512
+    StartEvaluationRunRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - mode
+      - dataset
+      - case_ids
+      - release
+      - scoring_contract
+      properties:
+        mode:
+          type: string
+          enum:
+          - selected
+          - all
+          - retrieval_only
+        dataset:
+          $ref: '#/components/schemas/GoldenDatasetIdentity'
+        case_ids:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        release:
+          $ref: '#/components/schemas/EvaluationReleaseIdentity'
+        scoring_contract:
+          $ref: '#/components/schemas/EvaluationScoringIdentity'
+      description: Immutable Golden evaluation execution request. selected and retrieval_only require
+        explicit non-empty case_ids; all requires an empty case_ids array. Model-bearing runs require
+        provider_id, model_id, and provider_config_hash. The backend revalidates every dataset, scoring,
+        release/index/config/runtime/collection/manifest, provider/model/config, and case-selection identity
+        against qualified authority before execution.
+    PlaygroundRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - question
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        release_id:
+          type: string
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+    ErrorBody:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - retryable
+      - details
+      properties:
+        code:
+          type: string
+          pattern: ^[A-Z0-9_]+$
+        message:
+          type: string
+        retryable:
+          type: boolean
+        details:
+          type: object
+          additionalProperties: true
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+      - request_id
+      - observed_at
+      - error
+      properties:
+        request_id:
+          type: string
+        observed_at:
+          type: string
+          format: date-time
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    AdminActor:
+      type: object
+      additionalProperties: false
+      required:
+      - actor_id
+      - actor_type
+      properties:
+        actor_id:
+          type: string
+        actor_type:
+          type: string
+          enum:
+          - human
+          - service
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+    QualificationStatus:
+      type: string
+      enum:
+      - qualified
+      - read_only
+      - disabled
+      - qualification_candidate
+      - blocked_authority
+      - unavailable
+      - unsupported
+      description: Evidence/authority qualification fact. It is intentionally separate from frontend effective
+        capability state.
+    EffectiveCapabilityState:
+      type: string
+      enum:
+      - enabled
+      - read_only
+      - disabled
+      - unavailable
+      - not_eligible
+      description: Frontend/action enablement state. Repair-A does not promote any candidate or blocked
+        authority into enabled.
+    CapabilityGate:
+      type: object
+      additionalProperties: false
+      required:
+      - capability_id
+      - qualification_status
+      - effective_state
+      - mutation_authorized
+      - reason_code
+      - source
+      properties:
+        capability_id:
+          type: string
+        qualification_status:
+          $ref: '#/components/schemas/QualificationStatus'
+        effective_state:
+          $ref: '#/components/schemas/EffectiveCapabilityState'
+        mutation_authorized:
+          type: boolean
+        reason_code:
+          type: string
+        source:
+          type: string
+        observed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        resource_identity:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+        evidence_digest:
+          type:
+          - string
+          - 'null'
+    ActivateVersionRequest:
+      properties:
+        preflight_token:
+          type: string
+          minLength: 1
+          title: Preflight Token
+        confirmation:
+          type: boolean
+          const: true
+          title: Confirmation
+      additionalProperties: false
+      type: object
+      required:
+      - preflight_token
+      - confirmation
+      title: ActivateVersionRequest
+    ConfirmJobRequest:
+      properties:
+        dry_run_id:
+          type: string
+          maxLength: 160
+          minLength: 1
+          title: Dry Run Id
+        dry_run_digest:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+          title: Dry Run Digest
+        confirmation:
+          type: boolean
+          const: true
+          title: Confirmation
+      type: object
+      required:
+      - dry_run_id
+      - dry_run_digest
+      - confirmation
+      title: ConfirmJobRequest
+    DatasetIdentity:
+      properties:
+        dataset_id:
+          type: string
+          maxLength: 256
+          minLength: 1
+          title: Dataset Id
+        version:
+          type: string
+          maxLength: 256
+          minLength: 1
+          title: Version
+        dataset_hash:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Dataset Hash
+      additionalProperties: false
+      type: object
+      required:
+      - dataset_id
+      - version
+      - dataset_hash
+      title: DatasetIdentity
+    DryRunRequest:
+      properties:
+        scope:
+          type: string
+          enum:
+          - single_document
+          - stale_documents
+          - explicit_documents
+          title: Scope
+        document_ids:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 100
+          - type: 'null'
+          title: Document Ids
+      type: object
+      required:
+      - scope
+      title: DryRunRequest
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    QaLifecycleRequest:
+      properties:
+        state:
+          type: string
+          maxLength: 32
+          minLength: 2
+          title: State
+        reason:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Reason
+        resolved_by_release:
+          anyOf:
+          - type: string
+            maxLength: 256
+          - type: 'null'
+          title: Resolved By Release
+      type: object
+      required:
+      - state
+      title: QaLifecycleRequest
+    ScoringContractIdentity:
+      properties:
+        version:
+          type: string
+          maxLength: 256
+          minLength: 1
+          title: Version
+        hash:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Hash
+      additionalProperties: false
+      type: object
+      required:
+      - version
+      - hash
+      title: ScoringContractIdentity
+    SuggestedQuestionsPromotionPreviewRequest:
+      properties:
+        event_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 20
+          minItems: 1
+          title: Event Ids
+      type: object
+      required:
+      - event_ids
+      title: SuggestedQuestionsPromotionPreviewRequest
+    SuggestedQuestionsPromotionPublishRequest:
+      properties:
+        base_revision:
+          type: string
+          title: Base Revision
+        selected_event_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 20
+          minItems: 1
+          title: Selected Event Ids
+      type: object
+      required:
+      - base_revision
+      - selected_event_ids
+      title: SuggestedQuestionsPromotionPublishRequest
+    SuggestedQuestionsUpdate:
+      properties:
+        base_revision:
+          type: string
+          title: Base Revision
+        operations:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Operations
+      type: object
+      required:
+      - base_revision
+      - operations
+      title: SuggestedQuestionsUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    knowledge_engine__m26_admin_qa__QaExportRequest:
+      properties:
+        trace_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 100
+          minItems: 1
+          title: Trace Ids
+      type: object
+      required:
+      - trace_ids
+      title: QaExportRequest
+    knowledge_engine__m26_qa_inbox_integration__QaExportRequest:
+      properties:
+        mode:
+          type: string
+          enum:
+          - new
+          - selected
+          - current_filter
+          title: Mode
+          default: new
+        include_previously_exported:
+          type: boolean
+          title: Include Previously Exported
+          default: false
+        event_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Event Ids
+        cluster_ids:
+          items:
+            type: string
+          type: array
+          maxItems: 500
+          title: Cluster Ids
+        range_name:
+          type: string
+          maxLength: 16
+          title: Range Name
+          default: 24h
+        from_ts:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: From Ts
+        to_ts:
+          anyOf:
+          - type: string
+            maxLength: 64
+          - type: 'null'
+          title: To Ts
+        search:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Search
+        result:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Result
+        evaluation_status:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Evaluation Status
+        country:
+          anyOf:
+          - type: string
+            maxLength: 8
+          - type: 'null'
+          title: Country
+        lifecycle:
+          anyOf:
+          - type: string
+            maxLength: 32
+          - type: 'null'
+          title: Lifecycle
+      type: object
+      title: QaExportRequest
+    SyncBlogRequest:
+      properties:
+        confirmation:
+          type: boolean
+          title: Confirmation
+          default: false
+        expected_plan_digest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expected Plan Digest
+      type: object
+      title: SyncBlogRequest
+      description: 'Operator intent for one-click blog synchronization.
+
+
+        Add/change-only plans can execute without an extra product confirmation.
+
+        A plan containing removals/unpublishes is destructive and must carry both an
+
+        explicit confirmation and the exact plan digest shown to the operator.'
+  headers:
+    RequestId:
+      description: Server-generated authoritative admin request identifier.
+      schema:
+        type: string
+        pattern: ^admreq_[a-f0-9]{32}$
+    OperationId:
+      description: Server-generated durable operation identifier when applicable.
+      schema:
+        type: string
+        pattern: ^admop_[a-f0-9]{32}$
+  responses:
+    AdminError:
+      description: Admin error envelope
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+x-m26-contract-authority: Gate-A-Repair-A
+x-m26-authority-precedence:
+  transport_security_request_error_idempotency_audit: SM-B01
+  read_availability_provenance_observation_freshness: SM-B02
+  qualification_evidence_status_facts: SM-B03
+  cross_lane_mapping: Gate-A-Repair-A
+x-m26-public-contract-separate: true
+x-m26-public-ask-contract:
+  canonical_answers_url: https://api.danielcanfly.com/v1/answers
+  canonical_health_url: https://api.danielcanfly.com/v1/answers/health
+  admin_namespace: /v1/admin/*
+  regression_policy: must_remain_behaviorally_separate
+x-m26-capability-default:
+  qualification_status: unavailable
+  effective_state: unavailable
+  mutation_authorized: false
+  reason_code: ADMIN_CAPABILITY_EVIDENCE_REQUIRED
+  rule: missing_or_unqualified_capability_must_never_be_inferred_enabled
+x-m26-capability-status-mapping:
+  read_only:
+    effective_state: read_only
+    mutation_authorized: false
+    reason_code: ADMIN_READ_ONLY
+  unavailable:
+    effective_state: unavailable
+    mutation_authorized: false
+    reason_code: ADMIN_CAPABILITY_UNAVAILABLE
+  blocked_authority:
+    effective_state: unavailable
+    mutation_authorized: false
+    reason_code: ADMIN_AUTHORITY_BLOCKED
+  qualification_candidate:
+    effective_state: disabled
+    mutation_authorized: false
+    reason_code: ADMIN_QUALIFICATION_PENDING
+x-m26-generic-qa-score:
+  active_numeric_filter: false
+  rule: No canonical generic numeric QA score exists. Do not invent a threshold or cross-domain numeric
+    filter.
+  suggested_questions_85_rubric_scope: SuggestedQuestionsOnly

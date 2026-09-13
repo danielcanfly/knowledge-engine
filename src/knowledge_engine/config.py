@@ -92,9 +92,7 @@ def _validate_public_origin(origin: str, *, app_env: str) -> None:
             "PUBLIC_ALLOWED_ORIGINS entries must not contain paths, queries, or fragments"
         )
     if app_env in {"staging", "production"} and parsed.scheme != "https":
-        raise ConfigurationError(
-            "PUBLIC_ALLOWED_ORIGINS must use HTTPS in staging and production"
-        )
+        raise ConfigurationError("PUBLIC_ALLOWED_ORIGINS must use HTTPS in staging and production")
     if parsed.scheme not in {"http", "https"}:
         raise ConfigurationError("PUBLIC_ALLOWED_ORIGINS must use HTTP or HTTPS")
 
@@ -125,6 +123,8 @@ class Settings:
     public_max_body_bytes: int = 16384
     public_request_timeout_seconds: float = 15.0
     public_max_concurrent_requests: int = 8
+    m26_ingestion_enabled: bool = False
+    m26_ingestion_state_db: Path = Path("/var/lib/knowledge-engine/ingestion/ingestion.sqlite3")
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -148,8 +148,7 @@ class Settings:
             jwt_default_audiences=default_audiences,
             object_store_backend=backend,
             filesystem_store_root=Path(
-                _env("FILESYSTEM_STORE_ROOT", ".artifacts/store")
-                or ".artifacts/store"
+                _env("FILESYSTEM_STORE_ROOT", ".artifacts/store") or ".artifacts/store"
             ).expanduser(),
             r2_endpoint_url=r2_endpoint_url,
             r2_bucket=r2_bucket,
@@ -181,6 +180,14 @@ class Settings:
                 "PUBLIC_MAX_CONCURRENT_REQUESTS",
                 8,
             ),
+            m26_ingestion_enabled=_bool("M26_INGESTION_ENABLED", False),
+            m26_ingestion_state_db=Path(
+                _env(
+                    "M26_INGESTION_STATE_DB",
+                    "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3",
+                )
+                or "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3"
+            ).expanduser(),
         )
         settings.validate()
         return settings
@@ -229,9 +236,7 @@ class Settings:
                     "R2_ENDPOINT_URL must not include a bucket path, query, or fragment"
                 )
         allowed = {"public", "internal", "confidential", "restricted"}
-        if not self.jwt_default_audiences or not set(
-            self.jwt_default_audiences
-        ).issubset(allowed):
+        if not self.jwt_default_audiences or not set(self.jwt_default_audiences).issubset(allowed):
             raise ConfigurationError("JWT_DEFAULT_AUDIENCES contains invalid values")
         if len(set(self.public_allowed_origins)) != len(self.public_allowed_origins):
             raise ConfigurationError("PUBLIC_ALLOWED_ORIGINS contains duplicates")
@@ -257,10 +262,6 @@ class Settings:
         }
         for name, (value, minimum, maximum) in bounded_integers.items():
             if not minimum <= value <= maximum:
-                raise ConfigurationError(
-                    f"{name} must be between {minimum} and {maximum}"
-                )
+                raise ConfigurationError(f"{name} must be between {minimum} and {maximum}")
         if not 0.1 <= self.public_request_timeout_seconds <= 120.0:
-            raise ConfigurationError(
-                "PUBLIC_REQUEST_TIMEOUT_SECONDS must be between 0.1 and 120"
-            )
+            raise ConfigurationError("PUBLIC_REQUEST_TIMEOUT_SECONDS must be between 0.1 and 120")

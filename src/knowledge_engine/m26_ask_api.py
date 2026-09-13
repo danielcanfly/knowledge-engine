@@ -13,6 +13,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 
 from .config import Settings
+from .m26_active_release_dense import active_release_dense_channel_from_env
 from .m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
     CONTRACT_SCHEMA_VERSION,
@@ -91,9 +92,7 @@ def _owner_graph_runtime() -> Runtime:
         create_object_store(settings),
         settings.cache_dir,
         settings.channel,
-        relation_aware_expansion_enabled=(
-            settings.relation_aware_expansion_enabled
-        ),
+        relation_aware_expansion_enabled=(settings.relation_aware_expansion_enabled),
     )
 
 
@@ -136,6 +135,8 @@ def run_owner_query_for_web(
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    if dense_channel is None:
+        dense_channel = active_release_dense_channel_from_env(require_remote=require_remote_dense)
     if provider_client is None and not _should_use_default_provider_routing():
         runtime_response = run_owner_arbitrary_query(
             root=root,
@@ -318,9 +319,7 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "accounting": {
             "provider_invoked": bool(runtime_response.get("provider_invoked", False)),
             "provider_call_count": int(runtime_response.get("provider_call_count", 0)),
-            "payg_equivalent_cost_usd": str(
-                runtime_response.get("payg_equivalent_cost_usd", "0")
-            ),
+            "payg_equivalent_cost_usd": str(runtime_response.get("payg_equivalent_cost_usd", "0")),
             "latency_ms": int(runtime_response.get("latency_ms", 0)),
         },
         "provider_routing": dict(_mapping(runtime_response.get("provider_routing"))),
@@ -376,16 +375,48 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
 def build_owner_graph_dto(
     active: Any,
     *,
-    expected_release_id: str = FULL_GRAPH_RELEASE_ID,
-    expected_manifest_sha256: str = FULL_GRAPH_MANIFEST_SHA256,
-    expected_graph_v2_sha256: str = FULL_GRAPH_V2_SHA256,
-    expected_node_count: int = FULL_GRAPH_NODE_COUNT,
-    expected_edge_count: int = FULL_GRAPH_EDGE_COUNT,
+    expected_release_id: str | None = None,
+    expected_manifest_sha256: str | None = None,
+    expected_graph_v2_sha256: str | None = None,
+    expected_node_count: int | None = None,
+    expected_edge_count: int | None = None,
 ) -> dict[str, Any]:
-    release_id = str(getattr(active, "release_id", ""))
-    manifest_sha256 = str(getattr(active, "manifest_sha256", ""))
+    resolved = getattr(active, "resolved_release", None)
+    if resolved is None:
+        try:
+            resolved = getattr(active, "active_release", None)
+        except Exception:
+            resolved = None
+    source = resolved if resolved is not None else active
+    release_id = str(getattr(source, "release_id", ""))
+    manifest_sha256 = str(
+        getattr(active, "manifest_sha256", "") or getattr(source, "production_manifest_sha256", "")
+    )
     manifest = getattr(active, "manifest", None)
     graph = getattr(active, "graph_v2", None)
+    if resolved is not None:
+        manifest = getattr(active, "manifest", None) or getattr(
+            resolved, "candidate_manifest", None
+        )
+        graph = getattr(active, "graph_v2", None)
+        if expected_release_id is None:
+            expected_release_id = release_id
+        if expected_manifest_sha256 is None:
+            expected_manifest_sha256 = manifest_sha256
+        if expected_graph_v2_sha256 is None and isinstance(manifest, Mapping):
+            expected_graph_v2_sha256 = _manifest_graph_v2_sha256(manifest)
+        if expected_node_count is None and isinstance(graph, Mapping):
+            expected_node_count = len(_object_list(graph.get("nodes")))
+        if expected_edge_count is None and isinstance(graph, Mapping):
+            expected_edge_count = len(_object_list(graph.get("edges")))
+    else:
+        # Historical synthetic fixture compatibility is explicit and only applies
+        # when no pointer-selected authority is present at all.
+        expected_release_id = expected_release_id or FULL_GRAPH_RELEASE_ID
+        expected_manifest_sha256 = expected_manifest_sha256 or FULL_GRAPH_MANIFEST_SHA256
+        expected_graph_v2_sha256 = expected_graph_v2_sha256 or FULL_GRAPH_V2_SHA256
+        expected_node_count = expected_node_count or FULL_GRAPH_NODE_COUNT
+        expected_edge_count = expected_edge_count or FULL_GRAPH_EDGE_COUNT
     if release_id != expected_release_id:
         raise M26AskApiError(
             "M26_OWNER_GRAPH_RELEASE_IDENTITY_MISMATCH",
@@ -402,7 +433,7 @@ def build_owner_graph_dto(
             "current production relation graph is unavailable",
         )
     graph_v2_sha256 = _manifest_graph_v2_sha256(manifest)
-    if graph_v2_sha256 != expected_graph_v2_sha256:
+    if expected_graph_v2_sha256 and graph_v2_sha256 != expected_graph_v2_sha256:
         raise M26AskApiError(
             "M26_OWNER_GRAPH_ARTIFACT_IDENTITY_MISMATCH",
             "current production graph artifact does not match the accepted binding",
@@ -414,16 +445,19 @@ def build_owner_graph_dto(
             "M26_OWNER_GRAPH_BOUND_EXCEEDED",
             "current production graph exceeds the owner browser bound",
         )
-    if len(nodes) != expected_node_count or len(edges) != expected_edge_count:
+    if expected_node_count is not None and len(nodes) != expected_node_count:
+        raise M26AskApiError(
+            "M26_OWNER_GRAPH_COUNT_MISMATCH",
+            "current production graph counts do not match the accepted inventory",
+        )
+    if expected_edge_count is not None and len(edges) != expected_edge_count:
         raise M26AskApiError(
             "M26_OWNER_GRAPH_COUNT_MISMATCH",
             "current production graph counts do not match the accepted inventory",
         )
 
     payload = {
-        key: value
-        for key, value in graph.items()
-        if key not in {"nodes", "edges", "release_id"}
+        key: value for key, value in graph.items() if key not in {"nodes", "edges", "release_id"}
     }
     payload.update(
         {
@@ -446,11 +480,29 @@ def build_owner_graph_dto(
             ],
             "binding": {
                 "production_pointer_key": "channels/production.json",
-                "production_pointer_sha256": FULL_GRAPH_POINTER_SHA256,
-                "pa2_acceptance_self_sha256": FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256,
-                "inventory_run_id": FULL_GRAPH_INVENTORY_RUN_ID,
-                "inventory_artifact_id": FULL_GRAPH_INVENTORY_ARTIFACT_ID,
-                "direct_manifest_key_sha256": canonical_sha256(FULL_GRAPH_MANIFEST_KEY),
+                "production_pointer_sha256": (
+                    getattr(resolved, "pointer_sha256", None)
+                    if resolved is not None
+                    else FULL_GRAPH_POINTER_SHA256
+                ),
+                "pa2_acceptance_self_sha256": (
+                    manifest.get("pa2_acceptance_self_sha256")
+                    if resolved is not None and isinstance(manifest, Mapping)
+                    else FULL_GRAPH_PA2_ACCEPTANCE_SELF_SHA256
+                ),
+                "inventory_run_id": (
+                    manifest.get("inventory_run_id")
+                    if resolved is not None and isinstance(manifest, Mapping)
+                    else FULL_GRAPH_INVENTORY_RUN_ID
+                ),
+                "inventory_artifact_id": (
+                    manifest.get("inventory_artifact_id")
+                    if resolved is not None and isinstance(manifest, Mapping)
+                    else FULL_GRAPH_INVENTORY_ARTIFACT_ID
+                ),
+                "direct_manifest_key_sha256": canonical_sha256(
+                    getattr(resolved, "candidate_manifest_key", FULL_GRAPH_MANIFEST_KEY)
+                ),
             },
             "authority": {
                 "owner_only": True,
