@@ -667,17 +667,17 @@ def build_runtime_ingestion_adapter_from_env(
         return current_identity
 
     make_finalizer = finalizer_factory or ProductionIngestionFinalizer
-    finalizer = make_finalizer(
-        store=store,
-        source_observer=source.observe,
-        qdrant_observer=qdrant_observer,
-        dense_channel=dense_channel,
-        ask_probe_question=os.environ[ASK_PROBE_ENV].strip(),
-        owner_authorization=owner_authorization,
-        promoted_at_factory=utc_now,
-        authority_check=authority_check,
-    )
     try:
+        finalizer = make_finalizer(
+            store=store,
+            source_observer=source.observe,
+            qdrant_observer=qdrant_observer,
+            dense_channel=dense_channel,
+            ask_probe_question=os.environ[ASK_PROBE_ENV].strip(),
+            owner_authorization=owner_authorization,
+            promoted_at_factory=utc_now,
+            authority_check=authority_check,
+        )
         authority_evidence = finalizer.self_check()
     except Exception:
         return _read_only_runtime(
@@ -686,20 +686,28 @@ def build_runtime_ingestion_adapter_from_env(
             active_manifest_observer=active_manifest_observer_from_store(store),
             candidate_manifest_observer=candidate_manifest_observer_from_store(store),
         )
-    make_materializer = materializer_factory or CloudflareQdrantCandidateMaterializer
-    materializer = make_materializer(
-        cloudflare=CloudflareConfig(
-            account_id=required["CLOUDFLARE_ACCOUNT_ID"],
-            api_token=required["CLOUDFLARE_AI_TOKEN"],
-        ),
-        qdrant_base_url=required["QDRANT_URL"],
-        qdrant_api_key=required["QDRANT_API_KEY"],
-    )
-    executor = candidate_executor_from_primitives(
-        store=store,
-        vector_materializer=materializer,
-        artifact_builder=source.artifact_builder(required[ENGINE_SHA_ENV]),
-    )
+    try:
+        make_materializer = materializer_factory or CloudflareQdrantCandidateMaterializer
+        materializer = make_materializer(
+            cloudflare=CloudflareConfig(
+                account_id=required["CLOUDFLARE_ACCOUNT_ID"],
+                api_token=required["CLOUDFLARE_AI_TOKEN"],
+            ),
+            qdrant_base_url=required["QDRANT_URL"],
+            qdrant_api_key=required["QDRANT_API_KEY"],
+        )
+        executor = candidate_executor_from_primitives(
+            store=store,
+            vector_materializer=materializer,
+            artifact_builder=source.artifact_builder(required[ENGINE_SHA_ENV]),
+        )
+    except Exception:
+        return _read_only_runtime(
+            ["candidate_executor_configuration"],
+            source_observer=source.observe,
+            active_manifest_observer=active_manifest_observer_from_store(store),
+            candidate_manifest_observer=candidate_manifest_observer_from_store(store),
+        )
     return build_sqlite_ingestion_adapter(
         source_observer=source.observe,
         active_manifest_observer=active_manifest_observer_from_store(store),
