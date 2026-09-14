@@ -11,6 +11,11 @@ on:
         required: true
         default: false
         type: boolean
+      l2_final_launch_reentry:
+        description: Apply the owner-authorized L2 final launch re-entry runtime wiring
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -42,12 +47,29 @@ jobs:
           JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
           JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
           RELEASE_SHA: ${{ inputs.git_sha }}
+          L2_FINAL_LAUNCH_REENTRY: ${{ inputs.l2_final_launch_reentry }}
+          KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+          QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ || secrets.QDRANT_READ_ONLY_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          M26_QUERY_BACKEND_TOKEN: ${{ secrets.M26_QUERY_BACKEND_TOKEN }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "git_sha must be an exact 40-character lowercase commit SHA"; exit 2; }
           for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET FULL_PRODUCTION_MANIFEST_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
+          if [ "$L2_FINAL_LAUNCH_REENTRY" = true ]; then
+            test "$RELEASE_SHA" = 2b61adb376bb143d1748d578a6d4a1d3444f7686
+            test "$RELEASE_SHA" != 72ea4b0719ade8ef8c52cefeb3bebab92e464b84
+            for name in KNOWLEDGE_SOURCE_READ_TOKEN QDRANT_URL QDRANT_API_KEY QDRANT_API_KEY_READ CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_AI_TOKEN M26_QUERY_BACKEND_TOKEN; do
+              test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
+            done
+            test "$QDRANT_API_KEY" != "$QDRANT_API_KEY_READ" || { echo 'QDRANT_READ_CREDENTIAL_DISTINCT=FAIL'; exit 2; }
+            printf '%s\n' 'L2_FINAL_LAUNCH_REENTRY_AUTHORITY=PASS' 'EVIDENCE_ONLY_HEAD_DEPLOYED=false'
+          fi
       - name: Fail closed on production R2 manifest credential canary
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -117,6 +139,15 @@ jobs:
           OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
           R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
           R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          L2_FINAL_LAUNCH_REENTRY: ${{ inputs.l2_final_launch_reentry }}
+          RELEASE_SHA: ${{ inputs.git_sha }}
+          KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+          QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ || secrets.QDRANT_READ_ONLY_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          M26_QUERY_BACKEND_TOKEN: ${{ secrets.M26_QUERY_BACKEND_TOKEN }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
@@ -140,6 +171,24 @@ jobs:
           EOF_ENV
           if [ -n "${OWNER_BYPASS_SHA:-}" ]; then
             printf 'M26_ASK_OWNER_BYPASS_TOKEN_SHA256=%s\n' "$OWNER_BYPASS_SHA" >> /tmp/knowledge-engine.env
+          fi
+          if [ "$L2_FINAL_LAUNCH_REENTRY" = true ]; then
+            cat >> /tmp/knowledge-engine.env <<EOF_REENTRY
+          M26_INGESTION_ENABLED=true
+          M26_INGESTION_PRODUCTION_ACTIVATION_ENABLED=true
+          M26_INGESTION_OWNER_AUTHORIZATION=DANIEL_FINAL_LAUNCH_REENTRY_20260914_P6
+          M26_INGESTION_ASK_PROBE_QUESTION=Why can revenue rise before cash arrives?
+          M26_QUERY_BUILD_SHA=$RELEASE_SHA
+          M26_SOURCE_REPOSITORY=danielcanfly/daniel-blog
+          M26_SOURCE_REF=main
+          M26_QUERY_BACKEND_TOKEN=$M26_QUERY_BACKEND_TOKEN
+          KNOWLEDGE_SOURCE_READ_TOKEN=$KNOWLEDGE_SOURCE_READ_TOKEN
+          QDRANT_URL=$QDRANT_URL
+          QDRANT_API_KEY=$QDRANT_API_KEY
+          QDRANT_API_KEY_READ=$QDRANT_API_KEY_READ
+          CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID
+          CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN
+          EOF_REENTRY
           fi
           scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
@@ -206,3 +255,38 @@ jobs:
           test "$ok" = true
           test "$actual" = "$RELEASE_SHA" || { echo "PUBLIC_RUNTIME_SHA_MISMATCH expected=$RELEASE_SHA actual=$actual" >&2; exit 1; }
           printf 'PUBLIC_RUNTIME_IDENTITY=%s\n' "$actual"
+
+      - name: L2 final launch re-entry authority postflight
+        if: ${{ inputs.l2_final_launch_reentry }}
+        env:
+          RELEASE_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          docker compose exec -T knowledge-engine python - <<'PY'
+          import json
+          from knowledge_engine.m26_ingestion_runtime import build_runtime_ingestion_adapter_from_env
+
+          adapter = build_runtime_ingestion_adapter_from_env()
+          observation = adapter.current_index()
+          data = observation.data if isinstance(observation.data, dict) else {}
+          evidence = {
+              "status": "pass",
+              "availability": observation.availability,
+              "finalization_mode": data.get("finalization_mode"),
+              "production_activation_authorized": data.get("production_activation_authorized"),
+              "missing_seams": data.get("missing_seams"),
+              "source_available": data.get("source") is not None,
+              "active_available": data.get("active") is not None,
+              "secret_values_recorded": False,
+          }
+          if observation.availability != "available" or evidence["finalization_mode"] != "production_activation" or evidence["production_activation_authorized"] is not True or evidence["missing_seams"] not in ([], None) or not evidence["source_available"] or not evidence["active_available"]:
+              evidence["status"] = "fail"
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          if evidence["status"] != "pass":
+              raise SystemExit(1)
+          PY
+          REMOTE
