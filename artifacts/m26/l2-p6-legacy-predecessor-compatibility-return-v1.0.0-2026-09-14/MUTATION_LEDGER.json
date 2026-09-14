@@ -1,0 +1,15 @@
+{
+  "backfill_mutations": 0,
+  "cloudflare_mutations": 0,
+  "dns_mutations": 0,
+  "frontend_mutations": 0,
+  "openapi_mutations": 0,
+  "oracle_config_mutations": 0,
+  "oracle_container_mutations": 0,
+  "oracle_service_mutations": 0,
+  "production_deployments": 0,
+  "production_pointer_mutations": 0,
+  "production_qdrant_mutations": 0,
+  "production_r2_mutations": 0,
+  "schema_version": "knowledge-engine-m26-l2-p6-mutation-ledger/v1"
+}

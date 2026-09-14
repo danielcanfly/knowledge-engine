@@ -1,0 +1,24 @@
+{
+  "branch": "codex/l2-p6-legacy-predecessor-compatibility-20260914",
+  "generated_at": "2026-09-14T03:43:45Z",
+  "oracle_census_run_id": 34803334630,
+  "payload_file_count_excluding_manifest_and_checksums": 23,
+  "production_mutations": 0,
+  "repair_commit": "2b61adb376bb143d1748d578a6d4a1d3444f7686",
+  "schema_version": "knowledge-engine-m26-l2-p6-return-manifest/v1",
+  "subordinate_returns": [
+    {
+      "path": "subordinates/L4_INDEPENDENT_ACCEPTANCE_RETURN.zip",
+      "sha256": "959fd5c2101477aad3e9341e39f63d08fe45d6e699765e8bffc73c1308563b38"
+    },
+    {
+      "path": "subordinates/L4_M23_IDENTITY_ARCHAEOLOGY_RETURN.zip",
+      "sha256": "d46a4b409787400563596ef9a554619092c61e9eaf56c9d5dd4dadcbbed0f96b"
+    },
+    {
+      "path": "subordinates/L4_QUALIFICATION_PROFILE_REVIEW_RETURN.zip",
+      "sha256": "516916864b388c686e0ddd78ad6d05e998711bd23f2d31de6946850b54a571ac"
+    }
+  ],
+  "terminal": "DANIEL_CONSOLE_L2_P6_LEGACY_PREDECESSOR_COMPATIBILITY_PASS_READY_FOR_FINAL_LAUNCH_REENTRY"
+}
