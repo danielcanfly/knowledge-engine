@@ -1,0 +1,386 @@
+name: L2 Final Launch Re-entry Operator
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Authorized launch phase
+        required: true
+        type: choice
+        options:
+          - backend_deploy
+          - controlled_sync
+
+permissions:
+  contents: read
+
+concurrency:
+  group: l2-final-launch-reentry-production
+  cancel-in-progress: false
+
+env:
+  EXACT_BACKEND_SHA: 2b61adb376bb143d1748d578a6d4a1d3444f7686
+  PREDECESSOR_RELEASE_ID: m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043
+  CANONICAL_COLLECTION: m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043
+
+jobs:
+  backend_deploy:
+    if: inputs.phase == 'backend_deploy'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      M26_QUERY_BACKEND_TOKEN: ${{ secrets.M26_QUERY_BACKEND_TOKEN }}
+      KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+      QDRANT_URL: ${{ vars.QDRANT_URL || secrets.QDRANT_URL }}
+      QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ || secrets.QDRANT_READ_ONLY_API_KEY }}
+      R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXACT_BACKEND_SHA }}
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Validate exact target and authority names
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXACT_BACKEND_SHA"
+          test "$EXACT_BACKEND_SHA" != "72ea4b0719ade8ef8c52cefeb3bebab92e464b84"
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH ORACLE_VM_SSH_PRIVATE_KEY M26_QUERY_BACKEND_TOKEN KNOWLEDGE_SOURCE_READ_TOKEN QDRANT_URL QDRANT_API_KEY QDRANT_API_KEY_READ R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_AI_TOKEN; do
+            test -n "${!name:-}" || { echo "MISSING_AUTHORITY_NAME=$name"; exit 2; }
+          done
+          test "$QDRANT_API_KEY" != "$QDRANT_API_KEY_READ" || { echo 'QDRANT_READ_CREDENTIAL_DISTINCT=FAIL'; exit 2; }
+          printf '%s\n' \
+            "exact_backend_sha=$EXACT_BACKEND_SHA" \
+            'evidence_only_head_deployed=false' \
+            'source_secret_ref=KNOWLEDGE_SOURCE_READ_TOKEN:PRESENT' \
+            'qdrant_write_secret_ref=QDRANT_API_KEY:PRESENT' \
+            'qdrant_read_secret_ref=QDRANT_API_KEY_READ_OR_READ_ONLY:PRESENT' \
+            'qdrant_read_write_distinct=PASS'
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Fresh preflight and rollback capture
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/l2-final-launch-reentry/evidence
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXPECTED_PREDECESSOR='$PREDECESSOR_RELEASE_ID' bash -se" <<'REMOTE' > /tmp/l2-final-launch-reentry/evidence/preflight.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          current_head="$(git rev-parse HEAD)"
+          env_backup=".env.final-launch-reentry-$stamp"
+          test -f .env
+          cp -p .env "$env_backup"
+          chmod 600 "$env_backup"
+          env_sha="$(sha256sum .env | awk '{print $1}')"
+          backup_sha="$(sha256sum "$env_backup" | awk '{print $1}')"
+          test "$env_sha" = "$backup_sha"
+          health="$(curl --fail --silent --show-error --max-time 15 http://127.0.0.1:8080/v1/answers/health)"
+          active_release="$(curl --fail --silent --show-error --max-time 20 http://127.0.0.1:8080/v1/admin/index/current 2>/dev/null | python3 -c 'import json,sys; p=json.load(sys.stdin); print(((p.get("data") or {}).get("release_id") or ""))' || true)"
+          printf 'timestamp=%s\ncheckout_head=%s\nenv_backup=%s\nenv_sha256=%s\nhealth_ok=%s\nactive_release_observed=%s\n' \
+            "$stamp" "$current_head" "$env_backup" "$env_sha" \
+            "$(printf '%s' "$health" | python3 -c 'import json,sys; print(str(json.load(sys.stdin).get("ok",False)).lower())')" \
+            "${active_release:-owner_route_auth_required}"
+          REMOTE
+          grep -E '^(timestamp|checkout_head|env_backup|env_sha256|health_ok|active_release_observed)=' /tmp/l2-final-launch-reentry/evidence/preflight.txt
+
+      - name: Wire exact production runtime configuration
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          keys = {
+              "M26_INGESTION_ENABLED": "true",
+              "M26_INGESTION_PRODUCTION_ACTIVATION_ENABLED": "true",
+              "M26_INGESTION_OWNER_AUTHORIZATION": "DANIEL_FINAL_LAUNCH_REENTRY_20260914_P6",
+              "M26_INGESTION_ASK_PROBE_QUESTION": "Why can revenue rise before cash arrives?",
+              "M26_QUERY_BUILD_SHA": os.environ["EXACT_BACKEND_SHA"],
+              "M26_SOURCE_REPOSITORY": "danielcanfly/daniel-blog",
+              "M26_SOURCE_REF": "main",
+              "M26_QUERY_BACKEND_TOKEN": os.environ["M26_QUERY_BACKEND_TOKEN"],
+              "KNOWLEDGE_SOURCE_READ_TOKEN": os.environ["KNOWLEDGE_SOURCE_READ_TOKEN"],
+              "QDRANT_URL": os.environ["QDRANT_URL"],
+              "QDRANT_API_KEY": os.environ["QDRANT_API_KEY"],
+              "QDRANT_API_KEY_READ": os.environ["QDRANT_API_KEY_READ"],
+              "R2_ENDPOINT_URL": os.environ["R2_ENDPOINT_URL"],
+              "R2_BUCKET": os.environ["R2_BUCKET"],
+              "R2_ACCESS_KEY_ID": os.environ["R2_ACCESS_KEY_ID"],
+              "R2_SECRET_ACCESS_KEY": os.environ["R2_SECRET_ACCESS_KEY"],
+              "CLOUDFLARE_ACCOUNT_ID": os.environ["CLOUDFLARE_ACCOUNT_ID"],
+              "CLOUDFLARE_AI_TOKEN": os.environ["CLOUDFLARE_AI_TOKEN"],
+          }
+          if any("\n" in value or "\r" in value for value in keys.values()):
+              raise SystemExit("environment value contains a newline")
+          Path("/tmp/l2-final-launch-reentry.env.patch").write_text(
+              "".join(f"{key}={value}\n" for key, value in keys.items()),
+              encoding="utf-8",
+          )
+          PY
+          scp /tmp/l2-final-launch-reentry.env.patch "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.final-launch-reentry.patch"
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE' > /tmp/l2-final-launch-reentry/evidence/runtime-wiring.txt
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          chmod 600 .env.final-launch-reentry.patch
+          cp .env .env.merged
+          while IFS= read -r incoming || test -n "$incoming"; do
+            test -n "$incoming" || continue
+            key="${incoming%%=*}"
+            case "$key" in [A-Za-z_][A-Za-z0-9_]*) ;; *) exit 2 ;; esac
+            awk -F= -v key="$key" '$1 != key {print}' .env.merged > .env.merge-next
+            printf '%s\n' "$incoming" >> .env.merge-next
+            mv .env.merge-next .env.merged
+          done < .env.final-launch-reentry.patch
+          chmod 600 .env.merged
+          mv .env.merged .env
+          rm -f .env.final-launch-reentry.patch
+          for key in M26_INGESTION_ENABLED M26_INGESTION_PRODUCTION_ACTIVATION_ENABLED M26_INGESTION_OWNER_AUTHORIZATION M26_INGESTION_ASK_PROBE_QUESTION M26_QUERY_BUILD_SHA M26_SOURCE_REPOSITORY M26_SOURCE_REF M26_QUERY_BACKEND_TOKEN KNOWLEDGE_SOURCE_READ_TOKEN QDRANT_URL QDRANT_API_KEY QDRANT_API_KEY_READ R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_AI_TOKEN; do
+            grep -q "^${key}=" .env || { echo "missing_name=$key"; exit 2; }
+            printf '%s=PRESENT\n' "$key"
+          done
+          printf 'env_sha256=%s\n' "$(sha256sum .env | awk '{print $1}')"
+          REMOTE
+          rm -f /tmp/l2-final-launch-reentry.env.patch
+
+      - name: Deploy exact backend
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXACT_BACKEND_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee /tmp/l2-final-launch-reentry/evidence/backend-deploy.txt
+
+      - name: Exact backend postflight
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXACT_BACKEND_SHA='$EXACT_BACKEND_SHA' bash -se" <<'REMOTE' > /tmp/l2-final-launch-reentry/evidence/backend-postflight.json
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          set -a
+          . ./.env
+          set +a
+          : "${M26_QUERY_BACKEND_TOKEN:?missing backend token}"
+          : "${KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH:?missing owner subject hash}"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          headers=(-H "authorization: Bearer $M26_QUERY_BACKEND_TOKEN" -H "x-m26-owner-subject-hash: $KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH")
+          health_code="$(curl --silent --show-error -o "$tmp/health.json" -w '%{http_code}' http://127.0.0.1:8080/v1/answers/health)"
+          owner_health_code="$(curl --silent --show-error "${headers[@]}" -o "$tmp/owner-health.json" -w '%{http_code}' http://127.0.0.1:8080/api/m26/health)"
+          docker compose exec -T knowledge-engine python - <<'PY' > "$tmp/index.json"
+          import json
+          from knowledge_engine.m26_ingestion_runtime import build_runtime_ingestion_adapter_from_env
+
+          observation = build_runtime_ingestion_adapter_from_env().current_index()
+          data = observation.data if isinstance(observation.data, dict) else {}
+          print(json.dumps({
+              "availability": observation.availability,
+              "release_id": data.get("release_id"),
+              "production_activation_authorized": data.get("production_activation_authorized"),
+              "missing_seams": data.get("missing_seams"),
+              "finalization_mode": data.get("finalization_mode"),
+          }, sort_keys=True))
+          PY
+          python3 - "$tmp/health.json" "$tmp/owner-health.json" "$tmp/index.json" "$health_code" "$owner_health_code" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          def load(path):
+              try: return json.loads(Path(path).read_text())
+              except Exception: return {}
+
+          health, owner_health, index = map(load, sys.argv[1:4])
+          evidence = {
+              "status": "pass",
+              "exact_backend_sha": os.environ["EXACT_BACKEND_SHA"],
+              "checkout_head": os.popen("git rev-parse HEAD").read().strip(),
+              "runtime_sha": os.popen("docker compose exec -T knowledge-engine sh -c 'printf %s \"$M26_QUERY_BUILD_SHA\"'").read().strip(),
+              "health_http": sys.argv[4],
+              "health_ok": health.get("ok"),
+              "health_build_sha": (health.get("backend") or health.get("runtime") or {}).get("build_sha"),
+              "owner_health_http": sys.argv[5],
+              "owner_health_status": owner_health.get("status"),
+              "owner_health_build_sha": (owner_health.get("canonical_runtime") or {}).get("build_sha"),
+              "index_availability": index.get("availability"),
+              "active_release_id": index.get("release_id"),
+              "production_activation_authorized": index.get("production_activation_authorized"),
+              "missing_seams": index.get("missing_seams"),
+              "finalization_mode": index.get("finalization_mode"),
+              "secret_values_recorded": False,
+          }
+          required = [
+              evidence["checkout_head"] == evidence["exact_backend_sha"],
+              evidence["runtime_sha"] == evidence["exact_backend_sha"],
+              evidence["health_http"] == "200",
+              evidence["health_ok"] is True,
+              evidence["owner_health_http"] == "200",
+              evidence["owner_health_build_sha"] == evidence["exact_backend_sha"],
+              evidence["production_activation_authorized"] is True,
+              evidence["missing_seams"] in ([], None),
+              evidence["finalization_mode"] == "production_activation",
+          ]
+          if not all(required): evidence["status"] = "fail"
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          if evidence["status"] != "pass": raise SystemExit(1)
+          PY
+          REMOTE
+          cat /tmp/l2-final-launch-reentry/evidence/backend-postflight.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: l2-final-launch-reentry-backend-${{ github.run_id }}
+          path: /tmp/l2-final-launch-reentry/evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  controlled_sync:
+    if: inputs.phase == 'controlled_sync'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+    steps:
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Fresh read-only plan and one zero-destructive Sync Blog
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/l2-final-launch-reentry/evidence
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' EXACT_BACKEND_SHA='$EXACT_BACKEND_SHA' bash -se" <<'REMOTE' > /tmp/l2-final-launch-reentry/evidence/controlled-sync.json
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$EXACT_BACKEND_SHA"
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          docker compose exec -T knowledge-engine python - <<'PY'
+          import json
+          from fastapi import FastAPI
+          from fastapi.testclient import TestClient
+          from knowledge_engine.m26_admin_contract import AdminActor
+          from knowledge_engine.m26_admin_control_plane import install_admin_control_plane
+          from knowledge_engine.m26_admin_ingestion import install_admin_ingestion_routes
+          from knowledge_engine.m26_admin_production import production_admin_runtime_from_env
+          from knowledge_engine.m26_ingestion_runtime import CombinedCapabilityProvider, build_runtime_ingestion_adapter_from_env
+          from knowledge_engine.m26_admin_ingestion_sync import build_index_health
+
+          adapter = build_runtime_ingestion_adapter_from_env()
+          production_admin = production_admin_runtime_from_env()
+          if production_admin is None:
+              raise SystemExit("production admin runtime unavailable")
+
+          current = adapter.current_index()
+          health = build_index_health(current)
+          data = health.data if isinstance(health.data, dict) else {}
+          source = data.get("source") or {}
+          diff = source.get("diff_vs_active") or {}
+          plan = {
+              "availability": health.availability,
+              "source_revision": source.get("source_revision"),
+              "source_identity_digest": source.get("source_identity_digest"),
+              "document_count": source.get("document_count"),
+              "plan_digest": source.get("plan_digest_vs_active"),
+              "requires_confirmation": source.get("requires_confirmation"),
+              "added_count": len(diff.get("added") or []),
+              "changed_count": len(diff.get("changed") or []),
+              "removed_count": len(diff.get("removed") or []),
+              "unchanged_count": len(diff.get("unchanged") or []),
+          }
+          if plan["availability"] != "available":
+              print(json.dumps({"status": "fresh_plan_unavailable", "fresh_plan": plan}, indent=2, sort_keys=True))
+              raise SystemExit(1)
+          if plan["removed_count"] or plan["requires_confirmation"]:
+              print(json.dumps({"status": "destructive_plan_stop_owner_confirmation_required", "fresh_plan": plan}, indent=2, sort_keys=True))
+              raise SystemExit(42)
+
+          class OperatorAuthenticator:
+              def authenticate(self, _assertion):
+                  return AdminActor(
+                      actor_id="service:final-launch-reentry",
+                      subject="final-launch-reentry",
+                      email=None,
+                      actor_type="service",
+                      issuer="owner-authorized-local-operator",
+                      audience=("production",),
+                  )
+
+          app = FastAPI()
+          install_admin_control_plane(
+              app,
+              authenticator=OperatorAuthenticator(),
+              capability_provider=CombinedCapabilityProvider(production_admin.capability_provider, adapter),
+              audit_sink=production_admin.store,
+              idempotency_store=adapter.ledger,
+          )
+          install_admin_ingestion_routes(app, adapter=adapter, include_job_reads=True)
+          client = TestClient(app)
+          response = client.post(
+              "/v1/admin/ingestion/sync",
+              headers={
+                  "cf-access-jwt-assertion": "owner-authorized-local-operator",
+                  "content-type": "application/json",
+                  "idempotency-key": "final-launch-reentry-zero-destructive-v1",
+              },
+              json={},
+          )
+          sync = response.json()
+          result = sync.get("result") or {}
+          receipt = result.get("result") or {}
+          output = {
+              "status": "pass",
+              "fresh_plan": plan,
+              "sync_http_status": str(response.status_code),
+              "operation_id": sync.get("operation_id"),
+              "replayed": sync.get("replayed"),
+              "job_id": result.get("job_id"),
+              "job_status": result.get("status"),
+              "candidate_release_id": result.get("candidate_release_id") or receipt.get("release_id"),
+              "candidate_manifest_key": receipt.get("manifest_key"),
+              "candidate_manifest_sha256": receipt.get("manifest_sha256"),
+              "qdrant_collection": receipt.get("qdrant_collection"),
+              "vector_point_count": (receipt.get("vector") or {}).get("point_count"),
+              "finalization": result.get("finalization") or receipt.get("finalization"),
+              "destructive_confirmation_sent": False,
+              "secret_values_recorded": False,
+          }
+          if output["sync_http_status"] != "202" or output["replayed"] is not False or output["job_status"] != "SUCCEEDED":
+              output["status"] = "fail"
+          print(json.dumps(output, indent=2, sort_keys=True))
+          if output["status"] != "pass": raise SystemExit(1)
+          PY
+          REMOTE
+          cat /tmp/l2-final-launch-reentry/evidence/controlled-sync.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: l2-final-launch-reentry-sync-${{ github.run_id }}
+          path: /tmp/l2-final-launch-reentry/evidence
+          if-no-files-found: error
+          retention-days: 30
