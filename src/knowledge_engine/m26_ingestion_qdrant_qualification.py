@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -10,14 +11,39 @@ from urllib.parse import quote, urlparse
 import httpx
 
 from .errors import ConfigurationError, IntegrityError
+from .m23_cloudflare_qdrant import CLOUDFLARE_MODEL, CLOUDFLARE_PROVIDER, normalize_text
 from .m26_active_production_release import ActiveProductionRelease
 from .m26_admin_contract import canonical_json_bytes
 from .m26_ingestion_candidate_qdrant import CANDIDATE_PAYLOAD_INDEX_SCHEMA
 from .m26_production_promotion import (
+    LEGACY_M25_ADMISSION_SHA256,
+    LEGACY_M25_CANDIDATE_MANIFEST_SHA256,
+    LEGACY_M25_COLLECTION,
+    LEGACY_M25_COMBINED_IDENTITY_SHA256,
+    LEGACY_M25_ENGINE_SHA,
+    LEGACY_M25_NORMALIZED_IDENTITY_SHA256,
+    LEGACY_M25_POINT_COUNT,
+    LEGACY_M25_POINTER_SHA256,
+    LEGACY_M25_PRODUCTION_MANIFEST_SHA256,
+    LEGACY_M25_RAW_IDENTITY_SHA256,
+    LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1,
+    LEGACY_M25_RELEASE_ID,
+    LEGACY_M25_SOURCE_SHA,
     REQUIRED_QDRANT_PAYLOAD_INDEXES,
+    STRICT_V2,
     ProductionQdrantQualification,
     QdrantQualification,
 )
+
+LEGACY_M25_PROMOTION_SCHEMA = "knowledge-engine-m25-10-production-promotion/v1"
+LEGACY_M25_PRODUCTION_MANIFEST_KEY = (
+    f"releases/{LEGACY_M25_RELEASE_ID}/promotion/m25-10-production-manifest.json"
+)
+LEGACY_M25_CANDIDATE_MANIFEST_KEY = f"releases/{LEGACY_M25_RELEASE_ID}/manifest.json"
+LEGACY_M25_SEMANTIC_INPUT_SHA256 = (
+    "377c8b8ec3b52aad03481008c50ac3c1f8203537928477de0a3d1bf89d26e7e0"
+)
+LEGACY_M25_SEMANTIC_INPUT_BYTES = 8_176_351
 
 
 @dataclass(frozen=True)
@@ -79,9 +105,11 @@ class QdrantReadOnlyQualificationObserver:
         config: QdrantQualificationConfig,
         *,
         client: httpx.Client | None = None,
+        store: Any | None = None,
     ) -> None:
         self.config = config
         self._client = client
+        self._store = store
         self.calls: list[tuple[str, str]] = []
 
     def _request(
@@ -244,12 +272,13 @@ class QdrantReadOnlyQualificationObserver:
         admission_sha256: str,
         expected_count: int,
         candidate: bool,
+        legacy_source_identities: Mapping[str, tuple[str, str]] | None = None,
     ) -> dict[str, Any]:
         snapshot = self._snapshot(collection)
         aliases = self._aliases(collection)
         exact_count = self._exact_count(collection)
         points = self._inventory(collection)
-        identities: list[dict[str, Any]] = []
+        rows: list[tuple[str, str, Mapping[str, Any], list[Any]]] = []
         vectors: list[dict[str, str]] = []
         expected_payload: dict[str, Any] = {
             "release_id": release_id,
@@ -270,6 +299,10 @@ class QdrantReadOnlyQualificationObserver:
             section_id = _required_string(payload, "section_id", "point payload")
             if not point_id:
                 raise IntegrityError("QDRANT-QUALIFY point id is missing")
+            provider = _required_string(payload, "embedding_provider", "point payload")
+            model = _required_string(payload, "embedding_model", "point payload")
+            if provider != CLOUDFLARE_PROVIDER or model != CLOUDFLARE_MODEL:
+                raise IntegrityError("QDRANT-QUALIFY embedding provider/model mismatch")
             vector = point.get("vector")
             if isinstance(vector, Mapping):
                 vector = vector.get("default")
@@ -284,6 +317,30 @@ class QdrantReadOnlyQualificationObserver:
                 )
             ):
                 raise IntegrityError("QDRANT-QUALIFY default vector content mismatch")
+            rows.append((point_id, section_id, payload, vector))
+            vectors.append({"point_id": point_id, "vector_sha256": _digest(vector)})
+
+        embedding_input_presence = [
+            "embedding_input_sha256" in payload for _, _, payload, _ in rows
+        ]
+        if candidate:
+            if not all(embedding_input_presence):
+                raise IntegrityError(
+                    "QDRANT-QUALIFY candidate requires STRICT_V2 embedding input identity"
+                )
+            identity_profile = STRICT_V2
+        elif all(embedding_input_presence):
+            identity_profile = STRICT_V2
+        elif any(embedding_input_presence):
+            raise IntegrityError("QDRANT-QUALIFY mixed strict/legacy population")
+        elif legacy_source_identities is not None:
+            identity_profile = LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1
+        else:
+            raise IntegrityError("QDRANT-QUALIFY legacy predecessor profile is not authorized")
+
+        identities: list[dict[str, Any]] = []
+        for point_id, section_id, payload, vector in rows:
+            text_sha256 = _hex64(payload.get("text_sha256"), "payload text_sha256")
             identity = {
                 "point_id": point_id,
                 "section_id": section_id,
@@ -292,19 +349,24 @@ class QdrantReadOnlyQualificationObserver:
                 "admission_sha256": payload.get("admission_sha256"),
                 "candidate_release_eligible": payload.get("candidate_release_eligible"),
                 "production_authority": payload.get("production_authority"),
-                "text_sha256": _hex64(payload.get("text_sha256"), "payload text_sha256"),
-                "embedding_input_sha256": _hex64(
-                    payload.get("embedding_input_sha256"), "payload embedding_input_sha256"
-                ),
-                "embedding_provider": _required_string(
-                    payload, "embedding_provider", "point payload"
-                ),
-                "embedding_model": _required_string(payload, "embedding_model", "point payload"),
+                "text_sha256": text_sha256,
+                "embedding_provider": CLOUDFLARE_PROVIDER,
+                "embedding_model": CLOUDFLARE_MODEL,
                 "vector_name": "default",
                 "vector_dimension": len(vector),
             }
+            if identity_profile == STRICT_V2:
+                identity["embedding_input_sha256"] = _hex64(
+                    payload.get("embedding_input_sha256"), "payload embedding_input_sha256"
+                )
+            else:
+                expected = legacy_source_identities.get(section_id)
+                if expected is None or text_sha256 != expected[0]:
+                    raise IntegrityError(
+                        "QDRANT-QUALIFY legacy payload/source text identity mismatch"
+                    )
+                identity["derived_embedding_input_sha256"] = expected[1]
             identities.append(identity)
-            vectors.append({"point_id": point_id, "vector_sha256": _digest(vector)})
         point_ids = [row["point_id"] for row in identities]
         section_ids = [row["section_id"] for row in identities]
         if (
@@ -316,15 +378,52 @@ class QdrantReadOnlyQualificationObserver:
             or len(set(section_ids)) != expected_count
         ):
             raise IntegrityError("QDRANT-QUALIFY full identity census mismatch")
+        legacy_payload_digest = ""
+        derived_embedding_digest = ""
+        historical_evidence_digest = ""
+        if identity_profile == LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1:
+            raw_pairs = sorted((row["section_id"], row["text_sha256"]) for row in identities)
+            normalized_pairs = sorted(
+                (row["section_id"], row["derived_embedding_input_sha256"]) for row in identities
+            )
+            triples = sorted(
+                (
+                    {
+                        "section_id": row["section_id"],
+                        "legacy_payload_text_sha256": row["text_sha256"],
+                        "actual_embedding_input_sha256": row["derived_embedding_input_sha256"],
+                    }
+                    for row in identities
+                ),
+                key=lambda row: row["section_id"],
+            )
+            legacy_payload_digest = _digest(raw_pairs)
+            derived_embedding_digest = _digest(normalized_pairs)
+            historical_evidence_digest = _digest(triples)
         return {
             **snapshot,
             "aliases": aliases,
             "exact_count": exact_count,
             "full_identity_count": len(points),
+            "identity_profile": identity_profile,
+            "derived_embedding_input_count": (
+                len(points)
+                if identity_profile == LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1
+                else 0
+            ),
+            "legacy_payload_text_identity_sha256": legacy_payload_digest,
+            "derived_embedding_input_identity_sha256": derived_embedding_digest,
+            "historical_identity_evidence_sha256": historical_evidence_digest,
             "point_ids_sha256": _digest(sorted(point_ids)),
             "section_ids_sha256": _digest(sorted(section_ids)),
             "aggregate_identity_sha256": _digest(
-                sorted(identities, key=lambda row: row["point_id"])
+                {
+                    "identity_profile": identity_profile,
+                    "legacy_payload_text_identity_sha256": legacy_payload_digest,
+                    "derived_embedding_input_identity_sha256": derived_embedding_digest,
+                    "historical_identity_evidence_sha256": historical_evidence_digest,
+                    "points": sorted(identities, key=lambda row: row["point_id"]),
+                }
             ),
             "vector_fingerprint_sha256": _digest(sorted(vectors, key=lambda row: row["point_id"])),
         }
@@ -382,6 +481,7 @@ class QdrantReadOnlyQualificationObserver:
         )
 
     def qualify_production(self, active: ActiveProductionRelease) -> ProductionQdrantQualification:
+        legacy_source_identities = self._legacy_source_identities(active)
         census = self._census(
             collection=active.qdrant_collection,
             release_id=active.release_id,
@@ -389,7 +489,15 @@ class QdrantReadOnlyQualificationObserver:
             admission_sha256=active.admission_sha256,
             expected_count=active.semantic_point_count,
             candidate=False,
+            legacy_source_identities=legacy_source_identities,
         )
+        if legacy_source_identities is not None and (
+            census["legacy_payload_text_identity_sha256"] != LEGACY_M25_RAW_IDENTITY_SHA256
+            or census["derived_embedding_input_identity_sha256"]
+            != LEGACY_M25_NORMALIZED_IDENTITY_SHA256
+            or census["historical_identity_evidence_sha256"] != LEGACY_M25_COMBINED_IDENTITY_SHA256
+        ):
+            raise IntegrityError("QDRANT-QUALIFY frozen legacy evidence mismatch")
         return ProductionQdrantQualification(
             collection=active.qdrant_collection,
             status=str(census["status"]),
@@ -403,7 +511,115 @@ class QdrantReadOnlyQualificationObserver:
             section_ids_sha256=str(census["section_ids_sha256"]),
             aggregate_identity_sha256=str(census["aggregate_identity_sha256"]),
             vector_fingerprint_sha256=str(census["vector_fingerprint_sha256"]),
+            identity_profile=str(census["identity_profile"]),
+            derived_embedding_input_count=int(census["derived_embedding_input_count"]),
+            legacy_payload_text_identity_sha256=str(census["legacy_payload_text_identity_sha256"]),
+            derived_embedding_input_identity_sha256=str(
+                census["derived_embedding_input_identity_sha256"]
+            ),
+            historical_identity_evidence_sha256=str(census["historical_identity_evidence_sha256"]),
         )
+
+    def _legacy_source_identities(
+        self, active: ActiveProductionRelease
+    ) -> dict[str, tuple[str, str]] | None:
+        raw_promotion = active.production_manifest.get("production_promotion")
+        if not isinstance(raw_promotion, Mapping):
+            return None
+        promotion = _mapping(raw_promotion, "production promotion")
+        if promotion.get("schema_version") != LEGACY_M25_PROMOTION_SCHEMA:
+            return None
+        identities = _mapping(active.candidate_manifest.get("identities"), "legacy identities")
+        if (
+            active.release_id != LEGACY_M25_RELEASE_ID
+            or active.pointer_sha256 != LEGACY_M25_POINTER_SHA256
+            or active.production_manifest_key != LEGACY_M25_PRODUCTION_MANIFEST_KEY
+            or active.production_manifest_sha256 != LEGACY_M25_PRODUCTION_MANIFEST_SHA256
+            or active.candidate_manifest_key != LEGACY_M25_CANDIDATE_MANIFEST_KEY
+            or active.candidate_manifest_sha256 != LEGACY_M25_CANDIDATE_MANIFEST_SHA256
+            or active.qdrant_collection != LEGACY_M25_COLLECTION
+            or active.source_commit_sha != LEGACY_M25_SOURCE_SHA
+            or active.admission_sha256 != LEGACY_M25_ADMISSION_SHA256
+            or active.semantic_point_count != LEGACY_M25_POINT_COUNT
+            or identities.get("engine_commit_sha") != LEGACY_M25_ENGINE_SHA
+        ):
+            raise IntegrityError("QDRANT-QUALIFY unknown legacy production identity")
+        if self._store is None:
+            raise IntegrityError("QDRANT-QUALIFY legacy source artifact reader is unavailable")
+        artifacts = active.candidate_manifest.get("artifacts")
+        if not isinstance(artifacts, list):
+            raise IntegrityError("QDRANT-QUALIFY legacy artifact family is unavailable")
+        entries = [
+            _mapping(item, "legacy semantic input artifact")
+            for item in artifacts
+            if isinstance(item, Mapping) and item.get("kind") == "semantic_inputs"
+        ]
+        if len(entries) != 1:
+            raise IntegrityError("QDRANT-QUALIFY legacy semantic input artifact is ambiguous")
+        entry = entries[0]
+        key = _required_string(entry, "key", "legacy semantic input artifact")
+        expected_sha256 = _hex64(entry.get("sha256"), "legacy semantic input artifact sha256")
+        if (
+            expected_sha256 != LEGACY_M25_SEMANTIC_INPUT_SHA256
+            or entry.get("bytes") != LEGACY_M25_SEMANTIC_INPUT_BYTES
+        ):
+            raise IntegrityError("QDRANT-QUALIFY unknown legacy semantic input artifact")
+        raw = self._store.get(key)
+        if hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise IntegrityError("QDRANT-QUALIFY legacy semantic input artifact digest mismatch")
+        if entry.get("bytes") != len(raw):
+            raise IntegrityError("QDRANT-QUALIFY legacy semantic input artifact size mismatch")
+        try:
+            artifact = json.loads(raw)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise IntegrityError(
+                "QDRANT-QUALIFY legacy semantic input artifact is invalid"
+            ) from exc
+        artifact = _mapping(artifact, "legacy semantic input artifact")
+        documents = artifact.get("documents")
+        if (
+            artifact.get("schema_version") != "knowledge-engine-semantic-inputs/v1"
+            or artifact.get("release_id") != active.release_id
+            or artifact.get("model") != CLOUDFLARE_MODEL
+            or not isinstance(documents, list)
+            or len(documents) != active.semantic_point_count
+        ):
+            raise IntegrityError("QDRANT-QUALIFY legacy semantic input artifact identity mismatch")
+        result: dict[str, tuple[str, str]] = {}
+        for raw_document in documents:
+            document = _mapping(raw_document, "legacy semantic input")
+            section_id = _required_string(document, "section_id", "legacy semantic input")
+            text = _required_string(document, "text", "legacy semantic input")
+            if section_id in result:
+                raise IntegrityError("QDRANT-QUALIFY duplicate legacy semantic input section")
+            result[section_id] = (
+                hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest(),
+            )
+        raw_digest = _digest(sorted((section_id, pair[0]) for section_id, pair in result.items()))
+        normalized_digest = _digest(
+            sorted((section_id, pair[1]) for section_id, pair in result.items())
+        )
+        combined_digest = _digest(
+            sorted(
+                (
+                    {
+                        "section_id": section_id,
+                        "legacy_payload_text_sha256": pair[0],
+                        "actual_embedding_input_sha256": pair[1],
+                    }
+                    for section_id, pair in result.items()
+                ),
+                key=lambda row: row["section_id"],
+            )
+        )
+        if (
+            raw_digest != LEGACY_M25_RAW_IDENTITY_SHA256
+            or normalized_digest != LEGACY_M25_NORMALIZED_IDENTITY_SHA256
+            or combined_digest != LEGACY_M25_COMBINED_IDENTITY_SHA256
+        ):
+            raise IntegrityError("QDRANT-QUALIFY legacy source evidence mismatch")
+        return result
 
 
 __all__ = [

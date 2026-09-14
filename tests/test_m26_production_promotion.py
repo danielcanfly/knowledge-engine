@@ -15,6 +15,7 @@ from knowledge_engine.m26_active_production_release import (
 from knowledge_engine.m26_production_promotion import (
     REQUIRED_ARTIFACT_KINDS,
     REQUIRED_QDRANT_PAYLOAD_INDEXES,
+    STRICT_V2,
     ProductionQdrantQualification,
     QdrantQualification,
     build_promotion_plan,
@@ -22,7 +23,9 @@ from knowledge_engine.m26_production_promotion import (
     execute_promotion,
     execute_rollback,
     pretty_json_bytes,
+    promotion_plan_from_payload,
     promotion_plan_receipt,
+    promotion_plan_to_payload,
     rollback_plan_receipt,
 )
 from knowledge_engine.storage import FileObjectStore, ObjectMetadata, sha256_bytes
@@ -186,6 +189,43 @@ def test_plan_is_generic_deterministic_and_read_only(tmp_path: Path) -> None:
     assert production_manifest["authority"]["candidate_only"] is False
     assert production_manifest["authority"]["production_pointer_authorized"] is True
     assert json.loads(plan.target_pointer_bytes)["release_id"] == CANDIDATE
+
+
+def test_durable_plan_requires_and_preserves_explicit_predecessor_profile(
+    tmp_path: Path,
+) -> None:
+    _, _, plan = _seed(tmp_path)
+    payload = promotion_plan_to_payload(plan)
+
+    assert payload["predecessor_qualification"]["qdrant"]["identity_profile"] == STRICT_V2
+    assert promotion_plan_from_payload(payload) == plan
+
+    missing = json.loads(json.dumps(payload))
+    del missing["predecessor_qualification"]["qdrant"]["identity_profile"]
+    with pytest.raises(IntegrityError, match="missing identity_profile"):
+        promotion_plan_from_payload(missing)
+
+    unknown = json.loads(json.dumps(payload))
+    unknown["predecessor_qualification"]["qdrant"]["identity_profile"] = "UNKNOWN"
+    with pytest.raises(IntegrityError, match="identity profile is invalid"):
+        promotion_plan_from_payload(unknown)
+
+
+def test_predecessor_profile_drift_fails_before_promotion_write(tmp_path: Path) -> None:
+    store, predecessor, plan = _seed(tmp_path)
+    drifted = replace(
+        plan.predecessor_qualification.qdrant,
+        identity_profile="UNKNOWN",
+    )
+
+    with pytest.raises(IntegrityError, match="identity profile is invalid"):
+        execute_promotion(
+            store=store,
+            plan=plan,
+            revalidate_predecessor_qdrant=lambda: drifted,
+        )
+    assert store.get(PRODUCTION_POINTER_KEY) == predecessor
+    assert store.head(plan.production_manifest_key) is None
 
 
 def test_plan_fails_on_artifact_digest_drift(tmp_path: Path) -> None:

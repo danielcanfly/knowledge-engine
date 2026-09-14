@@ -39,6 +39,33 @@ REQUIRED_QDRANT_PAYLOAD_INDEXES = frozenset(
         "production_authority",
     }
 )
+STRICT_V2 = "STRICT_V2"
+LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1 = (
+    "LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1"
+)
+PRODUCTION_QDRANT_IDENTITY_PROFILES = frozenset(
+    {STRICT_V2, LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1}
+)
+LEGACY_M25_RELEASE_ID = "m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043"
+LEGACY_M25_POINTER_SHA256 = "4a2cf8cc16d598cc2c6928491cf2c3b926e57e571297c61a8c3ff7a4ae396ff9"
+LEGACY_M25_PRODUCTION_MANIFEST_SHA256 = (
+    "72bb03e3fa22e453735719ab43898adfd4c7f186f818ed71685efb4fcd87de2b"
+)
+LEGACY_M25_CANDIDATE_MANIFEST_SHA256 = (
+    "f8e2a2f4b775e053bed93f3379f2aa6decd62b36e32380de0aff16caf14f18f3"
+)
+LEGACY_M25_SOURCE_SHA = "5250f8422f4fa08c1f3dc84840dc756850817635"
+LEGACY_M25_ADMISSION_SHA256 = "f5f01d82c7a1a38cf15fc54c890b904c4c015f608e2d25e294f9469f9b1927f2"
+LEGACY_M25_ENGINE_SHA = "fe499db2e043209bfa4c2390d513c5dc579727a2"
+LEGACY_M25_COLLECTION = "m25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043"
+LEGACY_M25_POINT_COUNT = 4197
+LEGACY_M25_RAW_IDENTITY_SHA256 = "4deffc35f27f0f2715c2d193bc0f6ca1b1c39a0871e50d8817068b73cc5885dc"
+LEGACY_M25_NORMALIZED_IDENTITY_SHA256 = (
+    "e86d14a87482f9daf05d3201ccac3da5b06224e4b48e7937189eaef7c256fe7d"
+)
+LEGACY_M25_COMBINED_IDENTITY_SHA256 = (
+    "cd65ac4863f656f3aeeff6c057781c69be647809aed36d605fcaac2e82c43784"
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +99,11 @@ class ProductionQdrantQualification:
     section_ids_sha256: str = ""
     aggregate_identity_sha256: str = ""
     vector_fingerprint_sha256: str = ""
+    identity_profile: str = STRICT_V2
+    derived_embedding_input_count: int = 0
+    legacy_payload_text_identity_sha256: str = ""
+    derived_embedding_input_identity_sha256: str = ""
+    historical_identity_evidence_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -753,6 +785,26 @@ def _validate_production_qdrant(
         raise IntegrityError("M26-PREDECESSOR-009 Qdrant vector shape mismatch")
     if qdrant.distance.casefold() != "cosine":
         raise IntegrityError("M26-PREDECESSOR-010 Qdrant distance mismatch")
+    if qdrant.identity_profile not in PRODUCTION_QDRANT_IDENTITY_PROFILES:
+        raise IntegrityError("M26-PREDECESSOR-011 Qdrant identity profile is invalid")
+    if qdrant.identity_profile == LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1:
+        if not _exact_legacy_m25_active(active):
+            raise IntegrityError("M26-PREDECESSOR-012 legacy profile identity mismatch")
+        if (
+            qdrant.derived_embedding_input_count != qdrant.full_identity_count
+            or qdrant.legacy_payload_text_identity_sha256 != LEGACY_M25_RAW_IDENTITY_SHA256
+            or qdrant.derived_embedding_input_identity_sha256
+            != LEGACY_M25_NORMALIZED_IDENTITY_SHA256
+            or qdrant.historical_identity_evidence_sha256 != LEGACY_M25_COMBINED_IDENTITY_SHA256
+        ):
+            raise IntegrityError("M26-PREDECESSOR-013 legacy identity evidence mismatch")
+    elif (
+        qdrant.derived_embedding_input_count != 0
+        or qdrant.legacy_payload_text_identity_sha256
+        or qdrant.derived_embedding_input_identity_sha256
+        or qdrant.historical_identity_evidence_sha256
+    ):
+        raise IntegrityError("M26-PREDECESSOR-014 strict profile contains legacy evidence")
     for value in (
         qdrant.point_ids_sha256,
         qdrant.section_ids_sha256,
@@ -760,6 +812,25 @@ def _validate_production_qdrant(
         qdrant.vector_fingerprint_sha256,
     ):
         _hex(identity_value=value, length=64)
+
+
+def _exact_legacy_m25_active(active: ActiveProductionRelease) -> bool:
+    promotion = active.production_manifest.get("production_promotion")
+    identities = active.candidate_manifest.get("identities")
+    if not isinstance(promotion, Mapping) or not isinstance(identities, Mapping):
+        return False
+    return (
+        promotion.get("schema_version") == "knowledge-engine-m25-10-production-promotion/v1"
+        and active.release_id == LEGACY_M25_RELEASE_ID
+        and active.pointer_sha256 == LEGACY_M25_POINTER_SHA256
+        and active.production_manifest_sha256 == LEGACY_M25_PRODUCTION_MANIFEST_SHA256
+        and active.candidate_manifest_sha256 == LEGACY_M25_CANDIDATE_MANIFEST_SHA256
+        and active.source_commit_sha == LEGACY_M25_SOURCE_SHA
+        and active.admission_sha256 == LEGACY_M25_ADMISSION_SHA256
+        and active.qdrant_collection == LEGACY_M25_COLLECTION
+        and active.semantic_point_count == LEGACY_M25_POINT_COUNT
+        and identities.get("engine_commit_sha") == LEGACY_M25_ENGINE_SHA
+    )
 
 
 def _predecessor_qualification_sha256(value: PredecessorQualification) -> str:
@@ -1030,7 +1101,7 @@ def _production_qdrant_from_payload(
     aliases = value.get("aliases", [])
     if not isinstance(aliases, list) or any(not isinstance(item, str) for item in aliases):
         raise IntegrityError("durable predecessor Qdrant aliases are invalid")
-    return ProductionQdrantQualification(
+    result = ProductionQdrantQualification(
         collection=_required_string(value, "collection", "durable predecessor Qdrant"),
         status=_required_string(value, "status", "durable predecessor Qdrant"),
         points_count=_positive_int(value.get("points_count"), "durable predecessor points_count"),
@@ -1051,7 +1122,42 @@ def _production_qdrant_from_payload(
         vector_fingerprint_sha256=_hex(
             identity_value=value.get("vector_fingerprint_sha256"), length=64
         ),
+        identity_profile=_required_string(value, "identity_profile", "durable predecessor Qdrant"),
+        derived_embedding_input_count=_nonnegative_int(
+            value.get("derived_embedding_input_count"),
+            "durable predecessor derived_embedding_input_count",
+        ),
+        legacy_payload_text_identity_sha256=_string_value(
+            value.get("legacy_payload_text_identity_sha256"),
+            "durable predecessor legacy_payload_text_identity_sha256",
+        ),
+        derived_embedding_input_identity_sha256=_string_value(
+            value.get("derived_embedding_input_identity_sha256"),
+            "durable predecessor derived_embedding_input_identity_sha256",
+        ),
+        historical_identity_evidence_sha256=_string_value(
+            value.get("historical_identity_evidence_sha256"),
+            "durable predecessor historical_identity_evidence_sha256",
+        ),
     )
+    if result.identity_profile not in PRODUCTION_QDRANT_IDENTITY_PROFILES:
+        raise IntegrityError("M26-PREDECESSOR-011 Qdrant identity profile is invalid")
+    legacy = result.identity_profile == LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1
+    if legacy and (
+        result.derived_embedding_input_count != result.full_identity_count
+        or result.legacy_payload_text_identity_sha256 != LEGACY_M25_RAW_IDENTITY_SHA256
+        or result.derived_embedding_input_identity_sha256 != LEGACY_M25_NORMALIZED_IDENTITY_SHA256
+        or result.historical_identity_evidence_sha256 != LEGACY_M25_COMBINED_IDENTITY_SHA256
+    ):
+        raise IntegrityError("M26-PREDECESSOR-013 legacy identity evidence mismatch")
+    if not legacy and (
+        result.derived_embedding_input_count != 0
+        or result.legacy_payload_text_identity_sha256
+        or result.derived_embedding_input_identity_sha256
+        or result.historical_identity_evidence_sha256
+    ):
+        raise IntegrityError("M26-PREDECESSOR-014 strict profile contains legacy evidence")
+    return result
 
 
 def _json_object(data: bytes, label: str) -> dict[str, Any]:
@@ -1090,6 +1196,18 @@ def _hex(*, identity_value: Any, length: int) -> str:
 def _positive_int(value: Any, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise IntegrityError(f"{label} must be a positive integer")
+    return value
+
+
+def _nonnegative_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise IntegrityError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _string_value(value: Any, label: str) -> str:
+    if not isinstance(value, str):
+        raise IntegrityError(f"{label} must be a string")
     return value
 
 

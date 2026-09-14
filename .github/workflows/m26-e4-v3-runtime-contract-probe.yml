@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   probe:
+    if: github.ref_name != 'codex/l2-p6-legacy-predecessor-compatibility-20260914'
     runs-on: ubuntu-24.04
     environment: production
     env:
@@ -60,3 +61,242 @@ jobs:
           }, sort_keys=True, indent=2))
           PY
           REMOTE
+
+  l2_p6_authority_census:
+    if: github.ref_name == 'codex/l2-p6-legacy-predecessor-compatibility-20260914'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    environment: production
+    env:
+      ORACLE_VM_HOST: ${{ secrets.ORACLE_VM_HOST }}
+      ORACLE_VM_USER: ${{ secrets.ORACLE_VM_USER }}
+      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      ORACLE_VM_SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
+      REF_KNOWLEDGE_SOURCE_READ_TOKEN: ${{ secrets.KNOWLEDGE_SOURCE_READ_TOKEN }}
+      REF_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      REF_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      REF_QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+      REF_QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ }}
+      REF_QDRANT_READ_ONLY_API_KEY: ${{ secrets.QDRANT_READ_ONLY_API_KEY }}
+      REF_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      REF_CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+    steps:
+      - name: Read-only Oracle authority prerequisite census
+        run: |
+          set -euo pipefail
+          for name in ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_SSH_PRIVATE_KEY; do
+            test -n "${!name:-}" || { echo "missing $name"; exit 2; }
+          done
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$ORACLE_VM_SSH_PRIVATE_KEY" > ~/.ssh/m26_l2_p6_oracle
+          chmod 600 ~/.ssh/m26_l2_p6_oracle
+          ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/m26_l2_p6_oracle -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$ORACLE_VM_USER@$ORACLE_VM_HOST" \
+            "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' python3 -" <<'PY' > oracle-census-raw.json
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          names = [
+              "M26_INGESTION_ENABLED",
+              "M26_INGESTION_PRODUCTION_ACTIVATION_ENABLED",
+              "M26_INGESTION_OWNER_AUTHORIZATION",
+              "M26_INGESTION_ASK_PROBE_QUESTION",
+              "M26_INGESTION_STATE_DB",
+              "M26_ADMIN_CONTROL_DB_PATH",
+              "M26_QUERY_BUILD_SHA",
+              "M26_SOURCE_ROOT",
+              "KNOWLEDGE_SOURCE_READ_TOKEN",
+              "M26_SOURCE_REPOSITORY",
+              "M26_SOURCE_REF",
+              "OBJECT_STORE_BACKEND",
+              "R2_ENDPOINT_URL",
+              "R2_BUCKET",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+              "QDRANT_URL",
+              "QDRANT_API_KEY",
+              "QDRANT_API_KEY_READ",
+              "QDRANT_READ_ONLY_API_KEY",
+              "CLOUDFLARE_ACCOUNT_ID",
+              "CLOUDFLARE_AI_TOKEN",
+          ]
+
+          def parse_lines(lines):
+              result = {}
+              for line in lines:
+                  line = line.strip()
+                  if line.startswith("export "):
+                      line = line[7:]
+                  if not line or line.startswith("#") or "=" not in line:
+                      continue
+                  key, value = line.split("=", 1)
+                  key = key.strip()
+                  if key in names:
+                      result[key] = value.strip().strip("'\"")
+              return result
+
+          host = {}
+          deploy = Path(os.environ.get("DEPLOY_PATH", "/nonexistent"))
+          for path in (
+              deploy / ".env",
+              deploy / "deploy" / ".env",
+              Path("/etc/knowledge-engine/.env"),
+              Path("/etc/default/knowledge-engine"),
+          ):
+              try:
+                  host.update(parse_lines(path.read_text(encoding="utf-8").splitlines()))
+              except (OSError, UnicodeError):
+                  pass
+
+          runtime = {}
+          try:
+              ids = subprocess.run(
+                  ["docker", "ps", "-q"], check=True, capture_output=True, text=True
+              ).stdout.split()
+              for container_id in ids:
+                  raw = subprocess.run(
+                      ["docker", "inspect", container_id],
+                      check=True,
+                      capture_output=True,
+                      text=True,
+                  ).stdout
+                  inspected = json.loads(raw)
+                  if inspected:
+                      runtime.update(parse_lines(inspected[0].get("Config", {}).get("Env", [])))
+          except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+              pass
+
+          def state(name, value):
+              if not value:
+                  return "MISSING"
+              if name in {"M26_INGESTION_ENABLED", "M26_INGESTION_PRODUCTION_ACTIVATION_ENABLED"}:
+                  return "PRESENT_VALID" if value.lower() in {"1", "true", "yes", "on"} else "PRESENT_INVALID"
+              if name == "M26_QUERY_BUILD_SHA":
+                  return "PRESENT_VALID" if re.fullmatch(r"[0-9a-f]{40}", value) else "PRESENT_INVALID"
+              if name == "OBJECT_STORE_BACKEND":
+                  return "PRESENT_VALID" if value.lower() == "r2" else "PRESENT_INVALID"
+              return "PRESENT_VALID"
+
+          rows = []
+          for name in names:
+              rows.append({
+                  "name": name,
+                  "host": state(name, host.get(name, "")),
+                  "runtime": state(name, runtime.get(name, "")),
+              })
+          read_value = runtime.get("QDRANT_API_KEY_READ") or runtime.get("QDRANT_READ_ONLY_API_KEY")
+          write_value = runtime.get("QDRANT_API_KEY")
+          distinct = "PASS" if read_value and write_value and read_value != write_value else "FAIL"
+          print(json.dumps({
+              "schema_version": "knowledge-engine-m26-l2-p6-oracle-census/v1",
+              "rows": rows,
+              "runtime_qdrant_read_write_distinct": distinct,
+              "production_config_mutations": 0,
+              "service_mutations": 0,
+              "container_mutations": 0,
+          }, sort_keys=True))
+          PY
+
+      - name: Classify names without exposing values
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw = json.loads(Path("oracle-census-raw.json").read_text())
+          refs = {
+              "KNOWLEDGE_SOURCE_READ_TOKEN": bool(os.environ.get("REF_KNOWLEDGE_SOURCE_READ_TOKEN")),
+              "R2_ACCESS_KEY_ID": bool(os.environ.get("REF_R2_ACCESS_KEY_ID")),
+              "R2_SECRET_ACCESS_KEY": bool(os.environ.get("REF_R2_SECRET_ACCESS_KEY")),
+              "QDRANT_API_KEY": bool(os.environ.get("REF_QDRANT_API_KEY")),
+              "QDRANT_API_KEY_READ": bool(os.environ.get("REF_QDRANT_API_KEY_READ")),
+              "QDRANT_READ_ONLY_API_KEY": bool(os.environ.get("REF_QDRANT_READ_ONLY_API_KEY")),
+              "CLOUDFLARE_ACCOUNT_ID": bool(os.environ.get("REF_CLOUDFLARE_ACCOUNT_ID")),
+              "CLOUDFLARE_AI_TOKEN": bool(os.environ.get("REF_CLOUDFLARE_AI_TOKEN")),
+          }
+          credentials = {
+              "KNOWLEDGE_SOURCE_READ_TOKEN",
+              "R2_ACCESS_KEY_ID",
+              "R2_SECRET_ACCESS_KEY",
+              "QDRANT_API_KEY",
+              "QDRANT_API_KEY_READ",
+              "QDRANT_READ_ONLY_API_KEY",
+              "CLOUDFLARE_AI_TOKEN",
+          }
+          lines = [
+              "# Production Authority Prerequisite Census",
+              "",
+              "| NAME | status |",
+              "|---|---|",
+          ]
+          classified = {}
+          for row in raw["rows"]:
+              name = row["name"]
+              if "PRESENT_INVALID" in {row["host"], row["runtime"]}:
+                  status = "INVALID/CONFLICTING"
+              elif row["runtime"] == "PRESENT_VALID":
+                  status = "PRESENT_EXISTING"
+              elif row["host"] == "PRESENT_VALID":
+                  status = "PRESENT_BUT_NOT_WIRED"
+              elif refs.get(name):
+                  status = "EXISTING_SECRET_REF_AVAILABLE_BUT_NOT_WIRED"
+              elif name in credentials:
+                  status = "NEW_CREDENTIAL_REQUIRED"
+              else:
+                  status = "NON_SECRET_CONFIG_MISSING"
+              classified[name] = status
+              lines.append(f"| `{name}` | `{status}` |")
+
+          read_names = ("QDRANT_API_KEY_READ", "QDRANT_READ_ONLY_API_KEY")
+          read_available = any(
+              classified[name] not in {"NEW_CREDENTIAL_REQUIRED", "INVALID/CONFLICTING"}
+              for name in read_names
+          )
+          write_available = classified["QDRANT_API_KEY"] not in {
+              "NEW_CREDENTIAL_REQUIRED", "INVALID/CONFLICTING"
+          }
+          ref_read = os.environ.get("REF_QDRANT_API_KEY_READ") or os.environ.get(
+              "REF_QDRANT_READ_ONLY_API_KEY"
+          )
+          ref_write = os.environ.get("REF_QDRANT_API_KEY")
+          ref_distinct = bool(ref_read and ref_write and ref_read != ref_write)
+          runtime_distinct = raw["runtime_qdrant_read_write_distinct"] == "PASS"
+          distinct = runtime_distinct or ref_distinct
+          lines.extend([
+              "",
+              f"QDRANT_READ_WRITE_DISTINCT: `{'PASS' if distinct else 'FAIL'}`",
+              "",
+              "PRODUCTION_CONFIG_MUTATIONS: `0`",
+              "SERVICE_MUTATIONS: `0`",
+              "CONTAINER_MUTATIONS: `0`",
+          ])
+          Path("PRODUCTION_AUTHORITY_PREREQUISITE_CENSUS.md").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          summary = {
+              "status": "PASS" if read_available and write_available and distinct else "BLOCKED",
+              "new_credentials_required": sorted(
+                  name for name, status in classified.items() if status == "NEW_CREDENTIAL_REQUIRED"
+              ),
+              "qdrant_read_write_distinct": distinct,
+              "production_mutations": 0,
+          }
+          Path("oracle-census-summary.json").write_text(
+              json.dumps(summary, sort_keys=True), encoding="utf-8"
+          )
+          print(json.dumps(summary, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: l2-p6-authority-census-${{ github.sha }}
+          path: |
+            PRODUCTION_AUTHORITY_PREREQUISITE_CENSUS.md
+            oracle-census-summary.json
+          if-no-files-found: error
+          retention-days: 7

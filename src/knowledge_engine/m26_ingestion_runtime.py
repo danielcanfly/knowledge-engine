@@ -638,7 +638,8 @@ def build_runtime_ingestion_adapter_from_env(
     )
     try:
         qdrant_observer = qdrant_observer_override or QdrantReadOnlyQualificationObserver(
-            QdrantQualificationConfig(url=required["QDRANT_URL"], api_key=read_key)
+            QdrantQualificationConfig(url=required["QDRANT_URL"], api_key=read_key),
+            store=store,
         )
         dense_channel = dense_channel_override or ActiveReleaseQdrantDenseChannel(
             ActiveReleaseDenseConfig(

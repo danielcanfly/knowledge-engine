@@ -9,11 +9,26 @@ import httpx
 import pytest
 
 from knowledge_engine.errors import IntegrityError
+from knowledge_engine.m23_cloudflare_qdrant import (
+    VECTOR_DIMENSION,
+    SectionInput,
+    build_cloudflare_request,
+    build_qdrant_points,
+    normalize_text,
+    validate_sections,
+)
 from knowledge_engine.m26_active_production_release import ActiveProductionRelease
-from knowledge_engine.m26_ingestion_candidate_qdrant import CANDIDATE_PAYLOAD_INDEX_SCHEMA
+from knowledge_engine.m26_ingestion_candidate_qdrant import (
+    CANDIDATE_PAYLOAD_INDEX_SCHEMA,
+    candidate_text_identities,
+)
 from knowledge_engine.m26_ingestion_qdrant_qualification import (
     QdrantQualificationConfig,
     QdrantReadOnlyQualificationObserver,
+)
+from knowledge_engine.m26_production_promotion import (
+    LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1,
+    STRICT_V2,
 )
 
 
@@ -21,8 +36,18 @@ def _sha(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
-def _point(point_id: str, section_id: str, *, release_id: str, source: str, admission: str):
-    return {
+def _point(
+    point_id: str,
+    section_id: str,
+    *,
+    release_id: str,
+    source: str,
+    admission: str,
+    embedding_input: bool = True,
+    provider: str = "cloudflare-workers-ai",
+    model: str = "@cf/baai/bge-m3",
+):
+    point = {
         "id": point_id,
         "payload": {
             "section_id": section_id,
@@ -32,21 +57,34 @@ def _point(point_id: str, section_id: str, *, release_id: str, source: str, admi
             "candidate_release_eligible": True,
             "production_authority": False,
             "text_sha256": _sha("text:" + section_id),
-            "embedding_input_sha256": _sha("embedding:" + section_id),
-            "embedding_provider": "cloudflare-workers-ai",
-            "embedding_model": "@cf/baai/bge-m3",
+            "embedding_provider": provider,
+            "embedding_model": model,
         },
         "vector": {"default": [0.1, 0.2, 0.3]},
     }
+    if embedding_input:
+        point["payload"]["embedding_input_sha256"] = _sha("embedding:" + section_id)
+    return point
 
 
 class _QdrantTransport:
-    def __init__(self, *, reverse: bool = False, wrong_type: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        reverse: bool = False,
+        wrong_type: bool = False,
+        identity_mode: str = "strict",
+        provider: str = "cloudflare-workers-ai",
+        model: str = "@cf/baai/bge-m3",
+    ) -> None:
         self.release_id = "release-qdrant-census"
         self.source = hashlib.sha1(b"source revision").hexdigest()
         self.admission = _sha("admission")
         self.reverse = reverse
         self.wrong_type = wrong_type
+        self.identity_mode = identity_mode
+        self.provider = provider
+        self.model = model
         self.requests: list[dict[str, Any]] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -92,6 +130,9 @@ class _QdrantTransport:
                     release_id=self.release_id,
                     source=self.source,
                     admission=self.admission,
+                    embedding_input=self.identity_mode == "strict",
+                    provider=self.provider,
+                    model=self.model,
                 ),
                 _point(
                     "point-b",
@@ -99,6 +140,9 @@ class _QdrantTransport:
                     release_id=self.release_id,
                     source=self.source,
                     admission=self.admission,
+                    embedding_input=self.identity_mode != "legacy",
+                    provider=self.provider,
+                    model=self.model,
                 ),
             ]
             if self.reverse:
@@ -183,6 +227,8 @@ def test_production_census_uses_exact_pointer_resolved_identity() -> None:
     assert result.collection == active.qdrant_collection
     assert result.full_identity_count == 2
     assert result.aliases == ()
+    assert result.identity_profile == STRICT_V2
+    assert result.derived_embedding_input_count == 0
 
 
 def test_observer_rejects_wrong_index_type_and_non_read_operation() -> None:
@@ -193,3 +239,113 @@ def test_observer_rejects_wrong_index_type_and_non_read_operation() -> None:
         observer.qualify_candidate(transport.manifest())
     with pytest.raises(IntegrityError, match="rejected non-read operation"):
         observer._request("PUT", "/collections/forbidden", {})
+
+
+def test_exact_historical_writer_separates_raw_payload_from_normalized_embedding() -> None:
+    raw = "  Legacy fullwidth text: Ａ  "
+    section = SectionInput(section_id="legacy#1", text=raw, payload={})
+    vector = [0.0] * (VECTOR_DIMENSION - 1) + [1.0]
+
+    provider_input = build_cloudflare_request([section.text])["text"][0]
+    legacy_payload = build_qdrant_points([section], [vector])[0]["payload"]
+    raw_sha256, normalized_sha256 = candidate_text_identities(raw, {"text_sha256": _sha(raw)})
+
+    assert provider_input == normalize_text(raw)
+    assert legacy_payload["text_sha256"] == raw_sha256
+    assert normalized_sha256 == _sha(provider_input)
+    assert legacy_payload["text_sha256"] != normalized_sha256
+
+
+def test_generic_m23_validated_path_hashes_normalized_embedding_input() -> None:
+    raw = "  Generic M23 fullwidth: Ａ  "
+    validated = validate_sections([{"section_id": "generic#1", "text": raw, "payload": {}}])[0]
+    vector = [0.0] * (VECTOR_DIMENSION - 1) + [1.0]
+
+    payload = build_qdrant_points([validated], [vector])[0]["payload"]
+
+    assert validated.text == normalize_text(raw)
+    assert payload["text_sha256"] == _sha(normalize_text(raw))
+
+
+def test_unknown_all_missing_production_population_fails_closed() -> None:
+    transport = _QdrantTransport(identity_mode="legacy")
+
+    with pytest.raises(IntegrityError, match="legacy predecessor profile is not authorized"):
+        _direct_census(transport, candidate=False)
+
+
+def _direct_census(
+    transport: _QdrantTransport,
+    *,
+    candidate: bool,
+    legacy_source_identities: Mapping[str, tuple[str, str]] | None = None,
+):
+    return _observer(transport)._census(
+        collection="candidate/census name",
+        release_id=transport.release_id,
+        source_commit_sha=transport.source,
+        admission_sha256=transport.admission,
+        expected_count=2,
+        candidate=candidate,
+        legacy_source_identities=legacy_source_identities,
+    )
+
+
+def test_legacy_profile_is_collection_wide_source_bound_and_domain_separated() -> None:
+    legacy = _QdrantTransport(identity_mode="legacy")
+    strict = _QdrantTransport()
+    source = {
+        "section-a": (_sha("text:section-a"), _sha("embedding:section-a")),
+        "section-b": (_sha("text:section-b"), _sha("embedding:section-b")),
+    }
+    legacy_result = _direct_census(legacy, candidate=False, legacy_source_identities=source)
+    strict_result = _direct_census(strict, candidate=False)
+
+    assert legacy_result["identity_profile"] == (
+        LEGACY_M25_RAW_TEXT_WITH_DERIVED_NORMALIZED_EMBEDDING_V1
+    )
+    assert legacy_result["derived_embedding_input_count"] == 2
+    assert strict_result["identity_profile"] == STRICT_V2
+    assert legacy_result["aggregate_identity_sha256"] != strict_result["aggregate_identity_sha256"]
+
+
+def test_candidate_missing_embedding_input_cannot_enter_legacy_profile() -> None:
+    transport = _QdrantTransport(identity_mode="legacy")
+    with pytest.raises(IntegrityError, match="candidate requires STRICT_V2"):
+        _direct_census(
+            transport,
+            candidate=True,
+            legacy_source_identities={
+                "section-a": (_sha("text:section-a"), _sha("embedding:section-a")),
+                "section-b": (_sha("text:section-b"), _sha("embedding:section-b")),
+            },
+        )
+
+
+def test_mixed_strict_legacy_population_fails_closed() -> None:
+    transport = _QdrantTransport(identity_mode="mixed")
+    with pytest.raises(IntegrityError, match="mixed strict/legacy"):
+        _direct_census(transport, candidate=False, legacy_source_identities={})
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [("wrong-provider", "@cf/baai/bge-m3"), ("cloudflare-workers-ai", "wrong-model")],
+)
+def test_census_requires_exact_embedding_provider_and_model(provider: str, model: str) -> None:
+    transport = _QdrantTransport(provider=provider, model=model)
+    with pytest.raises(IntegrityError, match="provider/model mismatch"):
+        _direct_census(transport, candidate=False)
+
+
+def test_legacy_profile_requires_exact_source_text_digest() -> None:
+    transport = _QdrantTransport(identity_mode="legacy")
+    with pytest.raises(IntegrityError, match="payload/source text identity mismatch"):
+        _direct_census(
+            transport,
+            candidate=False,
+            legacy_source_identities={
+                "section-a": ("f" * 64, _sha("embedding:section-a")),
+                "section-b": (_sha("text:section-b"), _sha("embedding:section-b")),
+            },
+        )
