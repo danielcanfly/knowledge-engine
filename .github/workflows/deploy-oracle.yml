@@ -31,6 +31,11 @@ on:
         required: true
         default: false
         type: boolean
+      sync_status_only:
+        description: Read durable Sync job and active pointer state without mutation
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -412,6 +417,54 @@ jobs:
           exit 1
           REMOTE
           rm -f /tmp/source-read-rewire.env
+      - name: Read durable Sync and active pointer status
+        if: ${{ inputs.sync_status_only }}
+        env:
+          RELEASE_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          docker compose exec -T knowledge-engine python - <<'PY'
+          import json, os
+          from pathlib import Path
+          from knowledge_engine.config import Settings
+          from knowledge_engine.m26_active_production_release import resolve_active_production_release
+          from knowledge_engine.m26_sqlite_ingestion import SQLiteIngestionLedger
+          from knowledge_engine.storage import create_object_store
+
+          path = os.environ.get("M26_INGESTION_STATE_DB") or os.environ.get("M26_ADMIN_CONTROL_DB_PATH")
+          ledger = SQLiteIngestionLedger(Path(path))
+          jobs = ledger.list_jobs()
+          selected = [
+              {key: job.get(key) for key in (
+                  "job_id", "operation_id", "status", "attempt", "source_revision",
+                  "source_identity_digest", "plan_id", "plan_digest", "manifest_diff",
+                  "candidate_release_id", "candidate_manifest_key", "candidate_manifest_sha256",
+                  "predecessor_pointer_sha256", "error", "result", "finalization_plan",
+              )}
+              for job in jobs
+              if str(job.get("actor_scope") or "").startswith("service:final-launch-reentry|")
+          ]
+          active = resolve_active_production_release(create_object_store(Settings.from_env()))
+          print(json.dumps({
+              "status": "read_only_observation",
+              "jobs": selected,
+              "active": {
+                  "release_id": active.release_id,
+                  "pointer_sha256": active.pointer_sha256,
+                  "production_manifest_sha256": active.production_manifest_sha256,
+                  "candidate_manifest_sha256": active.candidate_manifest_sha256,
+                  "qdrant_collection": active.qdrant_collection,
+                  "source_commit_sha": active.source_commit_sha,
+              },
+              "mutation_performed": False,
+              "secret_values_recorded": False,
+          }, indent=2, sort_keys=True))
+          PY
+          REMOTE
       - name: Optional public identity gate
         if: ${{ inputs.require_public_identity }}
         env:
