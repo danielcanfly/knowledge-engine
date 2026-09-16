@@ -812,7 +812,7 @@ def _router() -> APIRouter:
     async def preview_suggested_questions_promotion(
         request: Request, payload: SuggestedQuestionsPromotionPreviewRequest
     ) -> dict[str, Any]:
-        require_capability(request, "suggested_questions.publish", mutation=True)
+        require_capability(request, "suggested_questions.review", mutation=True)
         canonical_request = {"event_ids": list(payload.event_ids)}
         operation_id, replayed = _begin_idempotent_operation(request, canonical_request)
         store = _dependency(
