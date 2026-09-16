@@ -1704,17 +1704,7 @@ def _synthesize_and_verify(
     }
     review_rejected_facet_ids: set[str] = set()
 
-    requirement_ids = {item.requirement_id for item in requirements}
-    strict_no_support = bool(
-        requirements
-        and not supported_requirements
-        and (
-            "core_answer" in requirement_ids
-            or requirement_ids.issubset(
-                {"explanatory_answer", "comparison_or_distinction"}
-            )
-        )
-    )
+    strict_no_support = bool(requirements and not supported_requirements)
     if not evidence or strict_no_support:
         final_failures = [
             "NO_R1_SELECTED_EVIDENCE"

@@ -11,6 +11,10 @@ from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
 class _Provider:
     calls = 0
 
+    def complete(self, **_kwargs: Any) -> str:
+        self.calls += 1
+        raise AssertionError("provider must not be called")
+
 
 def _abstention() -> dict[str, Any]:
     return {
@@ -45,6 +49,37 @@ def test_no_seed_uses_bounded_b6_recovery_not_legacy_wrapper(
 
     assert observed["max_attempts"] == 2
     assert verification["status"] == "owner_only_safe_abstention"
+    assert closure["bp5c_r2_recovery"] is True
+
+
+def test_non_core_required_facet_without_support_fails_closed_without_provider() -> None:
+    provider = _Provider()
+    requirement = runtime.SemanticRequirement(
+        requirement_id="workflow_boundary",
+        instruction="State the workflow boundary.",
+        evidence_terms=("boundary",),
+        visible_patterns=(),
+    )
+
+    verification, closure = contract._consolidated_semantic_recovery(
+        question="Where is the workflow boundary?",
+        trace_id="trace",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            {
+                "evidence_id": "ev-1",
+                "passage_text": "This passage discusses an unrelated topic.",
+            }
+        ],
+        provider_client=provider,
+        requirements=[requirement],
+        endpoint_proof={},
+    )
+
+    assert provider.calls == 0
+    assert verification["status"] == "owner_only_safe_abstention"
+    assert verification["reason_codes"] == ["NO_SUPPORTED_REQUIRED_FACETS"]
+    assert closure["failures"] == ["NO_SUPPORTED_REQUIRED_FACETS"]
     assert closure["bp5c_r2_recovery"] is True
 
 
