@@ -56,7 +56,11 @@ def test_read_authority_is_enriched_without_restoring_mutation_seams(monkeypatch
     assert isinstance(enriched, SQLiteIngestionReadAuthority)
     assert enriched.missing_seams == ()
     assert enriched.source_observer is source_observer
-    assert enriched.active_manifest_observer is active_observer
+    assert callable(enriched.active_manifest_observer)
+    assert enriched.active_manifest_observer is not active_observer
+    decorated_active = enriched.active_manifest_observer()
+    assert decorated_active["release_id"] == "release-active"
+    assert "health_audit" in decorated_active
     assert enriched.candidate_manifest_observer is candidate_observer
     assert enriched.production_activation_authorized is False
     assert not hasattr(enriched, "candidate_executor")
@@ -65,4 +69,5 @@ def test_read_authority_is_enriched_without_restoring_mutation_seams(monkeypatch
     assert observation.availability == "available"
     assert observation.data["source"]["source_revision"] == "git:" + "a" * 40
     assert observation.data["active"]["release_id"] == "release-active"
+    assert "health_audit" in observation.data["active"]
     assert observation.data["finalization_authorized"] is False
