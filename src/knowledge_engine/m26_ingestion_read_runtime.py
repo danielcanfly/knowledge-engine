@@ -6,6 +6,7 @@ from typing import Any
 
 from .config import Settings
 from .m25_blog_pilot import GitHubClient
+from .m26_ingestion_health_read import enrich_active_observer_with_health
 from .m26_ingestion_runtime import (
     SOURCE_REF,
     SOURCE_REF_ENV,
@@ -17,6 +18,7 @@ from .m26_ingestion_runtime import (
     LocalBlogSource,
 )
 from .m26_sqlite_ingestion import (
+    SQLiteIngestionAdapter,
     SQLiteIngestionReadAuthority,
     active_manifest_observer_from_store,
     candidate_manifest_observer_from_store,
@@ -51,19 +53,41 @@ def _read_source_observer() -> tuple[Any | None, list[str]]:
     return source.observe, []
 
 
+def _object_store() -> Any | None:
+    try:
+        return create_object_store(Settings.from_env())
+    except Exception:
+        return None
+
+
+def _health_enriched_active(observer: Any, store: Any | None) -> Any:
+    if not callable(observer) or store is None:
+        return observer
+    return enrich_active_observer_with_health(observer, store=store)
+
+
 def enrich_read_authority_from_env(adapter: Any) -> Any:
     """Restore authoritative reads while preserving fail-closed mutations.
 
-    The production ingestion builder intentionally returns a
-    ``SQLiteIngestionReadAuthority`` whenever any mutation/finalization seam is
-    unqualified. Historically that fallback also lost otherwise safe source and
-    R2 manifest observers, making current-index and index-health appear unknown.
-
-    This function only enriches the read authority. It never creates a candidate
-    executor, finalizer, write credential, activation authority, or mutation
-    capability. ``CombinedCapabilityProvider`` therefore continues to keep Sync
-    Blog disabled until the original production mutation contract is satisfied.
+    Read evidence and mutation/finalization authority are deliberately separated.
+    Missing write authority must never erase safe source/R2/Qdrant observations,
+    while read-only enrichment must never create candidate executors, finalizers,
+    write credentials, activation authority, or mutation capabilities.
     """
+
+    if adapter is None:
+        return None
+
+    store = _object_store()
+
+    # A fully qualified mutable adapter already owns the correct ingestion engine.
+    # Only decorate its active observer with additional read-only health evidence.
+    if isinstance(adapter, SQLiteIngestionAdapter):
+        adapter.active_manifest_observer = _health_enriched_active(
+            adapter.active_manifest_observer,
+            store,
+        )
+        return adapter
 
     if not isinstance(adapter, SQLiteIngestionReadAuthority):
         return adapter
@@ -78,14 +102,15 @@ def enrich_read_authority_from_env(adapter: Any) -> Any:
         read_missing.extend(source_missing)
 
     if active_observer is None or candidate_observer is None:
-        try:
-            store = create_object_store(Settings.from_env())
+        if store is not None:
             if active_observer is None:
                 active_observer = active_manifest_observer_from_store(store)
             if candidate_observer is None:
                 candidate_observer = candidate_manifest_observer_from_store(store)
-        except Exception:
+        else:
             read_missing.append("production_object_store_read")
+
+    active_observer = _health_enriched_active(active_observer, store)
 
     if source_observer is None:
         read_missing.append("published_blog_read")
