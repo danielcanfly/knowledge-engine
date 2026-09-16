@@ -20,11 +20,24 @@ from .m26_admin_qa import (
 
 ADMIN_CONTROL_DB_ENV = "M26_ADMIN_CONTROL_DB_PATH"
 L3B_ADMIN_QUALIFIED_ENV = "M26_L3B_ADMIN_QUALIFIED"
+QA_CAPABILITY_EXPORT_JSONL = "qa.export_jsonl"
+QA_CAPABILITY_LIFECYCLE = "qa.lifecycle"
+SUGGESTED_QUESTIONS_REVIEW_CAPABILITY = "suggested_questions.review"
 SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY = "suggested_questions.publish"
+L3B_MUTATION_CAPABILITY_IDS = frozenset(
+    {
+        QA_CAPABILITY_EXPORT_JSONL,
+        QA_CAPABILITY_LIFECYCLE,
+        SUGGESTED_QUESTIONS_REVIEW_CAPABILITY,
+    }
+)
 L3B_CAPABILITY_IDS = (
     QA_CAPABILITY_DETAIL,
     QA_CAPABILITY_EVENTS,
     QA_CAPABILITY_EXPORT,
+    QA_CAPABILITY_EXPORT_JSONL,
+    QA_CAPABILITY_LIFECYCLE,
+    SUGGESTED_QUESTIONS_REVIEW_CAPABILITY,
     SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY,
 )
 L3B_QUALIFICATION_DIGEST = hashlib.sha256(
@@ -65,17 +78,21 @@ class QualifiedL3BCapabilityProvider:
                 state=(
                     "disabled"
                     if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "enabled"
+                    if capability_id in L3B_MUTATION_CAPABILITY_IDS
                     else "read_only"
                 ),
                 reason_code=(
                     L3B_SUGGESTED_QUESTIONS_PUBLISH_BLOCKED_REASON
                     if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "L3B_QA_V2_MUTATION_QUALIFIED"
+                    if capability_id in L3B_MUTATION_CAPABILITY_IDS
                     else "L3B_QA_PRODUCTION_QUALIFIED"
                 ),
                 source="l3b_production_qualification",
                 resource_identity={
                     "lane": "L3B_QA_P0",
-                    "binding": "qualified-production-runtime/v1",
+                    "binding": "qualified-production-runtime/v2",
                 },
                 evidence_digest=L3B_QUALIFICATION_DIGEST,
                 qualification_status=(
@@ -86,8 +103,11 @@ class QualifiedL3BCapabilityProvider:
                 effective_state=(
                     "unavailable"
                     if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    else "enabled"
+                    if capability_id in L3B_MUTATION_CAPABILITY_IDS
                     else "read_only"
                 ),
+                mutation_authorized=capability_id in L3B_MUTATION_CAPABILITY_IDS,
             )
             for capability_id in L3B_CAPABILITY_IDS
         }
@@ -224,6 +244,11 @@ __all__ = [
     "ADMIN_CONTROL_DB_ENV",
     "L3B_ADMIN_QUALIFIED_ENV",
     "L3B_CAPABILITY_IDS",
+    "L3B_MUTATION_CAPABILITY_IDS",
+    "QA_CAPABILITY_EXPORT_JSONL",
+    "QA_CAPABILITY_LIFECYCLE",
+    "SUGGESTED_QUESTIONS_REVIEW_CAPABILITY",
+    "SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY",
     "ProductionAdminRuntime",
     "QualifiedL3BCapabilityProvider",
     "SqliteAdminControlStore",
