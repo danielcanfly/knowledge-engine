@@ -317,7 +317,8 @@ def _trusted_country(scope: Scope) -> str:
     # Preserve the old direct-function test seam only for non-ASGI scopes. Real
     # HTTP requests always use the trusted-proxy boundary below.
     if scope.get("type") != "http":
-        if os.environ.get(QA_COUNTRY_TRUST_ENV, "").strip().casefold() not in {"1", "true", "yes"}:
+        trust_setting = os.environ.get(QA_COUNTRY_TRUST_ENV, "").strip().casefold()
+        if trust_setting not in {"1", "true", "yes"}:
             return "ZZ"
         if not headers.get("cf-ray"):
             return "ZZ"
@@ -405,6 +406,32 @@ def _legacy_event(event: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _advanced_filter_kwargs(
+    *,
+    failure_type: str | None,
+    score_min: int | None,
+    score_max: int | None,
+    latency_min_ms: int | None,
+    latency_max_ms: int | None,
+    release: str | None,
+    index_revision: str | None,
+    provider: str | None,
+    model: str | None,
+) -> dict[str, Any]:
+    values = {
+        "failure_type": failure_type,
+        "score_min": score_min,
+        "score_max": score_max,
+        "latency_min_ms": latency_min_ms,
+        "latency_max_ms": latency_max_ms,
+        "release": release,
+        "index_revision": index_revision,
+        "provider": provider,
+        "model": model,
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
 def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIRouter:
     router = APIRouter(prefix=QA_INBOX_PREFIX, tags=["QAInbox"])
 
@@ -442,6 +469,17 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 code="QA_COUNTRY_INVALID",
                 message=str(exc),
             ) from exc
+        advanced_filters = _advanced_filter_kwargs(
+            failure_type=failure_type,
+            score_min=score_min,
+            score_max=score_max,
+            latency_min_ms=latency_min_ms,
+            latency_max_ms=latency_max_ms,
+            release=release,
+            index_revision=index_revision,
+            provider=provider,
+            model=model,
+        )
         try:
             data = repository_provider().list_events(
                 range_name=range_name,
@@ -452,17 +490,9 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 evaluation_status=evaluation_status,
                 country=normalized_country,
                 lifecycle=lifecycle,
-                failure_type=failure_type,
-                score_min=score_min,
-                score_max=score_max,
-                latency_min_ms=latency_min_ms,
-                latency_max_ms=latency_max_ms,
-                release=release,
-                index_revision=index_revision,
-                provider=provider,
-                model=model,
                 limit=max(1, min(limit, 500)),
                 cursor=cursor,
+                **advanced_filters,
             )
         except ValueError as exc:
             raise AdminAPIError(
@@ -508,7 +538,9 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
             ) from exc
 
     @router.get("/clusters", operation_id="listQaFailureClusters")
-    async def list_clusters(request: Request, lifecycle: str | None = None) -> dict[str, Any]:
+    async def list_clusters(
+        request: Request, lifecycle: str | None = None
+    ) -> dict[str, Any]:
         require_capability(request, QA_CAPABILITY_EVENTS)
         return {"data": {"items": repository_provider().list_clusters(lifecycle=lifecycle)}}
 
@@ -567,6 +599,17 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
     async def export_jsonl(request: Request, payload: QaExportRequest) -> Response:
         require_capability(request, QA_CAPABILITY_EXPORT_JSONL, mutation=True)
         repository = repository_provider()
+        advanced_filters = _advanced_filter_kwargs(
+            failure_type=payload.failure_type,
+            score_min=payload.score_min,
+            score_max=payload.score_max,
+            latency_min_ms=payload.latency_min_ms,
+            latency_max_ms=payload.latency_max_ms,
+            release=payload.release,
+            index_revision=payload.index_revision,
+            provider=payload.provider,
+            model=payload.model,
+        )
         try:
             filter_values = (
                 payload.from_ts,
@@ -576,15 +619,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 payload.evaluation_status,
                 payload.country,
                 payload.lifecycle,
-                payload.failure_type,
-                payload.score_min,
-                payload.score_max,
-                payload.latency_min_ms,
-                payload.latency_max_ms,
-                payload.release,
-                payload.index_revision,
-                payload.provider,
-                payload.model,
+                *advanced_filters.values(),
             )
             filter_fields_set = any(value not in (None, "") for value in filter_values) or (
                 payload.range_name != "24h"
@@ -597,7 +632,8 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                     )
                 if selection_fields_set or filter_fields_set:
                     raise ValueError(
-                        "new export does not accept selection/filter fields; use selected or current_filter"
+                        "new export does not accept selection/filter fields; "
+                        "use selected or current_filter"
                     )
                 result = repository.export_new_failures()
             elif payload.mode == "selected":
@@ -619,15 +655,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                     evaluation_status=payload.evaluation_status,
                     country=payload.country,
                     lifecycle=payload.lifecycle,
-                    failure_type=payload.failure_type,
-                    score_min=payload.score_min,
-                    score_max=payload.score_max,
-                    latency_min_ms=payload.latency_min_ms,
-                    latency_max_ms=payload.latency_max_ms,
-                    release=payload.release,
-                    index_revision=payload.index_revision,
-                    provider=payload.provider,
-                    model=payload.model,
+                    **advanced_filters,
                 )
         except ValueError as exc:
             raise AdminAPIError(
