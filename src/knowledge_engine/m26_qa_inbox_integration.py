@@ -33,13 +33,14 @@ from .qa_answer_quality_evaluator import (
     ProviderAnswerQualityEvaluator,
     UnavailableAnswerQualityEvaluator,
 )
+from .qa_answer_quality_repository_v2 import QualifiedQaRepositoryV2
 from .qa_answer_quality_sqlite import SqliteQaRepository
 from .storage import create_object_store
 
 QA_INBOX_PREFIX = "/v1/admin/qa/inbox"
 QA_MAX_CAPTURE_BYTES = 2_000_000
-# Deprecated compatibility name. Country trust now follows the public API's
-# qualified trusted-proxy CIDR boundary instead of an independent QA toggle.
+# Deprecated compatibility name. Production country trust follows the public
+# API's qualified trusted-proxy CIDR boundary instead of an independent QA toggle.
 QA_COUNTRY_TRUST_ENV = "M26_QA_TRUST_CLOUDFLARE_COUNTRY"
 
 
@@ -62,11 +63,20 @@ class QaExportRequest(BaseModel):
     evaluation_status: str | None = Field(default=None, max_length=32)
     country: str | None = Field(default=None, max_length=8)
     lifecycle: str | None = Field(default=None, max_length=32)
+    failure_type: str | None = Field(default=None, max_length=256)
+    score_min: int | None = Field(default=None, ge=0, le=100)
+    score_max: int | None = Field(default=None, ge=0, le=100)
+    latency_min_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+    latency_max_ms: int | None = Field(default=None, ge=0, le=86_400_000)
+    release: str | None = Field(default=None, max_length=256)
+    index_revision: str | None = Field(default=None, max_length=256)
+    provider: str | None = Field(default=None, max_length=256)
+    model: str | None = Field(default=None, max_length=256)
 
 
 @lru_cache(maxsize=1)
-def qa_repository_from_env() -> SqliteQaRepository:
-    return SqliteQaRepository(create_object_store(Settings.from_env()))
+def qa_repository_from_env() -> QualifiedQaRepositoryV2:
+    return QualifiedQaRepositoryV2(create_object_store(Settings.from_env()))
 
 
 @lru_cache(maxsize=1)
@@ -304,6 +314,15 @@ def _trusted_country(scope: Scope) -> str:
         key.decode("latin-1").casefold(): value.decode("latin-1")
         for key, value in scope.get("headers", [])
     }
+    # Preserve the old direct-function test seam only for non-ASGI scopes. Real
+    # HTTP requests always use the trusted-proxy boundary below.
+    if scope.get("type") != "http":
+        if os.environ.get(QA_COUNTRY_TRUST_ENV, "").strip().casefold() not in {"1", "true", "yes"}:
+            return "ZZ"
+        if not headers.get("cf-ray"):
+            return "ZZ"
+        return _normalize_country(headers.get("cf-ipcountry"))
+
     client = scope.get("client")
     remote = str(client[0]) if isinstance(client, (list, tuple)) and client else ""
     from .m26_public_api import _trusted_proxy
@@ -400,6 +419,15 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         evaluation_status: str | None = None,
         country: str | None = None,
         lifecycle: str | None = None,
+        failure_type: str | None = None,
+        score_min: int | None = None,
+        score_max: int | None = None,
+        latency_min_ms: int | None = None,
+        latency_max_ms: int | None = None,
+        release: str | None = None,
+        index_revision: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> dict[str, Any]:
@@ -424,13 +452,22 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                 evaluation_status=evaluation_status,
                 country=normalized_country,
                 lifecycle=lifecycle,
+                failure_type=failure_type,
+                score_min=score_min,
+                score_max=score_max,
+                latency_min_ms=latency_min_ms,
+                latency_max_ms=latency_max_ms,
+                release=release,
+                index_revision=index_revision,
+                provider=provider,
+                model=model,
                 limit=max(1, min(limit, 500)),
                 cursor=cursor,
             )
         except ValueError as exc:
             raise AdminAPIError(
                 status_code=422,
-                code="QA_RANGE_INVALID",
+                code="QA_FILTER_INVALID",
                 message=str(exc),
             ) from exc
         return {"data": data}
@@ -531,17 +568,27 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         require_capability(request, QA_CAPABILITY_EXPORT_JSONL, mutation=True)
         repository = repository_provider()
         try:
-            filter_fields_set = any(
-                (
-                    payload.from_ts,
-                    payload.to_ts,
-                    payload.search,
-                    payload.result,
-                    payload.evaluation_status,
-                    payload.country,
-                    payload.lifecycle,
-                )
-            ) or payload.range_name != "24h"
+            filter_values = (
+                payload.from_ts,
+                payload.to_ts,
+                payload.search,
+                payload.result,
+                payload.evaluation_status,
+                payload.country,
+                payload.lifecycle,
+                payload.failure_type,
+                payload.score_min,
+                payload.score_max,
+                payload.latency_min_ms,
+                payload.latency_max_ms,
+                payload.release,
+                payload.index_revision,
+                payload.provider,
+                payload.model,
+            )
+            filter_fields_set = any(value not in (None, "") for value in filter_values) or (
+                payload.range_name != "24h"
+            )
             selection_fields_set = bool(payload.event_ids or payload.cluster_ids)
             if payload.mode == "new":
                 if payload.include_previously_exported:
@@ -572,6 +619,15 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
                     evaluation_status=payload.evaluation_status,
                     country=payload.country,
                     lifecycle=payload.lifecycle,
+                    failure_type=payload.failure_type,
+                    score_min=payload.score_min,
+                    score_max=payload.score_max,
+                    latency_min_ms=payload.latency_min_ms,
+                    latency_max_ms=payload.latency_max_ms,
+                    release=payload.release,
+                    index_revision=payload.index_revision,
+                    provider=payload.provider,
+                    model=payload.model,
                 )
         except ValueError as exc:
             raise AdminAPIError(
