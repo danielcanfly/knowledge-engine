@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -46,13 +46,182 @@ COMPACT_PROVIDER_TRUNCATED = "COMPACT_PROVIDER_TRUNCATED"
 COMPACT_PROVIDER_PARSE_FAILED = "COMPACT_PROVIDER_PARSE_FAILED"
 SEMANTIC_REVIEW_PARSE_FAILED = "SEMANTIC_REVIEW_PARSE_FAILED"
 SEMANTIC_REVIEW_SCHEMA_VERSION = legacy.SEMANTIC_REVIEW_SCHEMA_VERSION
+RUNTIME_BOUND_REVIEW_SCHEMA_VERSION = "m26-aqv2-runtime-bound-review/v1"
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
+FACET_LOCAL_CLAIM_SCHEMA_VERSION = "m26-aqv2-facet-local-claims/v1"
 SEMANTIC_SEGMENT_ROLES = {"material_claim", "model_explanation"}
 PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
     "provider_verified_runtime_bound_partial_semantic_closure"
 )
 FACET_CLOSURE_SCHEMA_VERSION = "m26-aqv2-r2-facet-closure/v1"
+MATERIAL_FACET_LEDGER_SCHEMA_VERSION = "m26-aqv2-wave-b-facet-ledger/v1"
+PROVIDER_FALSE_ABSTENTION = "M26_WB_001_PROVIDER_FALSE_ABSTENTION"
+PROVIDER_UNRESOLVED_SUPPORTED_FACET = (
+    "M26_WB_002_PROVIDER_UNRESOLVED_SUPPORTED_FACET"
+)
+CLAIM_DRAFT_UNKNOWN_FACET = "M26_WB_003_CLAIM_DRAFT_UNKNOWN_FACET"
+CLAIM_DRAFT_UNSUPPORTED_FACET = "M26_WB_004_CLAIM_DRAFT_UNSUPPORTED_FACET"
+CLAIM_DRAFT_UNKNOWN_LABEL = "M26_WB_005_CLAIM_DRAFT_UNKNOWN_LABEL"
+CLAIM_DRAFT_LABEL_FACET_MISMATCH = "M26_WB_006_CLAIM_DRAFT_LABEL_FACET_MISMATCH"
+CLAIM_DRAFT_SUPPORTED_FACET_MISSING = (
+    "M26_WB_007_CLAIM_DRAFT_SUPPORTED_FACET_MISSING"
+)
+CLAIM_DRAFT_RUNTIME_METADATA = "M26_WB_008_CLAIM_DRAFT_RUNTIME_METADATA"
+PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE = (
+    "M26_WB_009_PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE"
+)
+FACET_LOCAL_SLOT_MISSING = "M26_WB_010_FACET_LOCAL_SUPPORTED_SLOT_MISSING"
+FACET_LOCAL_SLOT_UNKNOWN = "M26_WB_011_FACET_LOCAL_UNKNOWN_SLOT"
+FACET_LOCAL_SLOT_DUPLICATE = "M26_WB_012_FACET_LOCAL_DUPLICATE_SLOT"
+FACET_LOCAL_SLOT_MALFORMED = "M26_WB_013_FACET_LOCAL_MALFORMED_SLOT"
+NO_MATERIAL_REQUIREMENT_ID = "runtime_evidence_backed_answer"
+REPAIR_KIND_NONE = "NONE"
+REPAIR_KIND_SYNTHESIS_CONTRACT = "SYNTHESIS_CONTRACT"
+REPAIR_KIND_SEMANTIC_VERDICT = "SEMANTIC_VERDICT"
+REPAIR_KIND_REVIEW_CONTRACT = "REVIEW_CONTRACT"
+CLAIM_DRAFT_ALLOWED_KEYS = {
+    "segment_id",
+    "semantic_role",
+    "claim_id",
+    "claim_type",
+    "text",
+    "evidence_labels",
+    "covers",
+    "unanswered_dimensions",
+}
+
+POST_PARSE_EXCEPTION_LEAVES = {
+    "M26_PPVE_001_STRUCTURED_CLAIMS_MISSING": "provider candidate has no structured claims",
+    "M26_PPVE_002_CLAIM_ID_MISSING": "provider claim has no claim_id",
+    "M26_PPVE_003_CLAIM_SURFACE_MISSING": "provider claim has no visible surface text",
+    "M26_PPVE_004_CLAIM_TYPE_INVALID": "provider claim type violates the compact contract",
+    "M26_PPVE_005_EVIDENCE_LABELS_INVALID": "claim-local evidence labels are not a list",
+    "M26_PPVE_006_EVIDENCE_LABELS_MISSING": "material claim has no claim-local evidence label",
+    "M26_PPVE_007_UNKNOWN_EVIDENCE_LABEL": "claim cites a label outside the supplied compact evidence map",
+    "M26_PPVE_008_EVIDENCE_BINDING_EMPTY": "runtime cannot bind provider prose to an exact evidence quote",
+    "M26_PPVE_010_UNKNOWN_FACET_ID": "claim covers a facet outside the derived requirement set",
+    "M26_PPVE_011_MODEL_EXPLANATION_COVERS_FACET": "model explanation claims material facet coverage",
+    "M26_PPVE_024_UNEXPECTED_KEY_LOOKUP": "post-parse runtime attempted an unavailable mapping key",
+}
+
+REPAIR_DIRECTIVES_BY_FAILURE = {
+    PROVIDER_FALSE_ABSTENTION: (
+        "Runtime evidence supports material facets. Draft supported material claims "
+        "using only the supplied facet IDs and allowed evidence labels."
+    ),
+    PROVIDER_UNRESOLVED_SUPPORTED_FACET: (
+        "Do not declare a runtime-supported facet unresolved. Draft a claim for it "
+        "with one of that facet's allowed evidence labels."
+    ),
+    CLAIM_DRAFT_UNKNOWN_FACET: "Remove facet IDs that are absent from required_facets.",
+    CLAIM_DRAFT_UNSUPPORTED_FACET: (
+        "Do not publish UNSUPPORTED or UNKNOWN facets as material claims."
+    ),
+    CLAIM_DRAFT_UNKNOWN_LABEL: "Use only evidence labels present in supplied evidence.",
+    CLAIM_DRAFT_LABEL_FACET_MISMATCH: (
+        "For each covered facet, use only evidence labels allowed by that facet ledger entry."
+    ),
+    CLAIM_DRAFT_SUPPORTED_FACET_MISSING: (
+        "Add material claims covering every SUPPORTED facet, using only its allowed labels."
+    ),
+    CLAIM_DRAFT_RUNTIME_METADATA: (
+        "Remove source, citation, release, hash, locator, and all other runtime-owned fields."
+    ),
+    PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE: (
+        "The runtime evidence budget cannot represent every supported facet; fail closed."
+    ),
+    FACET_LOCAL_SLOT_MISSING: (
+        "Return exactly one prose claim for every runtime-provided supported claim slot."
+    ),
+    FACET_LOCAL_SLOT_UNKNOWN: "Use only the runtime-provided claim slot IDs.",
+    FACET_LOCAL_SLOT_DUPLICATE: "Return each runtime-provided claim slot exactly once.",
+    FACET_LOCAL_SLOT_MALFORMED: (
+        "Return slot_id, text, and claim_type only; runtime owns facet and evidence identity."
+    ),
+    "M26_PPVE_011_MODEL_EXPLANATION_COVERS_FACET": (
+        "A MODEL_EXPLANATION segment claimed material facet coverage. On repair, set "
+        "covers=[] for every MODEL_EXPLANATION. If the statement is actually needed to "
+        "satisfy a material facet, express it as a material_claim and bind exact "
+        "supporting evidence labels."
+    ),
+}
+
+_POST_PARSE_VALUE_ERROR_MARKERS = (
+    ("structured claims required", "M26_PPVE_001_STRUCTURED_CLAIMS_MISSING"),
+    ("missing claim_id", "M26_PPVE_002_CLAIM_ID_MISSING"),
+    ("missing surface_text", "M26_PPVE_003_CLAIM_SURFACE_MISSING"),
+    ("invalid claim_type", "M26_PPVE_004_CLAIM_TYPE_INVALID"),
+    ("invalid claim-local evidence labels", "M26_PPVE_005_EVIDENCE_LABELS_INVALID"),
+    ("missing claim-local evidence labels", "M26_PPVE_006_EVIDENCE_LABELS_MISSING"),
+    ("unknown evidence labels", "M26_PPVE_007_UNKNOWN_EVIDENCE_LABEL"),
+    ("could not bind provider prose", "M26_PPVE_008_EVIDENCE_BINDING_EMPTY"),
+    ("covers unknown facet IDs", "M26_PPVE_010_UNKNOWN_FACET_ID"),
+    (
+        "model explanation cannot cover material facets",
+        "M26_PPVE_011_MODEL_EXPLANATION_COVERS_FACET",
+    ),
+)
+
+
+def _post_parse_exception_leaf(exc: Exception, *, stage: str) -> str:
+    if isinstance(exc, KeyError):
+        return "M26_PPVE_024_UNEXPECTED_KEY_LOOKUP"
+    message = str(exc)
+    for marker, leaf in _POST_PARSE_VALUE_ERROR_MARKERS:
+        if marker in message:
+            return leaf
+    bounded_stage = re.sub(r"[^A-Z0-9]+", "_", stage.upper()).strip("_")
+    if bounded_stage not in {
+        "SEGMENT_PROJECTION",
+        "CANDIDATE_BINDING",
+        "BOUNDED_PUBLICATION",
+        "MATERIAL_COVERAGE",
+        "SEMANTIC_REVIEW",
+        "VERIFIED_ANSWER",
+        "FACET_LOCAL_BINDING",
+        "NATIVE_SEMANTIC_REVIEW_BINDING",
+        "NO_MATERIAL_SLOT_BINDING",
+    }:
+        bounded_stage = "UNKNOWN_STAGE"
+    return f"M26_PPVE_099_UNCLASSIFIED_VALUE_ERROR_{bounded_stage}"
+
+
+def _bounded_repair_directives(
+    previous_failures: Sequence[str],
+    *,
+    claim_slot_by_claim_id: Mapping[str, str] | None = None,
+    only_slot_id: str | None = None,
+) -> list[str]:
+    directives: list[str] = []
+    slot_by_claim = claim_slot_by_claim_id or {}
+    for code in (str(item) for item in previous_failures[-8:]):
+        if code in REPAIR_DIRECTIVES_BY_FAILURE:
+            directives.append(REPAIR_DIRECTIVES_BY_FAILURE[code])
+            continue
+        matched = re.fullmatch(
+            r"SEMANTIC_REVIEW_BLOCKED:([^:]+):(INSUFFICIENT|CONTRADICTED)",
+            code,
+        )
+        if matched is None:
+            continue
+        claim_id, verdict = matched.groups()
+        slot_id = slot_by_claim.get(claim_id, claim_id.removesuffix("_claim"))
+        if only_slot_id is not None and slot_id != only_slot_id:
+            continue
+        if verdict == "INSUFFICIENT":
+            instruction = (
+                "narrow to one atomic proposition directly entailed by local evidence; "
+                "remove unsupported causality, quantity, time, identity, modality, "
+                "scope, comparison, and qualifiers"
+            )
+        else:
+            instruction = (
+                "correct polarity, direction, identity, quantity, time, and boundary "
+                "to match local evidence; remove the contradicted proposition"
+            )
+        directives.append(f"For runtime slot {slot_id}, {instruction}.")
+    return list(dict.fromkeys(directives))
 
 
 @dataclass(frozen=True)
@@ -62,6 +231,26 @@ class SemanticRequirement:
     evidence_terms: tuple[str, ...]
     visible_patterns: tuple[str, ...]
     exact_phrase: str = ""
+
+
+class ClaimDraftContractError(ValueError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class NativeSemanticReviewContractError(ValueError):
+    def __init__(
+        self,
+        code: str,
+        *,
+        raw: Mapping[str, Any],
+        review_slots: Sequence[Mapping[str, Any]],
+    ) -> None:
+        super().__init__(code)
+        self.code = code
+        self.raw = dict(raw)
+        self.review_slots = [dict(slot) for slot in review_slots]
 
 
 def _run_semantic_closure_internal(
@@ -169,6 +358,11 @@ def _run_semantic_closure_internal(
 
     bundle = answer_bundle or load_production_answer_bundle()
     _assert_full_production_graph(bundle)
+    requirements = _material_requirements_for_query(
+        normalized_question,
+        intent_class,
+        _semantic_requirements(normalized_question, intent_class),
+    )
     lexical, dense = legacy._run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
@@ -185,7 +379,6 @@ def _run_semantic_closure_internal(
         question=normalized_question,
         intent_class=intent_class,
     )
-    requirements = _semantic_requirements(normalized_question, intent_class)
     evidence, endpoint_proof = _strengthen_evidence(
         bundle=bundle,
         evidence=evidence,
@@ -439,6 +632,1037 @@ def _mirror_verified_support_proof(
     return closure
 
 
+ANSWER_SEEKING_INTENTS = {
+    "direct_grounded_knowledge",
+    "cross_document_comparison",
+    "complementary_synthesis",
+    "graph_relationship",
+    "temporal_conflict",
+    "provenance_source_trace",
+}
+
+
+def _material_requirements_for_query(
+    question: str,
+    intent_class: str,
+    requirements: Sequence[SemanticRequirement],
+) -> list[SemanticRequirement]:
+    """Give answer-seeking queries one typed core facet when derivation is empty."""
+    retained = list(requirements)
+    if retained or intent_class not in ANSWER_SEEKING_INTENTS:
+        return retained
+    terms = tuple(sorted(legacy._meaningful_terms(question)))
+    if not terms:
+        return retained
+    return [
+        SemanticRequirement(
+            requirement_id="core_answer",
+            instruction="Provide the source-backed answer to the question.",
+            evidence_terms=terms,
+            visible_patterns=(),
+        )
+    ]
+
+
+def _facet_local_provider_slots(
+    *,
+    requirements: Sequence[SemanticRequirement],
+    facet_ledger: Mapping[str, Any],
+    label_map: Mapping[str, Mapping[str, Any]],
+    snippet_map: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    facets = {
+        str(item.get("facet_id", "")): item
+        for item in facet_ledger.get("facets", [])
+        if isinstance(item, Mapping)
+    }
+    slots: list[dict[str, Any]] = []
+    for requirement in requirements:
+        facet = facets.get(requirement.requirement_id, {})
+        if facet.get("support_state") != "SUPPORTED":
+            continue
+        allowed_labels = [
+            str(item)
+            for item in facet.get("allowed_evidence_labels", [])
+            if str(item)
+        ]
+        allowed_ids = [
+            str(item)
+            for item in facet.get("allowed_evidence_ids", [])
+            if str(item)
+        ]
+        if not allowed_labels or not allowed_ids:
+            raise ClaimDraftContractError(
+                FACET_LOCAL_SLOT_MISSING,
+                "supported facet has no runtime-owned local evidence slot",
+            )
+        local_evidence = []
+        for label, evidence_id in zip(allowed_labels, allowed_ids, strict=False):
+            item = label_map.get(label)
+            if item is None:
+                raise ClaimDraftContractError(
+                    FACET_LOCAL_SLOT_MALFORMED,
+                    "facet-local slot references an unavailable runtime evidence item",
+                )
+            local_evidence.append(
+                {
+                    "context_index": len(local_evidence) + 1,
+                    "evidence_type": str(item.get("evidence_type", "passage")),
+                    "title": str(item.get("title", ""))[:120],
+                    "section": str(item.get("section_title", ""))[:120],
+                    "text": snippet_map.get(evidence_id)
+                    or _provider_snippet(item, "", requirements),
+                }
+            )
+        slots.append(
+            {
+                "slot_id": f"slot_{len(slots) + 1}",
+                "facet_id": requirement.requirement_id,
+                "instruction": requirement.instruction,
+                "requirement": requirement,
+                "allowed_evidence_ids": allowed_ids,
+                "allowed_evidence_labels": allowed_labels,
+                "evidence": local_evidence,
+            }
+        )
+    return slots
+
+
+def _facet_local_provider_payload(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[SemanticRequirement],
+    support_classification: Sequence[Mapping[str, Any]],
+    repair: bool,
+    previous_failures: Sequence[str],
+) -> tuple[
+    dict[str, Any],
+    dict[str, Any],
+    dict[str, Mapping[str, Any]],
+    dict[str, str],
+    list[dict[str, Any]],
+]:
+    support_by_id = {
+        str(item.get("facet_id", "")): dict(item)
+        for item in support_classification
+    }
+    supported_requirements = [
+        item
+        for item in requirements
+        if support_by_id.get(item.requirement_id, {}).get("support_state")
+        == "SUPPORTED"
+    ]
+    ranked = _facet_preserving_provider_evidence_pack(
+        evidence=evidence,
+        supported_requirements=supported_requirements,
+        support_classification=support_classification,
+        question=question,
+    )
+    label_map = {f"e{index}": item for index, item in enumerate(ranked, start=1)}
+    snippet_map = {
+        str(item.get("evidence_id", "")): _provider_snippet(
+            item, question, requirements
+        )
+        for item in ranked
+    }
+    facet_ledger = _material_facet_ledger(
+        requirements=requirements,
+        support_classification=support_classification,
+        label_map=label_map,
+    )
+    _assert_supported_facets_representable(
+        support_classification=support_classification,
+        facet_ledger=facet_ledger,
+    )
+    slots = _facet_local_provider_slots(
+        requirements=requirements,
+        facet_ledger=facet_ledger,
+        label_map=label_map,
+        snippet_map=snippet_map,
+    )
+    claim_slot_by_claim_id = {
+        f"{slot['slot_id']}_claim": str(slot["slot_id"])
+        for slot in slots
+    }
+    unresolved_ids = [
+        str(item.get("facet_id", ""))
+        for item in support_classification
+        if item.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
+    ]
+    task = {
+        "question": question,
+        "intent": intent_class,
+        "claim_slots": [
+            {
+                "slot_id": slot["slot_id"],
+                "facet_id": slot["facet_id"],
+                "instruction": slot["instruction"],
+                "evidence": slot["evidence"],
+                "repair_directives": (
+                    _bounded_repair_directives(
+                        previous_failures,
+                        claim_slot_by_claim_id=claim_slot_by_claim_id,
+                        only_slot_id=str(slot["slot_id"]),
+                    )
+                    if repair
+                    else []
+                ),
+            }
+            for slot in slots
+        ],
+        "required_slot_ids": [str(slot["slot_id"]) for slot in slots],
+        "runtime_unresolved_facet_ids": unresolved_ids,
+        "required_facets": [
+            {
+                "facet_id": slot["facet_id"],
+                "instruction": slot["instruction"],
+                "support_state": "SUPPORTED",
+                "supporting_evidence_labels": list(
+                    slot["allowed_evidence_labels"]
+                ),
+            }
+            for slot in slots
+        ],
+        "unresolved_facet_ids": unresolved_ids,
+        "evidence": [
+            {
+                "id": label,
+                "type": str(item.get("evidence_type", "passage")),
+                "source": str(
+                    item.get("source_identity") or item.get("source_id") or ""
+                ),
+                "title": str(item.get("title", ""))[:120],
+                "section": str(item.get("section_title", ""))[:120],
+                "concept": str(item.get("concept_id", ""))[:120],
+                "relation": str(item.get("relation_type", "")),
+                "from": str(item.get("edge_source", ""))[:120],
+                "to": str(item.get("edge_target", ""))[:120],
+                "text": snippet_map.get(str(item.get("evidence_id", "")), ""),
+            }
+            for label, item in label_map.items()
+        ],
+        "repair": list(previous_failures)[-8:] if repair else [],
+        "repair_directives": (
+            _bounded_repair_directives(
+                previous_failures,
+                claim_slot_by_claim_id=claim_slot_by_claim_id,
+            )
+            if repair
+            else []
+        ),
+        "repair_output_contract": (
+            {
+                "required_slot_ids": [str(slot["slot_id"]) for slot in slots],
+                "allowed_claim_keys": ["slot_id", "text", "claim_type"],
+                "forbidden_legacy_keys": [
+                    "status",
+                    "segments",
+                    "covers",
+                    "evidence_labels",
+                ],
+            }
+            if repair
+            else None
+        ),
+        "facet_local_output": {
+            "schema_version": FACET_LOCAL_CLAIM_SCHEMA_VERSION,
+            "claims": [
+                {
+                    "slot_id": str(slot["slot_id"]),
+                    "text": "Provider-authored prose for this slot.",
+                    "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS",
+                }
+                for slot in slots
+            ],
+            "model_explanations": [],
+        },
+        "output": {
+            "schema_version": COMPACT_CLOSURE_SCHEMA_VERSION,
+            "segments": [
+                {
+                    "semantic_role": "material_claim",
+                    "claim_type": "EVIDENCE_FACT|EVIDENCE_SYNTHESIS",
+                    "text": "Deprecated prose-only compatibility shape.",
+                    "evidence_labels": ["e1"],
+                    "covers": [],
+                }
+            ],
+        },
+    }
+    system = (
+        "Answer only from the supplied claim-slot evidence. Return exactly one JSON "
+        "object with keys schema_version, claims, and model_explanations. Return one "
+        "claim for every supplied claim slot, using its exact slot_id. Each claim may "
+        "contain only slot_id, text, and claim_type; do not return evidence IDs, labels, "
+        "facet IDs, covers, citations, sources, status, or unanswered dimensions. The "
+        "runtime owns all facet and evidence identity and will bind your prose to the "
+        "slot's local evidence. claim_type must be EVIDENCE_FACT or EVIDENCE_SYNTHESIS. "
+        "model_explanations is an optional array of short generic prose strings and may "
+        "not satisfy a material claim slot. Do not decide whether any runtime-supported "
+        "slot is unresolved. Use model_explanation only for genuinely generic connective "
+        "prose whose truth does not depend on supplied KB evidence; use claim_type "
+        "MODEL_EXPLANATION and evidence_labels [] only in the deprecated compatibility "
+        "shape. For numbered or versioned entities, supplied graph relations, and what "
+        "supplied evidence entails or does not entail, treat supported negation, "
+        "limitation, boundary, comparison, or non-inference as material. If uncertain "
+        "between material_claim and model_explanation, choose material_claim and bind "
+        "evidence."
+    )
+    max_tokens = _compact_provider_output_tokens(
+        question=question,
+        intent_class=intent_class,
+        packed_evidence=ranked,
+        requirements=requirements,
+        repair=repair,
+        previous_failures=previous_failures,
+    )
+    return (
+        {
+            "model": "MiniMax-M3",
+            "max_tokens": max_tokens,
+            "temperature": 0,
+            "stream": False,
+            "system": system,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": json.dumps(task, ensure_ascii=False, separators=(",", ":")),
+                }
+            ],
+        },
+        facet_ledger,
+        label_map,
+        snippet_map,
+        slots,
+    )
+
+
+def _parse_facet_local_provider_result(
+    text: str,
+    *,
+    slots: Sequence[Mapping[str, Any]],
+    allowed_legacy_missing_facet_ids: Collection[str] = (),
+    allow_legacy_compatibility: bool = True,
+) -> dict[str, Any]:
+    stripped = str(text).strip()
+    if not stripped:
+        raise ClaimDraftContractError(FACET_LOCAL_SLOT_MALFORMED, "facet-local output is empty")
+    stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.I)
+    stripped = re.sub(r"\s*```$", "", stripped)
+    try:
+        value, end = json.JSONDecoder().raw_decode(stripped)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED, "facet-local output is not valid JSON"
+        ) from exc
+    if stripped[end:].strip() or not isinstance(value, Mapping):
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED, "facet-local output must be one JSON object"
+        )
+    if value.get("schema_version") != FACET_LOCAL_CLAIM_SCHEMA_VERSION:
+        if not allow_legacy_compatibility:
+            raise ClaimDraftContractError(
+                FACET_LOCAL_SLOT_MALFORMED,
+                "facet-local repair output must use the native slot schema",
+            )
+        return _adapt_legacy_provider_prose(
+            value,
+            slots=slots,
+            allowed_missing_facet_ids=allowed_legacy_missing_facet_ids,
+        )
+    if set(value) - {"schema_version", "claims", "model_explanations"}:
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED,
+            "facet-local output contains provider-owned runtime metadata",
+        )
+    known_slots = {str(slot.get("slot_id", "")) for slot in slots}
+    raw_claims = value.get("claims")
+    if not isinstance(raw_claims, list):
+        raise ClaimDraftContractError(FACET_LOCAL_SLOT_MALFORMED, "facet-local claims must be a list")
+    seen: set[str] = set()
+    claims: list[dict[str, str]] = []
+    for raw_claim in raw_claims:
+        if not isinstance(raw_claim, Mapping) or set(raw_claim) - {"slot_id", "text", "claim_type"}:
+            raise ClaimDraftContractError(FACET_LOCAL_SLOT_MALFORMED, "facet-local claim shape is invalid")
+        slot_id = str(raw_claim.get("slot_id", "")).strip()
+        if slot_id not in known_slots:
+            raise ClaimDraftContractError(FACET_LOCAL_SLOT_UNKNOWN, "facet-local claim slot is unknown")
+        if slot_id in seen:
+            raise ClaimDraftContractError(FACET_LOCAL_SLOT_DUPLICATE, "facet-local claim slot is duplicated")
+        text_value = str(raw_claim.get("text", "")).strip()
+        claim_type = str(raw_claim.get("claim_type", "")).strip()
+        if not text_value or len(text_value) > MAX_PROVIDER_ANSWER_CHARS or claim_type not in {"EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"}:
+            raise ClaimDraftContractError(FACET_LOCAL_SLOT_MALFORMED, "facet-local claim text or type is invalid")
+        seen.add(slot_id)
+        claims.append({"slot_id": slot_id, "text": text_value, "claim_type": claim_type})
+    missing = known_slots - seen
+    if missing:
+        raise ClaimDraftContractError(FACET_LOCAL_SLOT_MISSING, "facet-local output omitted a supported claim slot")
+    raw_explanations = value.get("model_explanations", [])
+    if raw_explanations is None:
+        raw_explanations = []
+    if not isinstance(raw_explanations, list) or any(
+        not isinstance(item, str) or not item.strip() for item in raw_explanations
+    ):
+        raise ClaimDraftContractError(FACET_LOCAL_SLOT_MALFORMED, "model explanations must be non-empty strings")
+    return {
+        "claims": claims,
+        "model_explanations": [str(item).strip() for item in raw_explanations],
+        "native_facet_local_shape": True,
+    }
+
+
+def _adapt_legacy_provider_prose(
+    value: Mapping[str, Any],
+    *,
+    slots: Sequence[Mapping[str, Any]],
+    allowed_missing_facet_ids: Collection[str] = (),
+) -> dict[str, Any]:
+    """Extract prose from the pre-B4 shape without trusting its bookkeeping."""
+    if str(value.get("status", "")) == "abstain":
+        raise ClaimDraftContractError(
+            PROVIDER_FALSE_ABSTENTION,
+            "legacy provider abstained although runtime claim slots are supported",
+        )
+    raw_items = value.get("segments", value.get("claims", []))
+    if not isinstance(raw_items, list):
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED, "legacy provider prose is not a list"
+        )
+    material: list[dict[str, Any]] = []
+    explanations: list[str] = []
+    for raw_item in raw_items:
+        if not isinstance(raw_item, Mapping):
+            raise ClaimDraftContractError(
+                FACET_LOCAL_SLOT_MALFORMED, "legacy provider prose item is invalid"
+            )
+        text_value = str(
+            raw_item.get("text") or raw_item.get("surface_text") or ""
+        ).strip()
+        claim_type = str(raw_item.get("claim_type", "")).strip()
+        role = str(raw_item.get("semantic_role", "")).strip()
+        covers = [
+            str(item)
+            for item in raw_item.get("covers", [])
+            if str(item)
+        ] if isinstance(raw_item.get("covers", []), list) else []
+        if claim_type == "MODEL_EXPLANATION" or role == "model_explanation":
+            if covers:
+                raise ClaimDraftContractError(
+                    "M26_PPVE_011_MODEL_EXPLANATION_COVERS_FACET",
+                    "model explanation cannot satisfy a runtime material slot",
+                )
+            if text_value:
+                explanations.append(text_value)
+            continue
+        if text_value and claim_type in {"EVIDENCE_FACT", "EVIDENCE_SYNTHESIS"}:
+            material.append(
+                {
+                    "text": text_value,
+                    "claim_type": claim_type,
+                    "legacy_material_marker": bool(covers),
+                    "legacy_claim_id": str(raw_item.get("claim_id", "")).strip(),
+                }
+            )
+    drafts: list[dict[str, str]] = []
+    def runtime_match_score(
+        item: Mapping[str, Any], requirement: SemanticRequirement
+    ) -> int:
+        text_value = str(item["text"])
+        if _claim_text_covers_requirement(text_value, requirement):
+            return 1000
+        folded = text_value.casefold()
+        score = sum(
+            bool(str(term).strip()) and str(term).casefold() in folded
+            for term in requirement.evidence_terms
+        )
+        if score and any(
+            marker in folded
+            for marker in ("unresolved", "remains", "does not", "cannot", "can't")
+        ):
+            score += 1
+        return score
+
+    def runtime_match_is_sufficient(
+        item: Mapping[str, Any], requirement: SemanticRequirement
+    ) -> bool:
+        score = runtime_match_score(item, requirement)
+        return score >= (2 if requirement.visible_patterns else 1)
+
+    runtime_has_any_match = any(
+        runtime_match_is_sufficient(item, requirement)
+        for item in material
+        for slot in slots
+        if isinstance((requirement := slot.get("requirement")), SemanticRequirement)
+    )
+    for slot in slots:
+        facet_id = str(slot.get("facet_id", ""))
+        matching = None
+        requirement = slot.get("requirement")
+        if isinstance(requirement, SemanticRequirement):
+            scored = [
+                (runtime_match_score(item, requirement), index, item)
+                for index, item in enumerate(material)
+            ]
+            matching = max(scored, default=(0, 0, None), key=lambda row: (row[0], -row[1]))[2]
+            if matching is not None and not runtime_match_is_sufficient(
+                matching, requirement
+            ):
+                matching = None
+        if (
+            matching is None
+            and not runtime_has_any_match
+            and len(material) == 1
+            and material[0]["legacy_material_marker"]
+        ):
+            matching = material[0]
+        if matching is None:
+            if facet_id in set(allowed_missing_facet_ids):
+                continue
+            raise ClaimDraftContractError(
+                FACET_LOCAL_SLOT_MISSING,
+                "legacy provider prose omitted a runtime-supported claim slot",
+            )
+        drafts.append(
+            {
+                "slot_id": str(slot.get("slot_id", "")),
+                "text": str(matching["text"]),
+                "claim_type": str(matching["claim_type"]),
+                "legacy_claim_id": str(matching["legacy_claim_id"]),
+            }
+        )
+    return {
+        "claims": drafts,
+        "model_explanations": explanations,
+        "native_facet_local_shape": False,
+    }
+
+
+def _runtime_bound_facet_local_candidate(
+    *,
+    drafts: Mapping[str, Any],
+    slots: Sequence[Mapping[str, Any]],
+    label_map: Mapping[str, Mapping[str, Any]],
+    snippet_map: Mapping[str, str],
+    question: str,
+    intent_class: str,
+    unresolved_required_ids: Sequence[str],
+) -> dict[str, Any]:
+    slot_by_id = {str(slot["slot_id"]): slot for slot in slots}
+    claims: list[dict[str, Any]] = []
+    selected_ids: list[str] = []
+    used_claim_ids: set[str] = set()
+    claim_by_legacy_id: dict[str, dict[str, Any]] = {}
+    for draft in drafts.get("claims", []):
+        slot = slot_by_id[str(draft["slot_id"])]
+        refs: list[dict[str, Any]] = []
+        allowed_pairs = list(zip(
+            slot["allowed_evidence_labels"], slot["allowed_evidence_ids"], strict=False
+        ))
+        if intent_class == "graph_relationship" and any(
+            str(label_map[label].get("evidence_type", "")) == "graph_edge"
+            for label, _evidence_id in allowed_pairs
+        ):
+            allowed_pairs = [
+                (label, evidence_id)
+                for label, evidence_id in allowed_pairs
+                if str(label_map[label].get("evidence_type", "")) == "graph_edge"
+            ]
+        for label, evidence_id in allowed_pairs:
+            item = label_map[label]
+            quote = snippet_map.get(evidence_id) or legacy._first_exact_evidence_quote(
+                str(item.get("passage_text", "")), max_chars=360
+            )
+            refs.append(
+                {
+                    "evidence_id": evidence_id,
+                    "locator_id": str(item.get("locator_id", "")),
+                    "exact_quote": quote,
+                    "uncertainty": "low",
+                }
+            )
+            if evidence_id not in selected_ids:
+                selected_ids.append(evidence_id)
+        legacy_claim_id = str(draft.get("legacy_claim_id", "")).strip()
+        if legacy_claim_id and legacy_claim_id in claim_by_legacy_id:
+            existing = claim_by_legacy_id[legacy_claim_id]
+            facet_id = str(slot["facet_id"])
+            if facet_id not in existing["facet_ids"]:
+                existing["facet_ids"].append(facet_id)
+                existing["covers"].append(facet_id)
+            existing_labels = set(existing["evidence_labels"])
+            existing_refs = {
+                (str(item["evidence_id"]), str(item["locator_id"]))
+                for item in existing["support_refs"]
+            }
+            for label, _evidence_id in allowed_pairs:
+                if label not in existing_labels:
+                    existing["evidence_labels"].append(label)
+            for ref in refs:
+                key = (str(ref["evidence_id"]), str(ref["locator_id"]))
+                if key not in existing_refs:
+                    existing["support_refs"].append(ref)
+                    existing_refs.add(key)
+            continue
+        claim_id = legacy_claim_id or f"{slot['slot_id']}_claim"
+        if claim_id in used_claim_ids:
+            claim_id = f"{slot['slot_id']}_claim"
+        used_claim_ids.add(claim_id)
+        claim = {
+                "claim_id": claim_id,
+                "claim_type": str(draft["claim_type"]),
+                "claim_role": _infer_claim_role(intent_class=intent_class, claim_type=str(draft["claim_type"])),
+                "surface_text": str(draft["text"]),
+                "facet_ids": [str(slot["facet_id"])],
+                "support_mode": "exact_quote",
+                "evidence_labels": list(slot["allowed_evidence_labels"]),
+                "covers": [str(slot["facet_id"])],
+                "unanswered_dimensions": [],
+                "support_refs": refs,
+            }
+        claims.append(claim)
+        if legacy_claim_id:
+            claim_by_legacy_id[legacy_claim_id] = claim
+    for index, text_value in enumerate(drafts.get("model_explanations", []), start=1):
+        claims.append(
+            {
+                "claim_id": f"explanation_{index}",
+                "claim_type": "MODEL_EXPLANATION",
+                "claim_role": "model_explanation",
+                "surface_text": str(text_value),
+                "facet_ids": [],
+                "support_mode": "model_explanation",
+                "evidence_labels": [],
+                "covers": [],
+                "unanswered_dimensions": [],
+                "support_refs": [],
+            }
+        )
+    answer_text = " ".join(str(claim["surface_text"]) for claim in claims).strip()
+    return {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "partial_candidate" if unresolved_required_ids else "answer_candidate",
+        "relation": (
+            "contrasts_with" if intent_class == "cross_document_comparison" else
+            "complements" if intent_class == "complementary_synthesis" else
+            "precedes" if intent_class == "temporal_conflict" else None
+        ),
+        "selected_evidence_ids": selected_ids,
+        "answer_text": answer_text,
+        "claims": claims,
+        "missing_facets": [],
+        "abstention_reason": None,
+        "unanswered_dimensions": list(unresolved_required_ids),
+    }
+
+
+def _synthesize_facet_local_and_verify(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_client: ProviderClient,
+    requirements: Sequence[SemanticRequirement],
+    endpoint_proof: Mapping[str, Any],
+    support_classification: Sequence[Mapping[str, Any]],
+    supported_requirements: Sequence[SemanticRequirement],
+    unresolved_required_ids: set[str],
+    max_attempts: int,
+    provider_contract: str = "facet_local_runtime_bound_semantic_closure/v1",
+    binding_stage: str = "facet_local_binding",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    del supported_requirements
+    failures: list[str] = []
+    calls: list[dict[str, Any]] = []
+    repair_attempted = False
+    repair_consumed = False
+    repair_kind = REPAIR_KIND_NONE
+    repair_succeeded = False
+    repair_exhausted = False
+    repair_triggers: list[str] = []
+    max_attempts = max(1, min(int(max_attempts), 2))
+    facet_ledger: dict[str, Any] = {}
+    last_candidate: dict[str, Any] | None = None
+    final_support_proof: list[dict[str, Any]] = []
+    review_rejected_facet_ids: set[str] = set()
+
+    def apply_repair_state(
+        answer: dict[str, Any],
+        closure: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        repair_state = {
+            "repair_kind": repair_kind,
+            "repair_succeeded": repair_succeeded,
+            "repair_exhausted": repair_exhausted,
+            "repair_trigger_codes": list(dict.fromkeys(repair_triggers)),
+        }
+        answer.update(repair_state)
+        multi = answer.get("multi_evidence_verification")
+        if isinstance(multi, Mapping):
+            answer["multi_evidence_verification"] = {
+                **dict(multi),
+                **repair_state,
+            }
+        closure["repair_routing"] = dict(repair_state)
+        return answer, closure
+
+    for attempt in range(1, max_attempts + 1):
+        post_parse_stage = binding_stage
+        payload, facet_ledger, label_map, snippet_map, slots = _facet_local_provider_payload(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            requirements=requirements,
+            support_classification=support_classification,
+            repair=attempt == 2,
+            previous_failures=failures,
+        )
+        try:
+            raw = provider_client.call(
+                payload,
+                "aq_semantic_closure_repair" if attempt == 2 else "aq_semantic_closure",
+            )
+            try:
+                drafts = _parse_facet_local_provider_result(
+                    str(raw.get("text", raw.get("provider_text", ""))),
+                    slots=slots,
+                    allowed_legacy_missing_facet_ids=review_rejected_facet_ids,
+                    allow_legacy_compatibility=attempt == 1,
+                )
+                calls.append(_compact_call_telemetry(raw, parse_ok=True))
+            except ClaimDraftContractError as exc:
+                calls.append(_compact_call_telemetry(raw, parse_ok=False))
+                stop_reason = str(
+                    raw.get("stop_reason") or raw.get("finish_reason") or ""
+                )
+                failures.append(
+                    COMPACT_PROVIDER_TRUNCATED
+                    if stop_reason == "max_tokens"
+                    else exc.code
+                )
+                if exc.code == FACET_LOCAL_SLOT_MISSING:
+                    failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
+                if not repair_consumed and attempt < max_attempts:
+                    repair_attempted = True
+                    repair_consumed = True
+                    repair_kind = REPAIR_KIND_SYNTHESIS_CONTRACT
+                    repair_triggers.append(str(failures[-1]))
+                    continue
+                break
+            if attempt == 2 and repair_kind == REPAIR_KIND_SYNTHESIS_CONTRACT:
+                repair_succeeded = True
+            candidate = _runtime_bound_facet_local_candidate(
+                drafts=drafts,
+                slots=slots,
+                label_map=label_map,
+                snippet_map=snippet_map,
+                question=question,
+                intent_class=intent_class,
+                unresolved_required_ids=sorted(unresolved_required_ids),
+            )
+            last_candidate = candidate
+            native_draft = bool(drafts.get("native_facet_local_shape"))
+            if native_draft:
+                post_parse_stage = "native_semantic_review_binding"
+                try:
+                    semantic_review, review_raw = (
+                        _call_runtime_bound_semantic_entailment_review(
+                            provider_client=provider_client,
+                            question=question,
+                            intent_class=intent_class,
+                            candidate=candidate,
+                            evidence=evidence,
+                        )
+                    )
+                    calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+                except NativeSemanticReviewContractError as exc:
+                    calls.append(_compact_call_telemetry(exc.raw, parse_ok=False))
+                    if repair_consumed or attempt >= max_attempts:
+                        repair_exhausted = repair_consumed
+                        failures.append(exc.code)
+                        break
+                    repair_attempted = True
+                    repair_consumed = True
+                    repair_kind = REPAIR_KIND_REVIEW_CONTRACT
+                    repair_triggers.append(exc.code)
+                    try:
+                        semantic_review, review_raw = (
+                            _call_runtime_bound_semantic_entailment_review(
+                                provider_client=provider_client,
+                                question=question,
+                                intent_class=intent_class,
+                                candidate=candidate,
+                                evidence=evidence,
+                                review_slots=exc.review_slots,
+                                repair=True,
+                                previous_failure=exc.code,
+                            )
+                        )
+                        calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+                        repair_succeeded = True
+                    except NativeSemanticReviewContractError as repair_exc:
+                        calls.append(
+                            _compact_call_telemetry(repair_exc.raw, parse_ok=False)
+                        )
+                        repair_exhausted = True
+                        failures.append(repair_exc.code)
+                        break
+            else:
+                post_parse_stage = "semantic_review"
+                semantic_review, review_raw = _call_semantic_entailment_review(
+                    provider_client=provider_client,
+                    question=question,
+                    intent_class=intent_class,
+                    candidate=candidate,
+                    evidence=evidence,
+                )
+                semantic_review = _canonicalize_semantic_review_evidence_refs(
+                    semantic_review,
+                    _candidate_claim_by_id(candidate),
+                )
+                calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            if _semantic_review_has_out_of_local_evidence(
+                semantic_review, _candidate_claim_by_id(candidate)
+            ):
+                failures.append("M26-PA7-ME-065")
+            review_failures = _semantic_review_blocking_failures(semantic_review)
+            if review_failures:
+                failures.extend(review_failures)
+                if not repair_consumed and attempt < max_attempts:
+                    claim_by_id = _candidate_claim_by_id(candidate)
+                    blocking_claim_ids = {
+                        str(item.get("claim_id", ""))
+                        for item in semantic_review.get("claim_judgments", [])
+                        if isinstance(item, Mapping)
+                        and item.get("verdict")
+                        in legacy.SEMANTIC_REVIEW_BLOCKING_VERDICTS
+                    }
+                    review_rejected_facet_ids.update(
+                        str(facet_id)
+                        for claim_id in blocking_claim_ids
+                        for facet_id in claim_by_id.get(claim_id, {}).get(
+                            "facet_ids", []
+                        )
+                        if str(facet_id)
+                    )
+                    repair_attempted = True
+                    repair_consumed = True
+                    repair_kind = REPAIR_KIND_SEMANTIC_VERDICT
+                    repair_triggers.extend(review_failures)
+                    continue
+                partial = _verified_supported_review_partial(
+                    trace_id=trace_id,
+                    question=question,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    candidate=candidate,
+                    semantic_review=semantic_review,
+                    calls=calls,
+                    repair_attempted=repair_attempted,
+                    failures=failures,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                    final_support_proof=final_support_proof,
+                )
+                if partial is not None:
+                    partial[1]["provider_contract"] = provider_contract
+                    partial[1]["material_facet_ledger"] = facet_ledger
+                    if repair_kind == REPAIR_KIND_SEMANTIC_VERDICT:
+                        repair_succeeded = True
+                    return apply_repair_state(*partial)
+                repair_exhausted = repair_consumed
+                break
+            post_parse_stage = binding_stage
+            verified = legacy._verify_multi_evidence_provider_output(
+                trace_id=trace_id,
+                question=question,
+                intent_class=intent_class,
+                evidence=evidence,
+                provider_text=json.dumps(
+                    _verification_candidate(candidate), ensure_ascii=False, separators=(",", ":")
+                ),
+                semantic_review=semantic_review,
+            )
+            final_answer = legacy._verified_multi_evidence_answer(
+                intent_class=intent_class,
+                verified=verified,
+                evidence=evidence,
+                calls=calls,
+                repair_attempted=repair_attempted,
+            )
+            final_answer["answer_text"] = _render_reviewed_claim_text(
+                candidate=candidate, semantic_review=semantic_review
+            )
+            partial_answer = bool(
+                unresolved_required_ids or review_rejected_facet_ids
+            )
+            final_answer["answer_source"] = (
+                PARTIAL_SEMANTIC_CLOSURE_SOURCE
+                if partial_answer
+                else "provider_verified_runtime_bound_semantic_closure"
+            )
+            final_answer["multi_evidence_verification"] = {
+                **dict(final_answer.get("multi_evidence_verification", {})),
+                "verification_failure_codes_by_attempt": list(failures),
+                "repair_trigger": sorted(set(failures)) if repair_attempted else [],
+                "repair_result": "verified_partial" if partial_answer else "verified" if repair_attempted else "not_needed",
+                "deterministic_evidence_synthesis_used": False,
+                "provider_contract": provider_contract,
+                "semantic_review": dict(verified.get("semantic_review", {})),
+                "unanswered_dimensions": sorted(
+                    unresolved_required_ids | review_rejected_facet_ids
+                ),
+                "partial_answer": partial_answer,
+            }
+            closure = {
+                "schema_version": "m26-aq-semantic-closure/v1",
+                "requirements": [_requirement_public(item) for item in requirements],
+                "support_proof": final_support_proof,
+                "endpoint_proof": dict(endpoint_proof),
+                "failures": [],
+                "provider_contract": provider_contract,
+                "semantic_review": dict(verified.get("semantic_review", {})),
+                "facet_closure": {
+                    "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+                    **_facet_closure_trace(classification=support_classification, candidate=candidate),
+                },
+                "material_facet_ledger": facet_ledger,
+                "broad_deterministic_fallback_used": False,
+            }
+            if partial_answer:
+                closure["partial_answer"] = True
+                closure["unanswered_dimensions"] = sorted(
+                    unresolved_required_ids | review_rejected_facet_ids
+                )
+            if repair_consumed:
+                repair_succeeded = True
+            return apply_repair_state(final_answer, closure)
+        except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
+            code = (
+                exc.code
+                if isinstance(exc, (legacy.VerifiedAnswerGateError, ClaimDraftContractError))
+                else _post_parse_exception_leaf(exc, stage=post_parse_stage)
+            )
+            failures.append(str(code))
+            if not repair_consumed and attempt < max_attempts:
+                repair_attempted = True
+                repair_consumed = True
+                repair_kind = REPAIR_KIND_SYNTHESIS_CONTRACT
+                repair_triggers.append(str(code))
+                continue
+            repair_exhausted = repair_consumed
+        except (LiveGateError, httpx.HTTPError) as exc:
+            failures.append(type(exc).__name__)
+            break
+    final_failures = sorted({*failures, "SEMANTIC_CLOSURE_FAILED"})
+    if PROVIDER_FALSE_ABSTENTION in failures:
+        final_failures = sorted(
+            {*final_failures, "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE"}
+        )
+    abstention = legacy._verified_abstention(
+        reason_codes=final_failures,
+        calls=calls,
+        repair_attempted=repair_attempted,
+    )
+    abstention["answer_source"] = "safe_abstention"
+    abstention["multi_evidence_verification"] = {
+        **dict(abstention.get("multi_evidence_verification", {})),
+        "provider_contract": provider_contract,
+    }
+    closure = {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [_requirement_public(item) for item in requirements],
+        "support_proof": final_support_proof,
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": final_failures,
+        "provider_contract": provider_contract,
+        "facet_closure": {
+            "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+            **_facet_closure_trace(classification=support_classification, candidate=last_candidate),
+        },
+        "material_facet_ledger": facet_ledger,
+        "broad_deterministic_fallback_used": False,
+    }
+    return apply_repair_state(abstention, closure)
+
+
+def _synthesize_no_material_slot_and_verify(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_client: ProviderClient,
+    endpoint_proof: Mapping[str, Any],
+    max_attempts: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    requirement = SemanticRequirement(
+        requirement_id=NO_MATERIAL_REQUIREMENT_ID,
+        instruction="Provide one narrow answer directly entailed by the selected evidence.",
+        evidence_terms=tuple(sorted(legacy._meaningful_terms(question))),
+        visible_patterns=(),
+    )
+    ranked = _provider_evidence_order(evidence, [requirement], question)
+    supporting_ids = [
+        str(item.get("evidence_id", ""))
+        for item in ranked[:MAX_PROVIDER_EVIDENCE]
+        if str(item.get("evidence_id", ""))
+    ]
+    if not supporting_ids:
+        abstention = legacy._verified_abstention(
+            reason_codes=["NO_R1_SELECTED_EVIDENCE"],
+            calls=[],
+            repair_attempted=False,
+        )
+        abstention["answer_source"] = "safe_abstention"
+        return abstention, {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [],
+            "support_proof": [],
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": ["NO_R1_SELECTED_EVIDENCE"],
+            "provider_contract": "no_material_runtime_bound_semantic_closure/v1",
+            "facet_closure": {
+                "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
+                "facets": [],
+            },
+            "material_facet_ledger": {
+                "schema_version": MATERIAL_FACET_LEDGER_SCHEMA_VERSION,
+                "facets": [],
+            },
+            "broad_deterministic_fallback_used": False,
+        }
+    classification = [
+        {
+            "facet_id": NO_MATERIAL_REQUIREMENT_ID,
+            "instruction": requirement.instruction,
+            "support_state": "SUPPORTED",
+            "supporting_evidence_ids": supporting_ids,
+        }
+    ]
+    answer, closure = _synthesize_facet_local_and_verify(
+        question=question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        evidence=evidence,
+        provider_client=provider_client,
+        requirements=[requirement],
+        endpoint_proof=endpoint_proof,
+        support_classification=classification,
+        supported_requirements=[requirement],
+        unresolved_required_ids=set(),
+        max_attempts=max_attempts,
+        provider_contract="no_material_runtime_bound_semantic_closure/v1",
+        binding_stage="no_material_slot_binding",
+    )
+    closure["requirements"] = []
+    closure["no_material_answer_slot"] = True
+    return answer, closure
+
+
 def _synthesize_and_verify(
     *,
     question: str,
@@ -478,8 +1702,20 @@ def _synthesize_and_verify(
         for facet_id, state in support_by_id.items()
         if state in {"UNSUPPORTED", "UNKNOWN"}
     }
+    review_rejected_facet_ids: set[str] = set()
 
-    if not evidence or (requirements and not supported_requirements):
+    requirement_ids = {item.requirement_id for item in requirements}
+    strict_no_support = bool(
+        requirements
+        and not supported_requirements
+        and (
+            "core_answer" in requirement_ids
+            or requirement_ids.issubset(
+                {"explanatory_answer", "comparison_or_distinction"}
+            )
+        )
+    )
+    if not evidence or strict_no_support:
         final_failures = [
             "NO_R1_SELECTED_EVIDENCE"
             if not evidence
@@ -502,8 +1738,39 @@ def _synthesize_and_verify(
                 "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
                 **_facet_closure_trace(classification=support_classification),
             },
+            "material_facet_ledger": _material_facet_ledger(
+                requirements=requirements,
+                support_classification=support_classification,
+                label_map={},
+            ),
             "broad_deterministic_fallback_used": False,
         }
+
+    if not requirements:
+        return _synthesize_no_material_slot_and_verify(
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_client=provider_client,
+            endpoint_proof=endpoint_proof,
+            max_attempts=max_attempts,
+        )
+
+    if supported_requirements:
+        return _synthesize_facet_local_and_verify(
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_client=provider_client,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+            support_classification=support_classification,
+            supported_requirements=supported_requirements,
+            unresolved_required_ids=unresolved_required_ids,
+            max_attempts=max_attempts,
+        )
 
     max_attempts = max(1, min(int(max_attempts), 2))
 
@@ -511,6 +1778,7 @@ def _synthesize_and_verify(
         return current_attempt < max_attempts
 
     for attempt in range(1, max_attempts + 1):
+        post_parse_stage = "segment_projection"
         compact_payload, label_map, snippet_map = _compact_provider_payload(
             question=question,
             intent_class=intent_class,
@@ -520,6 +1788,19 @@ def _synthesize_and_verify(
             repair=attempt == 2,
             previous_failures=failures,
         )
+        facet_ledger = _material_facet_ledger(
+            requirements=requirements,
+            support_classification=support_classification,
+            label_map=label_map,
+        )
+        for facet in facet_ledger["facets"]:
+            if facet.get("facet_id") in review_rejected_facet_ids:
+                facet["repair_required"] = True
+        effective_supported_requirements = [
+            requirement
+            for requirement in supported_requirements
+            if requirement.requirement_id not in review_rejected_facet_ids
+        ]
         try:
             raw = provider_client.call(
                 compact_payload,
@@ -548,12 +1829,14 @@ def _synthesize_and_verify(
                 break
             calls.append(_compact_call_telemetry(raw, parse_ok=True))
             if parsed["status"] == "abstain":
+                failures.append(PROVIDER_FALSE_ABSTENTION)
                 failures.append("PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE")
                 if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
 
+            post_parse_stage = "segment_projection"
             provider_status = str(parsed["status"])
             segments = _parsed_provider_segments(parsed)
             answer = _visible_answer_from_segments(segments)
@@ -565,6 +1848,17 @@ def _synthesize_and_verify(
                 for item in unanswered_dimensions
                 if str(item).strip()
             }
+            supported_facet_ids = {
+                str(item.get("facet_id", ""))
+                for item in facet_ledger["facets"]
+                if item.get("support_state") == "SUPPORTED"
+            }
+            if (unanswered_ids & supported_facet_ids) - review_rejected_facet_ids:
+                failures.append(PROVIDER_UNRESOLVED_SUPPORTED_FACET)
+                if can_retry(attempt):
+                    repair_attempted = True
+                    continue
+                break
             if unresolved_required_ids and provider_status not in {
                 "partial",
                 "partial_candidate",
@@ -580,6 +1874,16 @@ def _synthesize_and_verify(
                     repair_attempted = True
                     continue
                 break
+            _validate_claim_draft_against_ledger(
+                segments=segments,
+                provider_status=provider_status,
+                unanswered_dimensions=unanswered_dimensions,
+                facet_ledger=facet_ledger,
+                label_map=label_map,
+                review_rejected_facet_ids=review_rejected_facet_ids,
+                allow_review_repair=repair_attempted,
+            )
+            post_parse_stage = "candidate_binding"
             candidate = _runtime_bound_candidate(
                 answer=answer,
                 question=question,
@@ -594,26 +1898,28 @@ def _synthesize_and_verify(
                 unanswered_dimensions=unanswered_dimensions,
                 semantic_failures=[],
             )
+            post_parse_stage = "bounded_publication"
             candidate, bounded_support_ref_limit = _bounded_publication_candidate(
                 candidate
             )
+            post_parse_stage = "material_coverage"
             material_coverage = _material_claim_requirement_coverage(
                 candidate,
-                requirements=supported_requirements,
+                requirements=effective_supported_requirements,
             )
             if _candidate_lacks_material_requirement_coverage(
                 candidate,
-                requirements=supported_requirements,
+                requirements=effective_supported_requirements,
             ) and not (
                 provider_status in {"partial", "partial_candidate"}
-                and material_coverage
+                and (material_coverage or review_rejected_facet_ids)
             ):
                 failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
                 if can_retry(attempt):
                     repair_attempted = True
                     continue
                 break
-            if _provider_partial_has_unresolved_material_gap(
+            if not review_rejected_facet_ids and _provider_partial_has_unresolved_material_gap(
                 candidate,
                 requirements=requirements,
                 unanswered_dimensions=unanswered_dimensions,
@@ -623,6 +1929,7 @@ def _synthesize_and_verify(
                     repair_attempted = True
                     continue
                 break
+            post_parse_stage = "semantic_review"
             semantic_review, review_raw = _call_semantic_entailment_review(
                 provider_client=provider_client,
                 question=question,
@@ -649,6 +1956,21 @@ def _synthesize_and_verify(
             if review_failures:
                 failures.extend(review_failures)
                 if can_retry(attempt):
+                    blocking_claim_ids = {
+                        str(item.get("claim_id", ""))
+                        for item in semantic_review.get("claim_judgments", [])
+                        if isinstance(item, Mapping)
+                        and item.get("verdict")
+                        in legacy.SEMANTIC_REVIEW_BLOCKING_VERDICTS
+                    }
+                    review_rejected_facet_ids.update(
+                        str(facet_id)
+                        for claim_id in blocking_claim_ids
+                        for facet_id in claim_by_id.get(claim_id, {}).get(
+                            "facet_ids", []
+                        )
+                        if str(facet_id)
+                    )
                     repair_attempted = True
                     continue
                 partial = _verified_supported_review_partial(
@@ -669,6 +1991,7 @@ def _synthesize_and_verify(
                     return partial
                 break
             try:
+                post_parse_stage = "verified_answer"
                 verified = legacy._verify_multi_evidence_provider_output(
                     trace_id=trace_id,
                     question=question,
@@ -709,6 +2032,10 @@ def _synthesize_and_verify(
                 evidence=evidence,
                 calls=calls,
                 repair_attempted=repair_attempted,
+            )
+            final_answer["answer_text"] = _render_reviewed_claim_text(
+                candidate=candidate,
+                semantic_review=semantic_review,
             )
             partial_answer = provider_status in {"partial", "partial_candidate"}
 
@@ -754,6 +2081,7 @@ def _synthesize_and_verify(
                         candidate=candidate,
                     ),
                 },
+                "material_facet_ledger": facet_ledger,
                 "broad_deterministic_fallback_used": False,
             }
             if partial_answer:
@@ -762,8 +2090,14 @@ def _synthesize_and_verify(
                 closure["unanswered_dimensions"] = unanswered_dimensions
             return final_answer, closure
         except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
-            code = getattr(exc, "code", type(exc).__name__)
+            code = (
+                exc.code
+                if isinstance(exc, (legacy.VerifiedAnswerGateError, ClaimDraftContractError))
+                else _post_parse_exception_leaf(exc, stage=post_parse_stage)
+            )
             failures.append(str(code))
+            if code == CLAIM_DRAFT_SUPPORTED_FACET_MISSING:
+                failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
             if can_retry(attempt):
                 repair_attempted = True
                 continue
@@ -825,6 +2159,11 @@ def _synthesize_and_verify(
             "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
             **_facet_closure_trace(classification=support_classification),
         },
+        "material_facet_ledger": _material_facet_ledger(
+            requirements=requirements,
+            support_classification=support_classification,
+            label_map={},
+        ),
         "broad_deterministic_fallback_used": False,
     }
     return abstention, closure
@@ -861,9 +2200,21 @@ def _verified_supported_review_partial(
         )
         if support.get("support_state") == "SUPPORTED"
     ]
+    claim_by_id = _candidate_claim_by_id(candidate)
+    dropped_facet_ids = {
+        str(facet_id)
+        for claim_id in dropped_claim_ids
+        for facet_id in claim_by_id.get(claim_id, {}).get("facet_ids", [])
+        if str(facet_id)
+    }
+    retained_supported_requirements = [
+        requirement
+        for requirement in supported_requirements
+        if requirement.requirement_id not in dropped_facet_ids
+    ]
     if _candidate_lacks_material_requirement_coverage(
         partial_candidate,
-        requirements=supported_requirements,
+        requirements=retained_supported_requirements,
     ):
         return None
     try:
@@ -885,6 +2236,10 @@ def _verified_supported_review_partial(
             evidence=evidence,
             calls=calls,
             repair_attempted=repair_attempted,
+        )
+        answer["answer_text"] = _render_reviewed_claim_text(
+            candidate=partial_candidate,
+            semantic_review=partial_review,
         )
     except Exception:
         return None
@@ -1048,6 +2403,162 @@ def _facet_support_classification(
     return classification
 
 
+def _material_facet_ledger(
+    *,
+    requirements: Sequence[SemanticRequirement],
+    support_classification: Sequence[Mapping[str, Any]],
+    label_map: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Materialize runtime-owned facet state and permitted evidence labels."""
+    support_by_id = {
+        str(item.get("facet_id", "")): item for item in support_classification
+    }
+    label_by_evidence_id = {
+        str(item.get("evidence_id", "")): str(label)
+        for label, item in label_map.items()
+        if str(item.get("evidence_id", ""))
+    }
+    source_by_evidence_id = {
+        str(item.get("evidence_id", "")): str(
+            item.get("source_identity") or item.get("source_id") or ""
+        )
+        for item in label_map.values()
+        if str(item.get("evidence_id", ""))
+    }
+    facets: list[dict[str, Any]] = []
+    for requirement in requirements:
+        support = support_by_id.get(requirement.requirement_id, {})
+        supporting_ids = [
+            str(item)
+            for item in support.get("supporting_evidence_ids", [])
+            if str(item)
+        ]
+        facets.append(
+            {
+                "facet_id": requirement.requirement_id,
+                "instruction": requirement.instruction,
+                "support_state": str(support.get("support_state", "UNKNOWN")),
+                "allowed_evidence_labels": [
+                    label_by_evidence_id[evidence_id]
+                    for evidence_id in supporting_ids
+                    if evidence_id in label_by_evidence_id
+                ],
+                "allowed_evidence_ids": [
+                    evidence_id
+                    for evidence_id in supporting_ids
+                    if evidence_id in label_by_evidence_id
+                ],
+                "runtime_source_ids": list(
+                    dict.fromkeys(
+                        source_by_evidence_id[evidence_id]
+                        for evidence_id in supporting_ids
+                        if source_by_evidence_id.get(evidence_id)
+                    )
+                ),
+            }
+        )
+    return {
+        "schema_version": MATERIAL_FACET_LEDGER_SCHEMA_VERSION,
+        "facets": facets,
+    }
+
+
+def _validate_claim_draft_against_ledger(
+    *,
+    segments: Sequence[Mapping[str, Any]],
+    provider_status: str,
+    unanswered_dimensions: Sequence[str],
+    facet_ledger: Mapping[str, Any],
+    label_map: Mapping[str, Mapping[str, Any]],
+    review_rejected_facet_ids: Sequence[str] = (),
+    allow_review_repair: bool = False,
+) -> None:
+    """Reject provider identity or support claims outside the runtime ledger."""
+    facets = {
+        str(item.get("facet_id", "")): item
+        for item in facet_ledger.get("facets", [])
+        if isinstance(item, Mapping) and str(item.get("facet_id", ""))
+    }
+    supported = {
+        facet_id
+        for facet_id, item in facets.items()
+        if item.get("support_state") == "SUPPORTED"
+    }
+    unresolved = {str(item) for item in unanswered_dimensions if str(item)}
+    review_rejected = {str(item) for item in review_rejected_facet_ids if str(item)}
+    if provider_status == "abstain" and supported:
+        raise ClaimDraftContractError(
+            PROVIDER_FALSE_ABSTENTION,
+            "provider abstained although runtime ledger has supported facets",
+        )
+    if unresolved & supported and not allow_review_repair:
+        raise ClaimDraftContractError(
+            PROVIDER_UNRESOLVED_SUPPORTED_FACET,
+            "provider declared a runtime-supported facet unresolved",
+        )
+
+    if not facets:
+        return
+    known_labels = set(label_map)
+    covered_supported: set[str] = set()
+    for segment in segments:
+        if str(segment.get("semantic_role", "")) != "material_claim":
+            if segment.get("covers"):
+                return
+            continue
+        labels = {str(item) for item in segment.get("evidence_labels", []) if str(item)}
+        if labels - known_labels:
+            raise ClaimDraftContractError(
+                CLAIM_DRAFT_UNKNOWN_LABEL,
+                "provider claim used an evidence label outside the runtime map",
+            )
+        covers = {str(item) for item in segment.get("covers", []) if str(item)}
+        if covers - set(facets):
+            raise ClaimDraftContractError(
+                CLAIM_DRAFT_UNKNOWN_FACET,
+                "provider claim used a facet outside the runtime ledger",
+            )
+        unsupported = {
+            facet_id
+            for facet_id in covers
+            if facets[facet_id].get("support_state") != "SUPPORTED"
+            and facet_id not in review_rejected
+        }
+        if unsupported:
+            raise ClaimDraftContractError(
+                CLAIM_DRAFT_UNSUPPORTED_FACET,
+                "provider claim attempted to publish an unsupported runtime facet",
+            )
+        allowed_labels = {
+            str(label)
+            for facet_id in covers
+            for label in facets[facet_id].get("allowed_evidence_labels", [])
+            if str(label)
+        }
+        label_missing_for_facet = any(
+            not labels
+            & {
+                str(label)
+                for label in facets[facet_id].get("allowed_evidence_labels", [])
+                if str(label)
+            }
+            for facet_id in covers
+        )
+        if covers and (
+            not labels or not labels.issubset(allowed_labels) or label_missing_for_facet
+        ):
+            raise ClaimDraftContractError(
+                CLAIM_DRAFT_LABEL_FACET_MISMATCH,
+                "provider claim label is not authorized for its declared facet",
+            )
+        covered_supported.update(covers)
+    if (supported - covered_supported) - review_rejected:
+        raise ClaimDraftContractError(
+            CLAIM_DRAFT_SUPPORTED_FACET_MISSING,
+            "provider claim draft omitted a runtime-supported facet",
+        )
+
+
 def _selected_evidence_is_inspectable(item: Mapping[str, Any]) -> bool:
     if not str(item.get("evidence_id", "")):
         return False
@@ -1058,6 +2569,32 @@ def _selected_evidence_is_inspectable(item: Mapping[str, Any]) -> bool:
             and (item.get("edge_target") or item.get("target"))
         )
     return bool(_selected_evidence_text(item).strip())
+
+
+STRUCTURAL_REQUIREMENT_IDS = {
+    "explanatory_answer",
+    "comparison_or_distinction",
+    "multi_dimension_structure",
+    "process_sequence",
+    "composition_relationship",
+    "decision_criteria",
+    "process_boundary",
+}
+STRUCTURAL_SUPPORT_TERMS = {
+    "because", "therefore", "reason", "mechanism", "means", "allows", "prevents",
+    "rather", "than", "while", "whereas", "different", "distinguish", "contrast",
+    "first", "second", "then", "next", "another", "parts", "part", "cases", "case", "tradeoffs",
+    "tradeoff", "combine",
+    "combined", "together", "compose", "composition", "integrate",
+    "criteria", "criterion", "evaluate", "decide", "choose", "if", "when", "stop", "verify",
+}
+
+
+def _requirement_material_terms(requirement: SemanticRequirement) -> set[str]:
+    terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+    if requirement.requirement_id in STRUCTURAL_REQUIREMENT_IDS:
+        terms -= STRUCTURAL_SUPPORT_TERMS
+    return terms
 
 
 def _selected_evidence_supports_requirement(
@@ -1079,10 +2616,19 @@ def _selected_evidence_supports_requirement(
     }
     cue = structural_cues.get(requirement.requirement_id)
     if cue is not None:
-        return bool(re.search(cue, text, flags=re.I))
+        if not re.search(cue, text, flags=re.I):
+            return False
+        material_terms = _requirement_material_terms(requirement)
+        if not material_terms:
+            # A one-term predicate requirement is still materially typed; retain
+            # the Wave A cue-only rejection for multi-term structural contracts.
+            required_terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+            return len(required_terms) == 1 and bool(required_terms & legacy._meaningful_terms(text))
+        return bool(material_terms & legacy._meaningful_terms(text))
     required_terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     evidence_terms = legacy._meaningful_terms(text)
-    return len(required_terms & evidence_terms) >= min(2, len(required_terms))
+    minimum_overlap = 1 if len(required_terms) == 1 else min(2, len(required_terms))
+    return len(required_terms & evidence_terms) >= minimum_overlap
 
 
 def _selected_evidence_set_supports_requirement(
@@ -1096,12 +2642,24 @@ def _selected_evidence_set_supports_requirement(
         return requirement.exact_phrase.casefold() in combined.casefold()
     requirement_id = requirement.requirement_id
     if requirement_id == "comparison_or_distinction":
+        material_terms = _requirement_material_terms(requirement)
         contributing = sum(
-            _requirement_evidence_score(requirement, item) > 0 for item in evidence
+            bool(material_terms & legacy._meaningful_terms(_selected_evidence_text(item)))
+            for item in evidence
         )
-        return contributing >= 2
+        has_form_cue = bool(
+            re.search(
+                r"\b(?:while|whereas|different|distinguish|contrast|rather than|instead)\b",
+                combined,
+                flags=re.I,
+            )
+        )
+        return contributing >= 2 or (contributing >= 1 and has_form_cue)
     if requirement_id == "explanatory_answer":
         return bool(
+            _requirement_material_terms(requirement)
+            & legacy._meaningful_terms(combined)
+        ) and bool(
             re.search(
                 r"\b(?:because|therefore|reason|mechanism|means|allows|prevents|"
                 r"preserves?|checks?|ensures?|solves?|causes?|uses?|leads? to|"
@@ -1111,6 +2669,11 @@ def _selected_evidence_set_supports_requirement(
             )
         )
     if requirement_id == "multi_dimension_structure":
+        if not (
+            _requirement_material_terms(requirement)
+            & legacy._meaningful_terms(combined)
+        ):
+            return False
         bullet_count = len(
             re.findall(r"(?:^|\n)\s*(?:[-*]|\d+[.)])\s+", combined)
         )
@@ -1644,11 +3207,12 @@ def _compact_provider_payload(
         for item in classification
         if item.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
     ]
-    ranked = _provider_evidence_order(
-        evidence, supported_requirements, question
-    )[
-        :MAX_PROVIDER_EVIDENCE
-    ]
+    ranked = _facet_preserving_provider_evidence_pack(
+        evidence=evidence,
+        supported_requirements=supported_requirements,
+        support_classification=classification,
+        question=question,
+    )
     label_map: dict[str, Mapping[str, Any]] = {}
     snippet_map: dict[str, str] = {}
     packed = []
@@ -1676,36 +3240,37 @@ def _compact_provider_payload(
                 "text": snippet,
             }
         )
-    supporting_labels_by_facet = {
-        facet_id: [
-            label
-            for label, item in label_map.items()
-            if str(item.get("evidence_id", ""))
-            in set(support.get("supporting_evidence_ids", []))
-        ]
-        for facet_id, support in support_by_id.items()
-    }
+    facet_ledger = _material_facet_ledger(
+        requirements=requirements,
+        support_classification=classification,
+        label_map=label_map,
+    )
+    _assert_supported_facets_representable(
+        support_classification=classification,
+        facet_ledger=facet_ledger,
+    )
     task = {
         "question": question,
         "intent": intent_class,
         "must_state": [item.instruction for item in supported_requirements],
         "required_facets": [
             {
-                "facet_id": item.requirement_id,
-                "instruction": item.instruction,
-                "support_state": support_by_id.get(item.requirement_id, {}).get(
-                    "support_state", "UNKNOWN"
-                ),
-                "supporting_evidence_labels": supporting_labels_by_facet.get(
-                    item.requirement_id, []
+                "facet_id": str(item.get("facet_id", "")),
+                "instruction": str(item.get("instruction", "")),
+                "support_state": str(item.get("support_state", "UNKNOWN")),
+                "supporting_evidence_labels": list(
+                    item.get("allowed_evidence_labels", [])
                 ),
             }
-            for item in requirements
+            for item in facet_ledger["facets"]
         ],
         "required_answer_status": "partial" if unresolved_ids else "answer",
         "unresolved_facet_ids": unresolved_ids,
         "evidence": packed,
         "repair": list(previous_failures)[-8:] if repair else [],
+        "repair_directives": (
+            _bounded_repair_directives(previous_failures) if repair else []
+        ),
         "output": {
             "schema_version": COMPACT_CLOSURE_SCHEMA_VERSION,
             "status": "answer|partial|abstain",
@@ -1742,7 +3307,9 @@ def _compact_provider_payload(
         "evidence. For material_claim segments include exactly one claim_id, a claim_type "
         "value EVIDENCE_FACT or EVIDENCE_SYNTHESIS, evidence_labels, and covers. For "
         "model_explanation segments include claim_id, claim_type MODEL_EXPLANATION, "
-        "evidence_labels [], and covers. Evidence labels such as e1 or e2 belong only in "
+        "evidence_labels [], and covers []. MODEL_EXPLANATION may provide only generic "
+        "connective or explanatory prose and may never satisfy a required material facet. "
+        "Evidence labels such as e1 or e2 belong only in "
         "evidence_labels and must not appear in visible text. covers must contain only "
         "stable facet_id values from required_facets and material claims must cite the "
         "claim-local evidence that supports each covered facet. Address every SUPPORTED "
@@ -1811,6 +3378,265 @@ def _compact_provider_output_tokens(
         MIN_PROVIDER_REPAIR_OUTPUT_TOKENS if repair else MIN_PROVIDER_OUTPUT_TOKENS,
         min(MAX_PROVIDER_OUTPUT_TOKENS, base),
     )
+
+
+def _runtime_review_slots(
+    *,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence_by_id = {str(item.get("evidence_id", "")): item for item in evidence}
+    slots: list[dict[str, Any]] = []
+    for raw_claim in legacy._list(candidate.get("claims"), "native review claims"):
+        claim = legacy._object(raw_claim, "native review claim")
+        allowed_ids = _claim_local_evidence_ids(claim)
+        local_evidence = []
+        for index, evidence_id in enumerate(allowed_ids, start=1):
+            item = evidence_by_id.get(evidence_id, {})
+            ref = next(
+                (
+                    value
+                    for value in legacy._list(
+                        claim.get("support_refs"), "native review support refs"
+                    )
+                    if isinstance(value, Mapping)
+                    and str(value.get("evidence_id", "")) == evidence_id
+                ),
+                {},
+            )
+            local_evidence.append(
+                {
+                    "local_index": index,
+                    "evidence_type": str(item.get("evidence_type", "passage")),
+                    "text": str(ref.get("exact_quote", "")),
+                }
+            )
+        slots.append(
+            {
+                "review_slot_id": f"review_{len(slots) + 1}",
+                "claim_id": str(claim.get("claim_id", "")),
+                "claim_type": str(claim.get("claim_type", "")),
+                "surface_text": str(claim.get("surface_text", "")),
+                "allowed_evidence_ids": allowed_ids,
+                "local_evidence": local_evidence,
+            }
+        )
+    return slots
+
+
+def _runtime_structured_claim_text(candidate: Mapping[str, Any]) -> str:
+    return " ".join(
+        str(claim.get("surface_text", ""))
+        for claim in legacy._list(candidate.get("claims"), "native renderer claims")
+        if isinstance(claim, Mapping)
+    ).strip()
+
+
+def _runtime_bound_semantic_review_payload(
+    *,
+    question: str,
+    intent_class: str,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+    review_slots: Sequence[Mapping[str, Any]] | None = None,
+    repair: bool = False,
+    previous_failure: str = "",
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    slots = (
+        [dict(slot) for slot in review_slots]
+        if review_slots is not None
+        else _runtime_review_slots(candidate=candidate, evidence=evidence)
+    )
+    task = {
+        "schema_version": RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+        "question_context": question,
+        "intent_class": intent_class,
+        "review_slots": [
+            {
+                "review_slot_id": slot["review_slot_id"],
+                "claim_type": slot["claim_type"],
+                "surface_text": slot["surface_text"],
+                "local_evidence": slot["local_evidence"],
+            }
+            for slot in slots
+        ],
+        "output": {
+            "schema_version": RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+            "judgments": [
+                {
+                    "review_slot_id": str(slot["review_slot_id"]),
+                    "verdict": "ENTAILED|CONTRADICTED|INSUFFICIENT|GENERIC_EXPLANATION",
+                }
+                for slot in slots
+            ],
+        },
+    }
+    if repair:
+        task["review_contract_repair"] = {
+            "previous_output_violated_json_contract": True,
+            "previous_failure_code": previous_failure,
+            "required_review_slot_ids": [
+                str(slot["review_slot_id"]) for slot in slots
+            ],
+            "required_top_level_keys": ["schema_version", "judgments"],
+            "required_judgment_keys": ["review_slot_id", "verdict"],
+            "allowed_verdicts": [
+                "ENTAILED",
+                "CONTRADICTED",
+                "INSUFFICIENT",
+                "GENERIC_EXPLANATION",
+            ],
+            "forbidden_output_fields": [
+                "claim_id",
+                "evidence_id",
+                "evidence_ids",
+                "evidence_labels",
+                "citations",
+                "coverage",
+                "publication_state",
+            ],
+            "candidate_claim_prose_must_remain_unchanged": True,
+        }
+    system = (
+        "You are the bounded M26 native claim semantic-entailment reviewer. Return "
+        "exactly one JSON object with only schema_version and judgments. Return exactly "
+        "one judgment for every supplied review_slot_id. A judgment may contain only "
+        "review_slot_id and verdict. Judge each surface_text using only that review "
+        "slot's local_evidence. Return ENTAILED only when local evidence directly "
+        "supports the complete proposition. Use CONTRADICTED for conflicting polarity, "
+        "direction, identity, quantity, time, or boundary; otherwise use INSUFFICIENT. "
+        "GENERIC_EXPLANATION is valid only for a MODEL_EXPLANATION slot. Do not return "
+        "claim IDs, evidence IDs, labels, coverage, citations, sources, or publication "
+        "status; the runtime owns all identity and visible coverage."
+    )
+    if repair:
+        system += (
+            " The previous review output violated the runtime-bound JSON contract. "
+            "This is one contract-only retry for the same immutable question, candidate "
+            "claims, and review slots. Return only schema_version and judgments using "
+            "every exact required review_slot_id and the allowed verdict enum. Do not "
+            "rewrite, alter, or replace any claim prose."
+        )
+    return (
+        {
+            "model": "MiniMax-M3",
+            "max_tokens": 2048,
+            "temperature": 0,
+            "stream": False,
+            "system": system,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": json.dumps(task, ensure_ascii=False, separators=(",", ":")),
+                }
+            ],
+        },
+        slots,
+    )
+
+
+def _normalize_runtime_bound_semantic_review(
+    value: Mapping[str, Any],
+    *,
+    review_slots: Sequence[Mapping[str, Any]],
+    candidate: Mapping[str, Any],
+) -> dict[str, Any]:
+    if set(value) != {"schema_version", "judgments"}:
+        raise ValueError("native semantic review top-level shape is invalid")
+    if value.get("schema_version") != RUNTIME_BOUND_REVIEW_SCHEMA_VERSION:
+        raise ValueError(SEMANTIC_REVIEW_PARSE_FAILED)
+    raw_judgments = value.get("judgments")
+    if not isinstance(raw_judgments, list):
+        raise ValueError("native semantic review judgments must be a list")
+    slot_by_id = {str(slot["review_slot_id"]): slot for slot in review_slots}
+    seen: set[str] = set()
+    normalized: list[dict[str, Any]] = []
+    for raw in raw_judgments:
+        if not isinstance(raw, Mapping) or set(raw) != {"review_slot_id", "verdict"}:
+            raise ValueError("native semantic review judgment shape is invalid")
+        review_slot_id = str(raw.get("review_slot_id", ""))
+        if review_slot_id not in slot_by_id:
+            raise ValueError("native semantic review references unknown review slot")
+        if review_slot_id in seen:
+            raise ValueError("native semantic review duplicates a review slot")
+        seen.add(review_slot_id)
+        slot = slot_by_id[review_slot_id]
+        verdict = str(raw.get("verdict", ""))
+        if verdict not in {
+            legacy.SEMANTIC_REVIEW_ENTAILED,
+            legacy.SEMANTIC_REVIEW_GENERIC_EXPLANATION,
+            *legacy.SEMANTIC_REVIEW_BLOCKING_VERDICTS,
+        }:
+            raise ValueError("native semantic review verdict is invalid")
+        is_explanation = str(slot.get("claim_type", "")) == "MODEL_EXPLANATION"
+        if verdict == legacy.SEMANTIC_REVIEW_GENERIC_EXPLANATION and not is_explanation:
+            raise ValueError("generic explanation verdict requires model explanation claim")
+        if is_explanation and verdict == legacy.SEMANTIC_REVIEW_ENTAILED:
+            raise ValueError("model explanation claim requires generic explanation verdict")
+        normalized.append(
+            {
+                "claim_id": str(slot["claim_id"]),
+                "verdict": verdict,
+                "evidence_ids": (
+                    list(slot["allowed_evidence_ids"])
+                    if verdict == legacy.SEMANTIC_REVIEW_ENTAILED
+                    else []
+                ),
+            }
+        )
+    missing = set(slot_by_id) - seen
+    if missing:
+        raise ValueError("native semantic review omitted a review slot")
+    rendered = _runtime_structured_claim_text(candidate)
+    if str(candidate.get("answer_text", "")) != rendered:
+        raise ValueError("native visible coverage renderer invariant failed")
+    return {
+        "schema_version": SEMANTIC_REVIEW_SCHEMA_VERSION,
+        "claim_judgments": normalized,
+        "visible_coverage": {"verdict": "COVERED", "uncovered_assertions": []},
+    }
+
+
+def _call_runtime_bound_semantic_entailment_review(
+    *,
+    provider_client: ProviderClient,
+    question: str,
+    intent_class: str,
+    candidate: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+    review_slots: Sequence[Mapping[str, Any]] | None = None,
+    repair: bool = False,
+    previous_failure: str = "",
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    payload, bound_review_slots = _runtime_bound_semantic_review_payload(
+        question=question,
+        intent_class=intent_class,
+        candidate=candidate,
+        evidence=evidence,
+        review_slots=review_slots,
+        repair=repair,
+        previous_failure=previous_failure,
+    )
+    raw = provider_client.call(payload, SEMANTIC_REVIEW_CALL_CLASS)
+    try:
+        parsed = _parse_semantic_review_result(
+            str(raw.get("text", raw.get("provider_text", "")))
+        )
+        review = _normalize_runtime_bound_semantic_review(
+            parsed,
+            review_slots=bound_review_slots,
+            candidate=candidate,
+        )
+    except (ValueError, KeyError) as exc:
+        raise NativeSemanticReviewContractError(
+            _post_parse_exception_leaf(
+                exc,
+                stage="native_semantic_review_binding",
+            ),
+            raw=raw,
+            review_slots=bound_review_slots,
+        ) from exc
+    return review, {**dict(raw), "call_class": SEMANTIC_REVIEW_CALL_CLASS}
 
 
 def _semantic_review_payload(
@@ -2021,6 +3847,11 @@ def _validate_provider_segments(raw_segments: Sequence[Any]) -> None:
         if not isinstance(raw_segment, Mapping):
             raise ValueError("compact provider segment must be object")
         segment = dict(raw_segment)
+        if set(segment) - CLAIM_DRAFT_ALLOWED_KEYS:
+            raise ClaimDraftContractError(
+                CLAIM_DRAFT_RUNTIME_METADATA,
+                "compact provider segment contains runtime-owned metadata or unknown fields",
+            )
         if "surface_text" in segment:
             raise ValueError("compact provider segment must not include surface_text")
         if "answer_text" in segment:
@@ -2426,6 +4257,43 @@ def _visible_answer_from_segments(segments: Sequence[Mapping[str, Any]]) -> str:
     ).strip()
 
 
+def _render_reviewed_claim_text(
+    *,
+    candidate: Mapping[str, Any],
+    semantic_review: Mapping[str, Any],
+) -> str:
+    """Render final prose only from claim text that passed claim-local review."""
+    verdict_by_claim_id = {
+        str(item.get("claim_id", "")): str(item.get("verdict", ""))
+        for item in semantic_review.get("claim_judgments", [])
+        if isinstance(item, Mapping)
+    }
+    reviewed: list[str] = []
+    seen_text: set[str] = set()
+    for raw_claim in candidate.get("claims", []):
+        if not isinstance(raw_claim, Mapping):
+            continue
+        claim_id = str(raw_claim.get("claim_id", ""))
+        expected = (
+            "GENERIC_EXPLANATION"
+            if str(raw_claim.get("claim_type", "")) == "MODEL_EXPLANATION"
+            else "ENTAILED"
+        )
+        if verdict_by_claim_id.get(claim_id) != expected:
+            continue
+        text = re.sub(r"\s+", " ", str(raw_claim.get("surface_text", ""))).strip()
+        if text and text not in seen_text:
+            reviewed.append(text)
+            seen_text.add(text)
+    answer = " ".join(reviewed).strip()
+    if not answer:
+        raise ClaimDraftContractError(
+            CLAIM_DRAFT_SUPPORTED_FACET_MISSING,
+            "reviewed claim renderer produced no publishable text",
+        )
+    return answer
+
+
 def _parsed_provider_unanswered_dimensions(
     parsed: Mapping[str, Any],
     segments: Sequence[Mapping[str, Any]],
@@ -2599,10 +4467,16 @@ def _semantic_requirements(
                 exact_phrase=context,
             )
 
-    if "production router" in q or (
-        "router" in q
-        and any(word in q for word in ("path", "downstream", "route"))
-    ):
+    router_mechanics_requested = bool(
+        re.search(r"\brouter(?:s)?\b", q)
+        and re.search(r"\b(?:path|downstream|route|routing)\b", q)
+        and re.search(
+            r"\b(?:choose|chooses|select|selects|route|routes|routing|inspect|inspects|"
+            r"decide|decides|determine|determines|direct|directs|send|sends|forward|forwards)\b",
+            q,
+        )
+    )
+    if router_mechanics_requested:
         add(
             "router_decision",
             "Explain what the router inspects and how that selects a downstream route/path.",
@@ -3174,12 +5048,26 @@ def _coordinated_question_subjects(question: str) -> list[str]:
         text = re.split(r"\bcombine\b", text, maxsplit=1, flags=re.I)[1]
     else:
         text = re.sub(
-            r"^(?:how|why)\s+(?:are|do|does|can|should)\s+|"
-            r"^what\s+(?:do|does|are|is)\s+",
+            r"^(?:how|why)\s+(?:are|do|does|can|should|would)\s+|"
+            r"^what\s+(?:do|does|are|is|should)\s+",
             "",
             text,
             flags=re.I,
         )
+        # A coordinated list can follow a shared actor + predicate, as in
+        # "systems handle context, state, memory, and retrieval".  The actor
+        # and predicate describe the relation; they are not the first list
+        # member.  Strip that grammatical lead only when a real 3+ member
+        # coordination follows, keeping the parser question-agnostic.
+        if "," in text and re.search(r"\band\b", text, flags=re.I):
+            text = re.sub(
+                r"^.+?\b(?:handle|handles|manage|manages|use|uses|organize|organizes|"
+                r"coordinate|coordinates|treat|treats|combine|combines)\s+",
+                "",
+                text,
+                count=1,
+                flags=re.I,
+            )
     text = re.sub(
         r"\s+(?:different|differ|each\s+change|not\s+interchangeable).*$",
         "",
@@ -3264,7 +5152,7 @@ def _add_generic_answer_dimension_requirements(
     asks_process = bool(
         re.search(r"\b(?:process|steps?|workflow|sequence)\b", q)
         or (
-            re.search(r"\bhow\s+(?:can|should|do|does)\b", q)
+            re.search(r"\bhow\s+(?:can|do|does)\b", q)
             and not asks_comparison
         )
     )
@@ -3290,9 +5178,7 @@ def _add_generic_answer_dimension_requirements(
             [r"\b(?:combine|together|workflow|compose|composition|integrate)\b"],
         )
 
-    if re.search(r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b", q) or re.match(
-        r"\s*how\s+should\b", q
-    ):
+    if re.search(r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b", q):
         add(
             "decision_criteria",
             "State the supported criteria used to decide or evaluate the choice.",
@@ -3467,7 +5353,6 @@ def _strengthen_evidence(
     intent_class: str,
     requirements: Sequence[SemanticRequirement],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    del bundle, lexical_result, trace_id, requirements
     selected = legacy._dedupe_evidence([dict(item) for item in evidence])
     endpoint_proof: dict[str, Any] = {
         "required": False,
@@ -3477,7 +5362,103 @@ def _strengthen_evidence(
         "edge_source": "",
         "edge_target": "",
         "relation_type": "",
+        "recovered_facets": [],
+        "recovery_actions": [],
+        "recovery_budget": 0,
+        "bounded_authorized_corpus_recovery": False,
     }
+    if requirements:
+        documents = legacy._release_documents(bundle)
+        support = _facet_support_classification(requirements=requirements, evidence=selected)
+        missing = [
+            requirement
+            for requirement, state in zip(requirements, support, strict=True)
+            if state.get("support_state") in {"UNSUPPORTED", "UNKNOWN"}
+        ]
+        budget = max(
+            0,
+            legacy._dynamic_evidence_budget(
+                question=question,
+                intent_class=intent_class,
+            )
+            - len(selected),
+        )
+        endpoint_proof["recovery_budget"] = budget
+        lexical_by_section = {
+            str(item.get("section_id", "")): item
+            for item in lexical_result.get("results", [])
+            if isinstance(item, Mapping)
+        }
+        selected_sections = {str(item.get("section_id", "")) for item in selected}
+        selected_concepts = {str(item.get("concept_id", "")) for item in selected}
+        selected_sources = {
+            str(item.get("source_id", ""))
+            for item in selected
+            if str(item.get("source_id", ""))
+        }
+        for requirement in missing:
+            if budget <= 0:
+                break
+            ranked_documents = sorted(
+                (
+                    document
+                    for document in documents
+                    if str(document.get("section_id", "")) not in selected_sections
+                    and _requirement_document_score(requirement, document) > 0
+                ),
+                key=lambda document: (
+                    -int(str(document.get("concept_id", "")) in selected_concepts),
+                    -int(str(document.get("source_id", "")) in selected_sources),
+                    -_requirement_document_score(requirement, document),
+                    str(document.get("section_id", "")),
+                ),
+            )
+            recovered = None
+            recovery_scope = "cross_source"
+            for document in ranked_documents:
+                source_local = str(document.get("concept_id", "")) in selected_concepts
+                lexical_item = lexical_by_section.get(str(document.get("section_id", "")), {})
+                try:
+                    candidate = legacy._evidence_item(
+                        bundle=bundle,
+                        document=document,
+                        lexical_result=lexical_item,
+                        trace_id=trace_id,
+                        ordinal=len(selected) + 1,
+                        channels=["semantic_requirement_recovery"],
+                        retrieval_metadata={
+                            "semantic_requirement_recovery": {
+                                "requirement_id": requirement.requirement_id,
+                                "scope": "source_local" if source_local else "cross_source",
+                            }
+                        },
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not _selected_evidence_supports_requirement(requirement, candidate):
+                    continue
+                recovered = candidate
+                recovery_scope = "source_local" if source_local else "cross_source"
+                break
+            if recovered is None:
+                continue
+            selected.append(recovered)
+            selected_sections.add(str(recovered.get("section_id", "")))
+            selected_concepts.add(str(recovered.get("concept_id", "")))
+            selected_sources.add(str(recovered.get("source_id", "")))
+            budget -= 1
+            endpoint_proof["recovered_facets"].append(requirement.requirement_id)
+            endpoint_proof["recovery_actions"].append(
+                {
+                    "requirement_id": requirement.requirement_id,
+                    "section_id": str(recovered.get("section_id", "")),
+                    "source_id": str(recovered.get("source_id", "")),
+                    "scope": recovery_scope,
+                }
+            )
+        endpoint_proof["bounded_authorized_corpus_recovery"] = bool(
+            endpoint_proof["recovery_actions"]
+        )
     if intent_class == "graph_relationship":
         entities = legacy._named_question_entities(question)
         if len(entities) >= 2:
@@ -3852,6 +5833,100 @@ def _provider_evidence_order(
             str(item.get("evidence_id", "")),
         ),
     )
+
+
+def _facet_preserving_provider_evidence_pack(
+    *,
+    evidence: Sequence[Mapping[str, Any]],
+    supported_requirements: Sequence[SemanticRequirement],
+    support_classification: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[Mapping[str, Any]]:
+    """Pack evidence deterministically while keeping every supported facet reachable."""
+    ranked = _provider_evidence_order(
+        evidence, supported_requirements, question
+    )
+    support_by_id = {
+        str(item.get("facet_id", "")): item for item in support_classification
+    }
+    packed: list[Mapping[str, Any]] = []
+    packed_ids: set[str] = set()
+
+    for requirement in supported_requirements:
+        support = support_by_id.get(requirement.requirement_id, {})
+        if support.get("support_state") != "SUPPORTED":
+            continue
+        supporting_ids = {
+            str(item)
+            for item in support.get("supporting_evidence_ids", [])
+            if str(item)
+        }
+        if not supporting_ids:
+            continue
+        candidate = next(
+            (
+                item
+                for item in ranked
+                if str(item.get("evidence_id", "")) in supporting_ids
+            ),
+            None,
+        )
+        if candidate is None:
+            raise ClaimDraftContractError(
+                PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE,
+                "supported facet has no rankable supporting evidence",
+            )
+        evidence_id = str(candidate.get("evidence_id", ""))
+        if evidence_id not in packed_ids:
+            packed.append(candidate)
+            packed_ids.add(evidence_id)
+        if len(packed) > MAX_PROVIDER_EVIDENCE:
+            raise ClaimDraftContractError(
+                PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE,
+                "provider evidence budget cannot represent supported facets",
+            )
+
+    for item in ranked:
+        evidence_id = str(item.get("evidence_id", ""))
+        if not evidence_id or evidence_id in packed_ids:
+            continue
+        packed.append(item)
+        packed_ids.add(evidence_id)
+        if len(packed) == MAX_PROVIDER_EVIDENCE:
+            break
+    return packed
+
+
+def _assert_supported_facets_representable(
+    *,
+    support_classification: Sequence[Mapping[str, Any]],
+    facet_ledger: Mapping[str, Any],
+) -> None:
+    """Keep the provider task internally satisfiable before any provider call."""
+    ledger_by_id = {
+        str(item.get("facet_id", "")): item
+        for item in facet_ledger.get("facets", [])
+        if isinstance(item, Mapping)
+    }
+    for support in support_classification:
+        if support.get("support_state") != "SUPPORTED":
+            continue
+        supporting_ids = [
+            str(item)
+            for item in support.get("supporting_evidence_ids", [])
+            if str(item)
+        ]
+        if not supporting_ids:
+            continue
+        facet_id = str(support.get("facet_id", ""))
+        facet = ledger_by_id.get(facet_id, {})
+        if not facet.get("allowed_evidence_ids") or not facet.get(
+            "allowed_evidence_labels"
+        ):
+            raise ClaimDraftContractError(
+                PROVIDER_EVIDENCE_PACK_UNREPRESENTABLE,
+                "supported facet has no authorized evidence label",
+            )
 
 
 def _provider_snippet(

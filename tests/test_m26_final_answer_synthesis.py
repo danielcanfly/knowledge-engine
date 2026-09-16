@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from knowledge_engine import m26_aq_semantic_contract
+from knowledge_engine import m26_pa7_semantic_closure_runtime as closure_runtime
 from knowledge_engine.m26_pa7_semantic_closure_runtime import (
     _parse_compact_provider_result,
     _semantic_requirements,
@@ -13,6 +14,26 @@ from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
+
+
+def _native_slot_body(
+    task: dict[str, Any],
+    texts: list[str],
+) -> dict[str, Any]:
+    slots = task["claim_slots"]
+    assert len(texts) == len(slots)
+    return {
+        "schema_version": closure_runtime.FACET_LOCAL_CLAIM_SCHEMA_VERSION,
+        "claims": [
+            {
+                "slot_id": str(slot["slot_id"]),
+                "text": text,
+                "claim_type": "EVIDENCE_FACT",
+            }
+            for slot, text in zip(slots, texts, strict=True)
+        ],
+        "model_explanations": [],
+    }
 
 
 def _passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
@@ -38,6 +59,21 @@ def _passage(evidence_id: str, text: str, source: str) -> dict[str, Any]:
 
 def _semantic_review_response(payload: dict[str, Any]) -> dict[str, Any]:
     task = json.loads(payload["messages"][0]["content"])
+    if "review_slots" in task:
+        return {
+            "schema_version": closure_runtime.RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+            "judgments": [
+                {
+                    "review_slot_id": str(slot["review_slot_id"]),
+                    "verdict": (
+                        "GENERIC_EXPLANATION"
+                        if str(slot["claim_type"]) == "MODEL_EXPLANATION"
+                        else "ENTAILED"
+                    ),
+                }
+                for slot in task["review_slots"]
+            ],
+        }
     answer = str(task["answer_text"]).casefold()
     question = str(task["question_context"]).casefold()
     judgments = []
@@ -112,7 +148,7 @@ class _TypedProvider:
 
 
 class _SequenceTypedProvider:
-    def __init__(self, responses: list[dict[str, Any]]) -> None:
+    def __init__(self, responses: list[Any]) -> None:
         self.responses = responses
         self.calls: list[dict[str, Any]] = []
         self.synthesis_call_count = 0
@@ -130,8 +166,11 @@ class _SequenceTypedProvider:
             }
         self.synthesis_call_count += 1
         index = min(self.synthesis_call_count, len(self.responses)) - 1
+        response = self.responses[index]
+        task = json.loads(payload["messages"][0]["content"])
+        body = response(task) if callable(response) else response
         return {
-            "text": json.dumps(self.responses[index]),
+            "text": json.dumps(body),
             "usage": {"input_tokens": 128, "output_tokens": 48},
             "cost_usd": "0.00001",
             "latency_ms": 4,
@@ -141,9 +180,16 @@ class _SequenceTypedProvider:
 
 
 class _TruncatingThenTypedProvider:
-    def __init__(self, *, answer_text: str, claims: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        *,
+        answer_text: str,
+        claims: list[dict[str, Any]],
+        repair_claim_texts: list[str],
+    ) -> None:
         self.answer_text = answer_text
         self.claims = claims
+        self.repair_claim_texts = repair_claim_texts
         self.calls: list[dict[str, Any]] = []
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
@@ -175,12 +221,9 @@ class _TruncatingThenTypedProvider:
                 "response_id": "typed-provider-truncated",
                 "call_class": call_class,
             }
+        task = json.loads(payload["messages"][0]["content"])
         return {
-            "text": json.dumps(_typed_body(
-                status="answer",
-                answer_text=self.answer_text,
-                claims=self.claims,
-            )),
+            "text": json.dumps(_native_slot_body(task, self.repair_claim_texts)),
             "usage": {"input_tokens": 128, "output_tokens": 96},
             "stop_reason": "stop",
             "cost_usd": "0.00001",
@@ -500,6 +543,12 @@ def test_max_tokens_truncation_gets_larger_bounded_repair_budget() -> None:
                 ],
             }
         ],
+        repair_claim_texts=[
+            "Durable state preserves progress",
+            "after a disconnect, while verification checks",
+            "the final result",
+            "before acceptance.",
+        ],
     )
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
@@ -606,22 +655,13 @@ def test_incomplete_answer_gets_one_bounded_repair() -> None:
                     }
                 ],
             ),
-            _typed_body(
-                status="answer",
-                answer_text=complete,
-                claims=[
-                    {
-                        "claim_id": "claim_1",
-                        "claim_type": "EVIDENCE_SYNTHESIS",
-                        "surface_text": complete,
-                        "evidence_labels": ["e1", "e2"],
-                        "covers": [
-                            "durable_state",
-                            "completion_verification",
-                            "explanatory_answer",
-                            "comparison_or_distinction",
-                        ],
-                    }
+            lambda task: _native_slot_body(
+                task,
+                [
+                    "Durable state preserves progress",
+                    "after a disconnect, while verification checks",
+                    "the final result",
+                    "before acceptance.",
                 ],
             ),
         ]
@@ -743,25 +783,11 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
     partial = "Durable state helps because it preserves progress after a disconnect."
     provider = _SequenceTypedProvider(
         [
-            _typed_body(
-                status="partial",
-                answer_text=partial,
-                claims=[
-                    {
-                        "claim_id": "claim_1",
-                        "claim_type": "EVIDENCE_FACT",
-                        "surface_text": partial,
-                        "evidence_labels": ["e1"],
-                        "covers": ["durable_state", "explanatory_answer"],
-                        "unanswered_dimensions": [
-                            "completion_verification",
-                            "comparison_or_distinction",
-                        ],
-                    }
-                ],
-                unanswered_dimensions=[
-                    "completion_verification",
-                    "comparison_or_distinction",
+            lambda task: _native_slot_body(
+                task,
+                [
+                    "Durable state helps because it",
+                    "preserves progress after a disconnect.",
                 ],
             )
         ]
@@ -769,9 +795,10 @@ def test_supported_partial_answer_states_unsupported_boundary() -> None:
 
     answer, closure = _run_typed_synthesis(question, evidence, provider)
 
-    assert len(_synthesis_calls(provider)) == 2
+    assert len(_synthesis_calls(provider)) == 1
     assert answer["status"] == "owner_only_cited_answer"
-    assert answer["repair_attempted"] is True
+    assert answer["repair_attempted"] is False
+    assert answer["answer_text"] == partial
     assert "Unsupported boundary" not in answer["answer_text"]
     assert answer["multi_evidence_verification"]["partial_answer"] is True
     assert closure["partial_answer"] is True

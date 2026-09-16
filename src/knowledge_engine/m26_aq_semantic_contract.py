@@ -425,6 +425,20 @@ def _authority_boundary_requirement() -> SemanticRequirement:
     )
 
 
+def _entity_requirement_equivalence_key(value: str) -> tuple[str, ...]:
+    tokens = re.findall(r"[A-Za-z0-9]+", str(value).casefold())
+    normalized: list[str] = []
+    for token in tokens:
+        if (
+            len(token) > 3
+            and token.endswith("s")
+            and not token.endswith(("ss", "is", "us"))
+        ):
+            token = token[:-1]
+        normalized.append(token)
+    return tuple(normalized)
+
+
 def derive_semantic_requirements(
     question: str,
     intent_class: str,
@@ -490,6 +504,7 @@ def derive_semantic_requirements(
         )
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
+    seen_entity_keys: set[tuple[str, ...]] = set()
     for item in base:
         requirement_id = str(getattr(item, "requirement_id", ""))
         if not requirement_id or requirement_id in seen:
@@ -516,8 +531,11 @@ def derive_semantic_requirements(
                 instruction = f"Name and address {cleaned} explicitly."
                 evidence_terms = (cleaned,)
                 visible_patterns = (re.escape(cleaned),)
-            if requirement_id in seen:
+            entity_key = _entity_requirement_equivalence_key(exact_phrase)
+            if requirement_id in seen or (entity_key and entity_key in seen_entity_keys):
                 continue
+            if entity_key:
+                seen_entity_keys.add(entity_key)
         seen.add(requirement_id)
         requirements.append(
             SemanticRequirement(
@@ -1198,6 +1216,21 @@ def _contract_compat_module() -> Any:
     return _CanonicalSupportCompatibility
 
 
+_LEGACY_ONE_SHOT_FACETS = frozenset(
+    {"durable_state", "completion_verification", "explanatory_answer", "comparison_or_distinction"}
+)
+
+
+def _legacy_closure_attempt_budget(requirements: Sequence[Any]) -> int:
+    """Keep the legacy canonical hot path one-shot; Wave B runtime remains repairable."""
+    requirement_ids = {
+        str(item.requirement_id)
+        for item in requirements
+        if hasattr(item, "requirement_id")
+    }
+    return 1 if _LEGACY_ONE_SHOT_FACETS.issubset(requirement_ids) else 2
+
+
 def synthesize_and_verify(
     *,
     question: str,
@@ -1222,7 +1255,7 @@ def synthesize_and_verify(
         requirements=runtime_requirements,
         endpoint_proof=endpoint_proof,
         allow_deterministic_recovery=allow_deterministic_recovery,
-        max_attempts=2,
+        max_attempts=_legacy_closure_attempt_budget(runtime_requirements),
     )
     fingerprint = semantic_contract_fingerprint()
     closure = {

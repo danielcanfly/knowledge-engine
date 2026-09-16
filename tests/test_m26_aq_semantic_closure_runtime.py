@@ -47,6 +47,26 @@ OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf63
 SEGMENT_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 
 
+def _native_slot_body(
+    task: dict[str, Any],
+    texts: list[str],
+) -> dict[str, Any]:
+    slots = task["claim_slots"]
+    assert len(texts) == len(slots)
+    return {
+        "schema_version": closure_runtime.FACET_LOCAL_CLAIM_SCHEMA_VERSION,
+        "claims": [
+            {
+                "slot_id": str(slot["slot_id"]),
+                "text": text,
+                "claim_type": "EVIDENCE_FACT",
+            }
+            for slot, text in zip(slots, texts, strict=True)
+        ],
+        "model_explanations": [],
+    }
+
+
 def _segment_body_from_legacy(body: dict[str, Any]) -> dict[str, Any]:
     if "segments" in body:
         return body
@@ -116,107 +136,47 @@ class _SemanticReviewRepairProvider:
         self.calls.append((payload, call_class))
         if call_class in {"aq_semantic_closure", "aq_semantic_closure_repair"}:
             task = json.loads(payload["messages"][0]["content"])
-            label_by_text = {
-                str(item["id"]): str(item.get("text", "")).casefold()
-                for item in task["evidence"]
+            text_by_facet = {
+                "router_snapshots": "The router keeps graph snapshots.",
+                "monitor_events": "The monitor rejects events.",
             }
-            router_label = next(
-                label for label, text in label_by_text.items() if "router" in text
+            body = _native_slot_body(
+                task,
+                [
+                    text_by_facet[str(slot["facet_id"])]
+                    for slot in task["claim_slots"]
+                ],
             )
-            monitor_label = next(
-                label for label, text in label_by_text.items() if "monitor" in text
-            )
-            if call_class == "aq_semantic_closure_repair":
-                body = {
-                    "schema_version": "m26-fas-synthesis/v1",
-                    "status": "partial",
-                    "answer_text": "The router keeps graph snapshots.",
-                    "claims": [
-                        {
-                            "claim_id": "claim_1",
-                            "claim_type": "EVIDENCE_FACT",
-                            "surface_text": "The router keeps graph snapshots.",
-                            "evidence_labels": [router_label],
-                            "covers": ["router_snapshots"],
-                        }
-                    ],
-                    "unanswered_dimensions": ["monitor_events"],
-                    "abstention_reason": None,
-                }
-            else:
-                body = {
-                    "schema_version": "m26-fas-synthesis/v1",
-                    "status": "answer",
-                    "answer_text": (
-                        "The router keeps graph snapshots. The monitor rejects events."
-                    ),
-                    "claims": [
-                        {
-                            "claim_id": "claim_1",
-                            "claim_type": "EVIDENCE_FACT",
-                            "surface_text": "The router keeps graph snapshots.",
-                            "evidence_labels": [router_label],
-                            "covers": ["router_snapshots"],
-                        },
-                        {
-                            "claim_id": "claim_2",
-                            "claim_type": "EVIDENCE_FACT",
-                            "surface_text": "The monitor rejects events.",
-                            "evidence_labels": [monitor_label],
-                            "covers": ["monitor_events"],
-                        },
-                    ],
-                    "unanswered_dimensions": [],
-                    "abstention_reason": None,
-                }
             return {
-                "text": json.dumps(_segment_body_from_legacy(body)),
+                "text": json.dumps(body),
                 "usage": {"input_tokens": 10, "output_tokens": 10},
                 "cost_usd": "0.001",
                 "call_class": call_class,
             }
 
         task = json.loads(payload["messages"][0]["content"])
-        claim_cases = task["claim_cases"]
-        self.review_claim_cases.append(claim_cases)
+        review_slots = task["review_slots"]
+        self.review_claim_cases.append(review_slots)
         judgments = []
-        for case in claim_cases:
-            claim_id = str(case["claim_id"])
-            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
-            surface = str(case["surface_text"]).casefold()
+        for slot in review_slots:
+            surface = str(slot["surface_text"]).casefold()
             if "rejects" in surface:
-                judgments.append(
-                    {
-                        "claim_id": claim_id,
-                        "verdict": "CONTRADICTED",
-                        "evidence_ids": local_ids,
-                    }
-                )
-            elif str(case["claim_type"]) == "MODEL_EXPLANATION":
-                judgments.append(
-                    {
-                        "claim_id": claim_id,
-                        "verdict": "GENERIC_EXPLANATION",
-                        "evidence_ids": [],
-                    }
-                )
+                verdict = "CONTRADICTED"
+            elif str(slot["claim_type"]) == "MODEL_EXPLANATION":
+                verdict = "GENERIC_EXPLANATION"
             else:
-                judgments.append(
-                    {
-                        "claim_id": claim_id,
-                        "verdict": "ENTAILED",
-                        "evidence_ids": local_ids,
-                    }
-                )
+                verdict = "ENTAILED"
+            judgments.append(
+                {
+                    "review_slot_id": str(slot["review_slot_id"]),
+                    "verdict": verdict,
+                }
+            )
         return {
             "text": json.dumps(
                 {
-                    "schema_version": "m26-claim-entailment-review/v1",
-                    "claim_judgments": judgments,
-                    "visible_coverage": {
-                        "verdict": "COVERED",
-                        "uncovered_assertions": [],
-                    },
+                    "schema_version": closure_runtime.RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+                    "judgments": judgments,
                 }
             ),
             "usage": {"input_tokens": 10, "output_tokens": 10},
@@ -245,15 +205,21 @@ class _ScriptedSemanticClosureProvider:
             else:
                 result = {"status": "abstain", "answer_text": "", "claims": []}
             body = result(task) if callable(result) else result
+            wire_body = (
+                body
+                if body.get("schema_version")
+                == closure_runtime.FACET_LOCAL_CLAIM_SCHEMA_VERSION
+                else _segment_body_from_legacy(body)
+            )
             return {
-                "text": json.dumps(_segment_body_from_legacy(body)),
+                "text": json.dumps(wire_body),
                 "usage": {"input_tokens": 10, "output_tokens": 10},
                 "cost_usd": "0.001",
                 "call_class": call_class,
             }
 
         task = json.loads(payload["messages"][0]["content"])
-        claim_cases = task["claim_cases"]
+        claim_cases = task.get("review_slots", task.get("claim_cases", []))
         self.review_claim_cases.append(claim_cases)
         if self.review_result is not None:
             body = (
@@ -263,6 +229,31 @@ class _ScriptedSemanticClosureProvider:
             )
             return {
                 "text": json.dumps(body),
+                "usage": {"input_tokens": 10, "output_tokens": 10},
+                "cost_usd": "0.001",
+                "call_class": call_class,
+            }
+        if "review_slots" in task:
+            return {
+                "text": json.dumps(
+                    {
+                        "schema_version": (
+                            closure_runtime.RUNTIME_BOUND_REVIEW_SCHEMA_VERSION
+                        ),
+                        "judgments": [
+                            {
+                                "review_slot_id": str(slot["review_slot_id"]),
+                                "verdict": (
+                                    "GENERIC_EXPLANATION"
+                                    if str(slot["claim_type"])
+                                    == "MODEL_EXPLANATION"
+                                    else "ENTAILED"
+                                ),
+                            }
+                            for slot in claim_cases
+                        ],
+                    }
+                ),
                 "usage": {"input_tokens": 10, "output_tokens": 10},
                 "cost_usd": "0.001",
                 "call_class": call_class,
@@ -1114,25 +1105,7 @@ def test_candidate2r1_wrong_review_schema_test_module_fails_closed() -> None:
     ]
 
     def synthesis(task: dict[str, Any]) -> dict[str, Any]:
-        router_label = next(
-            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
-        )
-        return {
-            "schema_version": "m26-fas-synthesis/v1",
-            "status": "answer",
-            "answer_text": "The router keeps graph snapshots.",
-            "claims": [
-                {
-                    "claim_id": "claim_1",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The router keeps graph snapshots.",
-                    "evidence_labels": [router_label],
-                    "covers": ["router_snapshots"],
-                }
-            ],
-            "unanswered_dimensions": [],
-            "abstention_reason": None,
-        }
+        return _native_slot_body(task, ["The router keeps graph snapshots."])
 
     test_module_provider = type(
         "WrongReviewSchemaProvider",
@@ -1162,11 +1135,13 @@ def test_candidate2r1_wrong_review_schema_test_module_fails_closed() -> None:
     assert [call_class for _, call_class in provider.calls] == [
         "aq_semantic_closure",
         "aq_claim_semantic_entailment",
-        "aq_semantic_closure_repair",
         "aq_claim_semantic_entailment",
     ]
     assert answer["answer_source"] == "safe_abstention"
-    assert "ValueError" in closure["failures"]
+    assert (
+        "M26_PPVE_099_UNCLASSIFIED_VALUE_ERROR_NATIVE_SEMANTIC_REVIEW_BINDING"
+        in closure["failures"]
+    )
     assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
 
 
@@ -1249,25 +1224,7 @@ def test_candidate2r1_second_attempt_requires_real_reviewer() -> None:
     ]
 
     def valid_synthesis(task: dict[str, Any]) -> dict[str, Any]:
-        router_label = next(
-            str(item["id"]) for item in task["evidence"] if "router" in item["text"]
-        )
-        return {
-            "schema_version": "m26-fas-synthesis/v1",
-            "status": "answer",
-            "answer_text": "The router keeps graph snapshots.",
-            "claims": [
-                {
-                    "claim_id": "claim_1",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The router keeps graph snapshots.",
-                    "evidence_labels": [router_label],
-                    "covers": ["router_snapshots"],
-                }
-            ],
-            "unanswered_dimensions": [],
-            "abstention_reason": None,
-        }
+        return _native_slot_body(task, ["The router keeps graph snapshots."])
 
     class ParseFailThenValidProvider(_ScriptedSemanticClosureProvider):
         def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
@@ -1464,42 +1421,14 @@ def test_candidate2_top_level_used_cannot_rescue_missing_claim_binding() -> None
             "router-note",
         )
     ]
+    def injected_identity(task: dict[str, Any]) -> dict[str, Any]:
+        body = _native_slot_body(task, ["The router stores graph snapshots."])
+        body["used"] = ["e1"]
+        body["claims"][0]["evidence_labels"] = ["e1"]
+        return body
+
     provider = _ScriptedSemanticClosureProvider(
-        [
-            {
-                "schema_version": "m26-fas-synthesis/v1",
-                "status": "answer",
-                "answer_text": "The router stores graph snapshots.",
-                "used": ["e1"],
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "claim_type": "EVIDENCE_FACT",
-                        "surface_text": "The router stores graph snapshots.",
-                        "evidence_labels": [],
-                        "covers": ["router_snapshots"],
-                    }
-                ],
-                "unanswered_dimensions": [],
-                "abstention_reason": None,
-            },
-            {
-                "schema_version": "m26-fas-synthesis/v1",
-                "status": "answer",
-                "answer_text": "The router stores graph snapshots.",
-                "used": ["e1"],
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "claim_type": "EVIDENCE_FACT",
-                        "surface_text": "The router stores graph snapshots.",
-                        "covers": ["router_snapshots"],
-                    }
-                ],
-                "unanswered_dimensions": [],
-                "abstention_reason": None,
-            },
-        ]
+        [injected_identity, injected_identity]
     )
 
     answer, _closure = _synthesize_and_verify(
@@ -1528,23 +1457,14 @@ def test_candidate2_unknown_claim_label_fails_closed_without_review() -> None:
             "router-note",
         )
     ]
-    bad_claim = {
-        "schema_version": "m26-fas-synthesis/v1",
-        "status": "answer",
-        "answer_text": "The router stores graph snapshots.",
-        "claims": [
-            {
-                "claim_id": "claim_1",
-                "claim_type": "EVIDENCE_FACT",
-                "surface_text": "The router stores graph snapshots.",
-                "evidence_labels": ["e999"],
-                "covers": ["router_snapshots"],
-            }
-        ],
-        "unanswered_dimensions": [],
-        "abstention_reason": None,
-    }
-    provider = _ScriptedSemanticClosureProvider([bad_claim, bad_claim])
+    def injected_unknown_label(task: dict[str, Any]) -> dict[str, Any]:
+        body = _native_slot_body(task, ["The router stores graph snapshots."])
+        body["claims"][0]["evidence_labels"] = ["e999"]
+        return body
+
+    provider = _ScriptedSemanticClosureProvider(
+        [injected_unknown_label, injected_unknown_label]
+    )
 
     answer, _closure = _synthesize_and_verify(
         question="Explain router graph snapshots.",
@@ -1571,37 +1491,32 @@ def test_candidate2_claim_local_review_isolation() -> None:
     ]
 
     def synthesis(task: dict[str, Any]) -> dict[str, Any]:
-        labels = {
-            str(item["id"]): str(item["text"]).casefold()
-            for item in task["evidence"]
+        text_by_facet = {
+            "router_snapshots": "The router stores graph snapshots.",
+            "monitor_events": "The monitor accepts events.",
         }
-        router_label = next(label for label, text in labels.items() if "router" in text)
-        monitor_label = next(label for label, text in labels.items() if "monitor" in text)
-        return {
-            "schema_version": "m26-fas-synthesis/v1",
-            "status": "answer",
-            "answer_text": (
-                "The router stores graph snapshots. The monitor accepts events."
-            ),
-            "claims": [
-                {
-                    "claim_id": "claim_router",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The router stores graph snapshots.",
-                    "evidence_labels": [router_label],
-                    "covers": ["router_snapshots"],
-                },
-                {
-                    "claim_id": "claim_monitor",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The monitor accepts events.",
-                    "evidence_labels": [monitor_label],
-                    "covers": ["monitor_events"],
-                },
+        return _native_slot_body(
+            task,
+            [
+                text_by_facet[str(slot["facet_id"])]
+                for slot in task["claim_slots"]
             ],
-            "unanswered_dimensions": [],
-            "abstention_reason": None,
-        }
+        )
+
+    requirements = [
+        SemanticRequirement(
+            requirement_id="router_snapshots",
+            instruction="Explain router graph snapshots.",
+            evidence_terms=("router", "graph", "snapshots"),
+            visible_patterns=(),
+        ),
+        SemanticRequirement(
+            requirement_id="monitor_events",
+            instruction="Explain monitor events.",
+            evidence_terms=("monitor", "events"),
+            visible_patterns=(),
+        ),
+    ]
 
     provider = _ScriptedSemanticClosureProvider([synthesis])
     answer, _closure = _synthesize_and_verify(
@@ -1610,18 +1525,18 @@ def test_candidate2_claim_local_review_isolation() -> None:
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
         provider_client=provider,
-        requirements=[],
+        requirements=requirements,
         endpoint_proof={"schema_version": "test"},
     )
 
     assert answer["answer_source"] == "provider_verified_runtime_bound_semantic_closure"
-    assert {
-        str(case["claim_id"]): {str(item["evidence_id"]) for item in case["evidence"]}
-        for case in provider.review_claim_cases[0]
-    } == {
-        "claim_router": {"router"},
-        "claim_monitor": {"monitor"},
-    }
+    assert [
+        {str(item["text"]) for item in slot["local_evidence"]}
+        for slot in provider.review_claim_cases[0]
+    ] == [
+        {"The router stores graph snapshots."},
+        {"The monitor accepts events."},
+    ]
 
 
 def test_candidate2r1_static_no_test_awareness_guard() -> None:
@@ -1662,7 +1577,7 @@ def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
         provider_client=provider,
-        requirements=_semantic_requirements(question, "direct_grounded_knowledge"),
+        requirements=[],
         endpoint_proof={"schema_version": "test"},
     )
 
@@ -1674,7 +1589,10 @@ def test_provider_abstain_with_available_evidence_safely_abstains_without_quote_
     assert answer["answer_source"] == "safe_abstention"
     assert answer["safe_abstention"] is True
     verification = answer["multi_evidence_verification"]
-    assert verification["provider_contract"] == "compact_runtime_bound_semantic_closure/v1"
+    assert (
+        verification["provider_contract"]
+        == "no_material_runtime_bound_semantic_closure/v1"
+    )
     assert closure["broad_deterministic_fallback_used"] is False
     assert "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE" in closure["failures"]
     assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
@@ -1731,16 +1649,13 @@ def test_semantic_review_one_repair_preserves_supported_partial() -> None:
     assert "router keeps graph snapshots" in answer["answer_text"].casefold()
     assert "unsupported boundary" not in answer["answer_text"].casefold()
     assert closure["partial_answer"] is True
-    first_review_cases = {
-        str(case["claim_id"]): {
-            str(item["evidence_id"]) for item in case["evidence"]
-        }
-        for case in provider.review_claim_cases[0]
-    }
-    assert first_review_cases == {
-        "claim_1": {"ev_router"},
-        "claim_2": {"ev_monitor"},
-    }
+    assert [
+        {str(item["text"]) for item in slot["local_evidence"]}
+        for slot in provider.review_claim_cases[0]
+    ] == [
+        {"The router stores graph snapshots."},
+        {"The monitor accepts events."},
+    ]
 
 
 def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() -> None:
@@ -1759,71 +1674,53 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     ]
 
     def synthesis(task: dict[str, Any]) -> dict[str, Any]:
-        labels = {
-            "router": next(
-                str(item["id"]) for item in task["evidence"] if "router" in item["text"]
-            ),
-            "monitor": next(
-                str(item["id"]) for item in task["evidence"] if "monitor" in item["text"]
-            ),
+        text_by_facet = {
+            "router_snapshots": "The router keeps graph snapshots.",
+            "monitor_events": "The monitor rejects events.",
         }
-        return {
-            "schema_version": "m26-fas-synthesis/v1",
-            "status": "answer",
-            "answer_text": "The router keeps graph snapshots. The monitor rejects events.",
-            "claims": [
-                {
-                    "claim_id": "claim_1",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The router keeps graph snapshots.",
-                    "evidence_labels": [labels["router"]],
-                    "covers": ["router_snapshots"],
-                },
-                {
-                    "claim_id": "claim_2",
-                    "claim_type": "EVIDENCE_FACT",
-                    "surface_text": "The monitor rejects events.",
-                    "evidence_labels": [labels["monitor"]],
-                    "covers": ["monitor_events"],
-                },
+        return _native_slot_body(
+            task,
+            [
+                text_by_facet[str(slot["facet_id"])]
+                for slot in task["claim_slots"]
             ],
-            "unanswered_dimensions": [],
-            "abstention_reason": None,
-        }
+        )
 
     def review(task: dict[str, Any]) -> dict[str, Any]:
-        judgments = []
-        for case in task["claim_cases"]:
-            local_ids = [str(item["evidence_id"]) for item in case["evidence"]]
-            if str(case["claim_id"]) == "claim_1":
-                judgments.append(
-                    {
-                        "claim_id": "claim_1",
-                        "verdict": "ENTAILED",
-                        "evidence_ids": local_ids,
-                    }
-                )
-            else:
-                judgments.append(
-                    {
-                        "claim_id": "claim_2",
-                        "verdict": "INSUFFICIENT",
-                        "evidence_ids": local_ids,
-                    }
-                )
+        judgments = [
+            {
+                "review_slot_id": str(slot["review_slot_id"]),
+                "verdict": (
+                    "ENTAILED"
+                    if "router" in str(slot["surface_text"]).casefold()
+                    else "INSUFFICIENT"
+                ),
+            }
+            for slot in task["review_slots"]
+        ]
         return {
-            "schema_version": "m26-claim-entailment-review/v1",
-            "claim_judgments": judgments,
-            "visible_coverage": {
-                "verdict": "UNCOVERED",
-                "uncovered_assertions": ["The monitor rejects events."],
-            },
+            "schema_version": closure_runtime.RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+            "judgments": judgments,
         }
 
     provider = _ScriptedSemanticClosureProvider(
         [synthesis, synthesis],
         review_result=review,
     )
+    requirements = [
+        SemanticRequirement(
+            requirement_id="router_snapshots",
+            instruction="Explain router graph snapshots.",
+            evidence_terms=("router", "graph", "snapshots"),
+            visible_patterns=(),
+        ),
+        SemanticRequirement(
+            requirement_id="monitor_events",
+            instruction="Explain monitor events.",
+            evidence_terms=("monitor", "events"),
+            visible_patterns=(),
+        ),
+    ]
 
     answer, closure = _synthesize_and_verify(
         question=question,
@@ -1831,7 +1728,7 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
         intent_class="direct_grounded_knowledge",
         evidence=evidence,
         provider_client=provider,
-        requirements=[],
+        requirements=requirements,
         endpoint_proof={"schema_version": "test"},
     )
 
@@ -1846,7 +1743,9 @@ def test_semantic_review_final_rejection_publishes_entailed_claims_as_partial() 
     assert answer["unsupported_accepted_claims"] == 0
     assert "router keeps graph snapshots" in answer["answer_text"].casefold()
     assert "monitor rejects events" not in answer["answer_text"].casefold()
-    assert answer["multi_evidence_verification"]["dropped_claim_ids"] == ["claim_2"]
+    assert answer["multi_evidence_verification"]["dropped_claim_ids"] == [
+        "slot_2_claim"
+    ]
     assert closure["partial_answer"] is True
     assert closure["failures"] == []
 
@@ -1866,32 +1765,31 @@ def test_provider_partial_without_requirement_coverage_abstains_deterministicall
             "datastore-note",
         )
     ]
-    partial = {
-        "schema_version": "m26-fas-synthesis/v1",
-        "status": "partial",
-        "answer_text": (
-            "The supplied evidence mentions the datastore, but it does not verify a "
-            "callback direction."
-        ),
-        "claims": [
-            {
-                "claim_id": "claim_1",
-                "claim_type": "EVIDENCE_SYNTHESIS",
-                "surface_text": (
-                    "The supplied evidence mentions the datastore, but it does not "
-                    "verify a callback direction."
-                ),
-                "evidence_labels": ["e1"],
-                "covers": ["direct_answer"],
-            }
-        ],
-        "unanswered_dimensions": [
-            "Whether the ingestion service writes records to the datastore",
-            "Whether the datastore initiates callbacks to the ingestion service",
-        ],
-        "abstention_reason": None,
-    }
-    provider = _ScriptedSemanticClosureProvider([partial, partial])
+    def insufficient_claim(task: dict[str, Any]) -> dict[str, Any]:
+        return _native_slot_body(
+            task,
+            [
+                "The supplied evidence mentions the datastore but does not establish "
+                "the requested callback direction."
+            ],
+        )
+
+    def insufficient_review(task: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "schema_version": closure_runtime.RUNTIME_BOUND_REVIEW_SCHEMA_VERSION,
+            "judgments": [
+                {
+                    "review_slot_id": str(slot["review_slot_id"]),
+                    "verdict": "INSUFFICIENT",
+                }
+                for slot in task["review_slots"]
+            ],
+        }
+
+    provider = _ScriptedSemanticClosureProvider(
+        [insufficient_claim, insufficient_claim],
+        review_result=insufficient_review,
+    )
 
     answer, closure = _synthesize_and_verify(
         question=question,
@@ -1905,11 +1803,19 @@ def test_provider_partial_without_requirement_coverage_abstains_deterministicall
 
     assert [call_class for _, call_class in provider.calls] == [
         "aq_semantic_closure",
+        "aq_claim_semantic_entailment",
         "aq_semantic_closure_repair",
+        "aq_claim_semantic_entailment",
     ]
     assert answer["status"] == "owner_only_safe_abstention"
     assert answer["safe_abstention"] is True
-    assert "PARTIAL_ANSWER_UNRESOLVED_MATERIAL_DIMENSIONS" in answer["reason_codes"]
+    assert any(
+        code.startswith("SEMANTIC_REVIEW_BLOCKED:")
+        for code in answer["reason_codes"]
+    )
+    assert closure["provider_contract"] == (
+        "no_material_runtime_bound_semantic_closure/v1"
+    )
     assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
 
 

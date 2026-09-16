@@ -379,6 +379,19 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
             body,
         ):
             return None
+        if re.search(r"\b(?:difference|differences)\s+between\b|\bdifferent\s+from\b", body):
+            return None
+        if re.match(
+            r"(?:the\s+)?(?:[a-z]+|\d+)\s+(?:parts?|components?|steps?|stages?|"
+            r"types?|variants?|items?)\s+of\b",
+            body,
+        ):
+            return None
+        if re.search(
+            r"\b(?:actually\s+)?(?:testing|measuring|evaluating|checking|trying)\b",
+            body,
+        ):
+            return None
         if (prefix.startswith("what does") or prefix.startswith("what do")) and (
             " mean " not in f" {body} "
         ):
@@ -6829,6 +6842,39 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
             context_terms=frozenset(),
             relation_terms=frozenset({"belongs", "belong", "documents", "embeddings", "graph"}),
             subject_phrases=(subject,) if subject else (),
+            requires_explicit_relation=True,
+        )
+
+    helped_decision_match = re.search(
+        r"\bwhat\s+does\s+(.+?)\s+help\s+(.+?)\s+(?:decide|choose|determine|evaluate)\b",
+        normalized,
+    )
+    if helped_decision_match is not None:
+        role_subject = _strip_leading_articles(helped_decision_match.group(1))
+        role_context = _strip_leading_articles(helped_decision_match.group(2))
+        return _AnswerBearingQueryFocus(
+            relation="role",
+            subject_terms=frozenset(_coverage_terms(role_subject)),
+            context_terms=frozenset(_coverage_terms(role_context)),
+            relation_terms=frozenset(
+                {
+                    "role",
+                    "purpose",
+                    "function",
+                    "use",
+                    "uses",
+                    "used",
+                    "help",
+                    "helps",
+                    "decision",
+                    "decisions",
+                    "decide",
+                    "choose",
+                    "determine",
+                    "evaluate",
+                }
+            ),
+            subject_phrases=_subject_phrase_variants(role_subject),
             requires_explicit_relation=True,
         )
 

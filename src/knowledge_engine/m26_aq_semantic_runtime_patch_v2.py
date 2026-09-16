@@ -2401,6 +2401,7 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
             "The state machine defines the policy and approval authority envelope. "
             "Adaptive replanning revises remaining work when assumptions change, with "
             "those revisions staying within the state-machine policy and approval gates "
+            "and together composing a bounded execution loop "
             "rather than expanding the replanner's authority."
         )
     if {"obsidian_role", "graphology_role", "sigma_role", "trust_anchor"}.issubset(ids):
