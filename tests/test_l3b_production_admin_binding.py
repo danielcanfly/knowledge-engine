@@ -35,7 +35,10 @@ def test_qualified_provider_exposes_only_l3b_capabilities() -> None:
     assert {gate.capability_id: gate.state for gate in gates} == {
         "qa.event.read": "read_only",
         "qa.events.read": "read_only",
+        "qa.export_jsonl": "enabled",
         "qa.export_markdown": "read_only",
+        "qa.lifecycle": "enabled",
+        "suggested_questions.review": "enabled",
         "suggested_questions.publish": "disabled",
     }
     assert all(gate.source == "l3b_production_qualification" for gate in gates)
@@ -46,11 +49,17 @@ def test_qualified_provider_exposes_only_l3b_capabilities() -> None:
 def test_production_provider_emits_canonical_read_evidence_and_blocks_publish() -> None:
     provider = QualifiedL3BCapabilityProvider()
 
-    for capability_id in ("qa.events.read", "qa.event.read"):
+    for capability_id in ("qa.events.read", "qa.event.read", "qa.export_markdown"):
         payload = provider.get_capability(capability_id).to_payload()
         assert payload["qualification_status"] == "qualified"
         assert payload["effective_state"] == "read_only"
         assert payload["mutation_authorized"] is False
+
+    for capability_id in ("qa.export_jsonl", "qa.lifecycle", "suggested_questions.review"):
+        payload = provider.get_capability(capability_id).to_payload()
+        assert payload["qualification_status"] == "qualified"
+        assert payload["effective_state"] == "enabled"
+        assert payload["mutation_authorized"] is True
 
     publish = provider.get_capability("suggested_questions.publish").to_payload()
     assert publish["qualification_status"] == "blocked_authority"
@@ -89,25 +98,32 @@ def test_production_provider_settings_projection_is_readable_and_mutation_safe()
     capabilities = {
         item["capability_id"]: item for item in response.json()["data"]["capabilities"]
     }
-    for capability_id in ("qa.events.read", "qa.event.read"):
+    for capability_id in ("qa.events.read", "qa.event.read", "qa.export_markdown"):
         assert capabilities[capability_id]["qualification_status"] == "qualified"
         assert capabilities[capability_id]["effective_state"] == "read_only"
         assert capabilities[capability_id]["mutation_authorized"] is False
+    for capability_id in ("qa.export_jsonl", "qa.lifecycle", "suggested_questions.review"):
+        assert capabilities[capability_id]["qualification_status"] == "qualified"
+        assert capabilities[capability_id]["effective_state"] == "enabled"
+        assert capabilities[capability_id]["mutation_authorized"] is True
     publish = capabilities["suggested_questions.publish"]
     assert publish["effective_state"] == "unavailable"
     assert publish["mutation_authorized"] is False
 
 
-def test_production_provider_direct_read_gate_allows_reads_but_mutations_fail_closed() -> None:
+def test_production_provider_direct_gate_separates_review_from_publish_authority() -> None:
     app = FastAPI()
     provider = QualifiedL3BCapabilityProvider()
     install_admin_control_plane(app, capability_provider=provider)
     request = type("Request", (), {"app": app})()
 
     assert require_capability(request, "qa.events.read").state == "read_only"
-    with pytest.raises(AdminAPIError) as export_error:
+    assert require_capability(request, "qa.export_jsonl", mutation=True).state == "enabled"
+    assert require_capability(request, "qa.lifecycle", mutation=True).state == "enabled"
+    assert require_capability(request, "suggested_questions.review", mutation=True).state == "enabled"
+    with pytest.raises(AdminAPIError) as legacy_export_error:
         require_capability(request, "qa.export_markdown", mutation=True)
-    assert export_error.value.status_code == 409
+    assert legacy_export_error.value.status_code == 409
     with pytest.raises(AdminAPIError) as publish_error:
         require_capability(request, "suggested_questions.publish", mutation=True)
     assert publish_error.value.status_code == 409
