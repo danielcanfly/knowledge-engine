@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from typing import Any
 
+from .m26_admin_contract import canonical_json_bytes
 from .m26_admin_ingestion_core import ReadObservation
 from .m26_admin_ingestion_sync import build_index_health
 
@@ -120,7 +122,7 @@ def build_operator_index_health(observation: ReadObservation) -> ReadObservation
         reason_code=built.reason_code,
         detail=built.detail,
         resource_identity=built.resource_identity,
-        evidence_digest=built.evidence_digest,
+        evidence_digest=hashlib.sha256(canonical_json_bytes(health)).hexdigest(),
     )
 
 
