@@ -468,7 +468,7 @@ def derive_semantic_requirements(
 ) -> list[SemanticRequirement]:
     """Return canonical semantic requirements without mutating runtime modules."""
     lifecycle_requested = _requested_lifecycle_requirements(question)
-    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_parts = runtime._semantic_contextual_definition_query_parts(question)
     authority_requested = _state_machine_replanner_question(question)
     base = list(
         base_requirements
@@ -1314,7 +1314,7 @@ def _definition_fallback_requirements_present(
     question: str,
     requirements: Sequence[Any],
 ) -> bool:
-    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_parts = runtime._semantic_contextual_definition_query_parts(question)
     if definition_parts is None:
         return False
     requirement_ids = {_semantic_requirement_id(item) for item in requirements}
@@ -1588,7 +1588,7 @@ def _recover_definition_fallback_answer(
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     if str(verification.get("status")) != "owner_only_safe_abstention":
         return None
-    if legacy._contextual_definition_query_parts(question) is None:
+    if runtime._semantic_contextual_definition_query_parts(question) is None:
         return None
     if intent_class != "direct_grounded_knowledge":
         return None

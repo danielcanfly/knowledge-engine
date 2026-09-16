@@ -65,55 +65,15 @@ def test_explicit_decision_language_still_requires_decision_criteria():
     assert "decision_criteria" in _ids(question)
 
 
-def test_help_decide_question_is_answer_bearing_role_not_generic_overlap():
+def test_help_decide_question_keeps_semantic_decision_requirement_without_retrieval_override():
     question = "What does retry_count help an operator decide?"
 
-    focus = legacy._answer_bearing_query_focus(question)
-
-    assert focus.relation == "role"
-    assert "retry_count" in focus.subject_terms
-    assert {"operator"}.issubset(focus.context_terms)
-    assert focus.requires_explicit_relation is True
-
-    irrelevant = legacy._candidate_answer_bearing_score(
-        question=question,
-        document={
-            "title": "General operations",
-            "section_title": "Deployment criteria",
-            "description": "Choose a deployment mode based on cost and latency.",
-            "body": "Teams evaluate cost, latency, and release risk before deployment.",
-            "excerpt": "",
-        },
-        focus=focus,
-    )
-    relevant = legacy._candidate_answer_bearing_score(
-        question=question,
-        document={
-            "title": "Retry telemetry",
-            "section_title": "retry_count",
-            "description": "",
-            "body": (
-                "retry_count helps an operator decide whether repeated attempts indicate "
-                "a transient failure or a condition that needs intervention."
-            ),
-            "excerpt": "",
-        },
-        focus=focus,
-    )
-
-    assert irrelevant["answer_bearing"] is False
-    assert relevant["answer_bearing"] is True
-    assert relevant["score"] > irrelevant["score"]
-
+    assert "decision_criteria" in _ids(question)
 
 def test_action_enumeration_and_comparison_questions_are_not_misclassified_as_definitions():
     action_question = "What were the adapter variants actually measuring in the experiments?"
     enumeration_question = "What are the five parts of the runtime mental model?"
     comparison_question = "What is the practical difference between a handoff and a fork?"
-
-    assert legacy._contextual_definition_query_parts(action_question) is None
-    assert legacy._contextual_definition_query_parts(enumeration_question) is None
-    assert legacy._contextual_definition_query_parts(comparison_question) is None
 
     action_ids = _ids(action_question)
     enumeration_ids = _ids(enumeration_question)

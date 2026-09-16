@@ -91,6 +91,32 @@ CLAIM_DRAFT_ALLOWED_KEYS = {
     "unanswered_dimensions",
 }
 
+def _semantic_contextual_definition_query_parts(question: str) -> dict[str, str] | None:
+    """Semantic-only definition shape classifier without mutating retrieval behavior."""
+    parts = legacy._contextual_definition_query_parts(question)
+    if parts is None:
+        return None
+    normalized = " ".join(str(question).casefold().split()).strip(" ?.")
+    prefix = str(parts.get("question_prefix", "")).strip()
+    body = normalized
+    if prefix and normalized.startswith(prefix + " "):
+        body = normalized[len(prefix) + 1 :].strip(" ?.")
+    if re.search(r"\b(?:difference|differences)\s+between\b|\bdifferent\s+from\b", body):
+        return None
+    if re.match(
+        r"(?:the\s+)?(?:[a-z]+|\d+)\s+(?:parts?|components?|steps?|stages?|"
+        r"types?|variants?|items?)\s+of\b",
+        body,
+    ):
+        return None
+    if re.search(
+        r"\b(?:actually\s+)?(?:testing|measuring|evaluating|checking|trying)\b",
+        body,
+    ):
+        return None
+    return parts
+
+
 POST_PARSE_EXCEPTION_LEAVES = {
     "M26_PPVE_001_STRUCTURED_CLAIMS_MISSING": "provider candidate has no structured claims",
     "M26_PPVE_002_CLAIM_ID_MISSING": "provider claim has no claim_id",
@@ -4381,7 +4407,7 @@ def _semantic_requirements(
     q = question.casefold()
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
-    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_parts = _semantic_contextual_definition_query_parts(question)
 
     def add(
         requirement_id: str,
@@ -5726,7 +5752,7 @@ def _provider_evidence_order(
     question: str,
 ) -> list[Mapping[str, Any]]:
     qterms = legacy._meaningful_terms(question)
-    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_parts = _semantic_contextual_definition_query_parts(question)
     definition_head_terms = (
         legacy._coverage_terms(definition_parts["definition_head"])
         if definition_parts
@@ -5930,7 +5956,7 @@ def _provider_snippet(
     if item.get("evidence_type") == "graph_edge":
         return text[:MAX_PROVIDER_SNIPPET_CHARS]
     target_terms = set(legacy._meaningful_terms(question))
-    definition_parts = legacy._contextual_definition_query_parts(question)
+    definition_parts = _semantic_contextual_definition_query_parts(question)
     definition_head_terms = (
         legacy._coverage_terms(definition_parts["definition_head"])
         if definition_parts
