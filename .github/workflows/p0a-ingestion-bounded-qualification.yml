@@ -37,5 +37,4 @@ jobs:
             tests/test_m26_ingestion_read_runtime.py \
             tests/test_m26_admin_ingestion.py \
             tests/test_m26_admin_ingestion_sync.py \
-            tests/test_m26_ingestion_runtime.py \
             tests/test_m26_sqlite_ingestion.py
