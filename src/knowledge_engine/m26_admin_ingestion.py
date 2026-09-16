@@ -27,6 +27,7 @@ from .m26_admin_ingestion_sync import (
     build_sync_plan,
     require_sync_adapter,
 )
+from .m26_ingestion_operator_health import build_operator_index_health
 
 CAP_INDEX_CURRENT_READ = "index.current.read"
 CAP_INDEX_AUDIT_START = "index.audit.start"
@@ -161,7 +162,10 @@ def _router() -> APIRouter:
 
     @router.get("/index/health", operation_id="getIndexHealth")
     async def index_health(request: Request) -> dict[str, Any]:
-        return _read_envelope(request, build_index_health(_adapter(request).current_index()))
+        return _read_envelope(
+            request,
+            build_operator_index_health(_adapter(request).current_index()),
+        )
 
     @router.post("/index/audits", status_code=202, operation_id="startIndexAudit")
     async def start_index_audit(request: Request) -> dict[str, Any]:
