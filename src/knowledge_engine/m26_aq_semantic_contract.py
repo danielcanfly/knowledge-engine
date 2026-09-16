@@ -76,6 +76,28 @@ class SemanticJudgment:
     contract_fingerprint: str
 
 
+@dataclass(frozen=True)
+class FastAttemptEnvelope:
+    """Private, non-public result retained from a structurally valid fast attempt."""
+
+    publication: Mapping[str, Any]
+    rejection_reason_codes: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FastRecoverySeed:
+    answer_text: str
+    citation_ids: tuple[str, ...]
+    facet_ids: tuple[str, ...]
+    support_refs: tuple[Mapping[str, Any], ...]
+
+
+@dataclass(frozen=True)
+class _FastAttemptOutcome:
+    response: dict[str, Any] | None = None
+    envelope: FastAttemptEnvelope | None = None
+
+
 def _state_machine_replanner_question(question: str) -> bool:
     q = question.casefold()
     return "state machine" in q and any(
@@ -3536,7 +3558,7 @@ def _try_fast_supported_answer(
     provider: ProviderClient,
     question_sha: str,
     started: float,
-) -> dict[str, Any] | None:
+) -> _FastAttemptOutcome:
     payload = legacy._fast_synthesis_payload(
         question=question,
         trace_id=trace_id,
@@ -3576,24 +3598,30 @@ def _try_fast_supported_answer(
                 "fail_closed": True,
             },
         }
-        return _response_with_contract(response)
+        return _FastAttemptOutcome(response=_response_with_contract(response))
     except (httpx.HTTPError, KeyError, ValueError):
-        return None
+        return _FastAttemptOutcome()
     if legacy._fast_public_abstention_publication(normalized) is not None:
-        return None
+        return _FastAttemptOutcome()
     publication = legacy._validate_fast_provider_candidate(
         question=question,
         selected_evidence=evidence,
         provider_output=normalized,
     )
     if publication is None:
-        return None
-    if _question_answer_alignment_failures(
+        return _FastAttemptOutcome()
+    alignment_failures = _question_answer_alignment_failures(
         question=question,
         answer_text=str(publication.get("answer_text", "")),
         evidence=evidence,
-    ):
-        return None
+    )
+    if alignment_failures:
+        return _FastAttemptOutcome(
+            envelope=FastAttemptEnvelope(
+                publication=dict(publication),
+                rejection_reason_codes=tuple(str(item) for item in alignment_failures),
+            )
+        )
     response = legacy._fast_answer_response(
         gate=gate,
         trace_id=trace_id,
@@ -3619,7 +3647,68 @@ def _try_fast_supported_answer(
         },
         "semantic_contract": _semantic_contract_public(),
     }
-    return _response_with_contract(response)
+    return _FastAttemptOutcome(response=_response_with_contract(response))
+
+
+def _fast_recovery_seed(
+    *,
+    envelope: FastAttemptEnvelope | None,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> FastRecoverySeed | None:
+    if envelope is None:
+        return None
+    publication = envelope.publication
+    answer_text = str(publication.get("answer_text", "")).strip()
+    citation_ids = tuple(
+        dict.fromkeys(str(item).strip() for item in publication.get("citation_ids", ()))
+    )
+    if not answer_text or not citation_ids or legacy._contains_internal_fragment_leak(answer_text):
+        return None
+    evidence_by_id = {
+        str(item.get("evidence_id", "")): item
+        for item in evidence
+        if str(item.get("evidence_id", ""))
+    }
+    if any(evidence_id not in evidence_by_id for evidence_id in citation_ids):
+        return None
+    runtime_requirements = runtime._material_requirements_for_query(
+        question,
+        intent_class,
+        _runtime_semantic_requirements(requirements),
+    )
+    classification = runtime._facet_support_classification(
+        requirements=runtime_requirements,
+        evidence=evidence,
+    )
+    cited = set(citation_ids)
+    bound_facets = [
+        str(item.get("facet_id", ""))
+        for item in classification
+        if item.get("support_state") == "SUPPORTED"
+        and cited.intersection(
+            str(evidence_id)
+            for evidence_id in item.get("supporting_evidence_ids", ())
+        )
+    ]
+    if len(bound_facets) != 1:
+        return None
+    support_refs = tuple(
+        item
+        for item in publication.get("support_refs", ())
+        if isinstance(item, Mapping)
+        and str(item.get("evidence_id", "")) in cited
+    )
+    if {str(item.get("evidence_id", "")) for item in support_refs} != cited:
+        return None
+    return FastRecoverySeed(
+        answer_text=answer_text,
+        citation_ids=citation_ids,
+        facet_ids=tuple(bound_facets),
+        support_refs=support_refs,
+    )
 
 
 def run_owner_arbitrary_query(
@@ -3828,7 +3917,7 @@ def run_owner_arbitrary_query(
         )
         return response
 
-    fast_response = _try_fast_supported_answer(
+    fast_outcome = _try_fast_supported_answer(
         question=normalized_question,
         trace_id=trace_id,
         intent_class=intent_class,
@@ -3842,14 +3931,22 @@ def run_owner_arbitrary_query(
         question_sha=question_sha,
         started=started,
     )
-    if fast_response is not None:
+    if fast_outcome.response is not None:
         legacy._emit_runtime_event(
             event_sink,
             "stage.completed",
             stage="publication",
-            status=fast_response.get("status", ""),
+            status=fast_outcome.response.get("status", ""),
         )
-        return fast_response
+        return fast_outcome.response
+    fast_seed = _fast_recovery_seed(
+        envelope=fast_outcome.envelope,
+        question=normalized_question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    del fast_seed  # I2 retains the private seed; I3 owns recovery routing.
 
     legacy._emit_runtime_event(event_sink, "stage.started", stage="closure")
     legacy._emit_runtime_event(event_sink, "stage.started", stage="review")
