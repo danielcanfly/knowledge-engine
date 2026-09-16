@@ -1,0 +1,39 @@
+name: P0-A Ingestion Bounded Qualification
+
+on:
+  push:
+    branches:
+      - qualification/p0a-ingestion-v2-20260916
+
+permissions:
+  contents: read
+
+jobs:
+  bounded:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Ruff changed P0-A files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(git diff --name-only 2b61adb376bb143d1748d578a6d4a1d3444f7686..HEAD -- '*.py')
+          test -n "$files"
+          python -m ruff check $files
+      - name: Ingestion regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q \
+            tests/test_m26_ingestion_operator_health.py \
+            tests/test_m26_ingestion_read_runtime.py \
+            tests/test_m26_admin_ingestion.py \
+            tests/test_m26_admin_ingestion_sync.py \
+            tests/test_m26_ingestion_runtime.py \
+            tests/test_m26_sqlite_ingestion.py
