@@ -1,0 +1,55 @@
+name: P0-B QA v2 Qualification
+
+on:
+  pull_request:
+    paths:
+      - 'src/knowledge_engine/m26_admin_production.py'
+      - 'src/knowledge_engine/m26_qa_inbox_integration.py'
+      - 'src/knowledge_engine/m26_suggested_questions_admin.py'
+      - 'src/knowledge_engine/qa_answer_quality_repository_v2.py'
+      - 'tests/test_l3b_production_admin_binding.py'
+      - 'tests/test_qa_inbox_api_completeness.py'
+      - 'tests/test_qa_inbox_v2_contract.py'
+      - 'tests/test_m26_suggested_questions_admin.py'
+      - 'tests/test_suggested_questions_promotion.py'
+      - '.github/workflows/p0b-qa-v2-qualification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-p0b:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Compile P0-B source and tests
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m26_admin_production.py \
+            src/knowledge_engine/m26_qa_inbox_integration.py \
+            src/knowledge_engine/m26_suggested_questions_admin.py \
+            src/knowledge_engine/qa_answer_quality_repository_v2.py \
+            tests/test_l3b_production_admin_binding.py \
+            tests/test_qa_inbox_api_completeness.py \
+            tests/test_qa_inbox_v2_contract.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_suggested_questions_promotion.py
+      - name: Lint new P0-B contract surface
+        run: |
+          ruff check --ignore E501 \
+            src/knowledge_engine/qa_answer_quality_repository_v2.py \
+            tests/test_qa_inbox_v2_contract.py
+      - name: Run P0-B contract tests
+        run: |
+          pytest -q \
+            tests/test_l3b_production_admin_binding.py \
+            tests/test_qa_inbox_api_completeness.py \
+            tests/test_qa_inbox_v2_contract.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_suggested_questions_promotion.py
