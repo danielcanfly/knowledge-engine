@@ -66,14 +66,23 @@ class StaticCapabilities:
     enabled: bool = True
 
     def list_capabilities(self) -> list[CapabilityGate]:
-        gate = self.get_capability("suggested_questions.publish")
-        return [gate] if gate else []
+        return [
+            gate
+            for capability_id in (
+                "suggested_questions.review",
+                "suggested_questions.publish",
+            )
+            if (gate := self.get_capability(capability_id)) is not None
+        ]
 
     def get_capability(self, capability_id: str) -> CapabilityGate | None:
-        if capability_id != "suggested_questions.publish" or not self.enabled:
+        if not self.enabled or capability_id not in {
+            "suggested_questions.review",
+            "suggested_questions.publish",
+        }:
             return None
         return CapabilityGate(
-            capability_id="suggested_questions.publish",
+            capability_id=capability_id,
             state="enabled",
             reason_code="TEST_QUALIFIED",
             source="test",
