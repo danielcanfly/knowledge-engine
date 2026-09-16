@@ -13,7 +13,11 @@ from typing import Any
 
 import httpx
 
-from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
+from .m26_pa5_v8_live import (
+    AnswerProviderAttemptBudget,
+    LiveGateError,
+    MiniMaxClient,
+)
 
 CLOUDFLARE_PROVIDER = "cloudflare"
 MINIMAX_PROVIDER = "minimax-m3"
@@ -270,6 +274,7 @@ class CloudflareWorkersAIClient:
         state: CloudflareRouterState,
         max_calls: int,
         timeout: float = 120.0,
+        attempt_budget: AnswerProviderAttemptBudget | None = None,
     ) -> None:
         if not api_key or not account_id:
             state.record_disabled_configuration("CLOUDFLARE_CONFIGURATION_MISSING")
@@ -280,6 +285,7 @@ class CloudflareWorkersAIClient:
         self.max_calls = max_calls
         self.calls = 0
         self.cost = Decimal("0")
+        self.attempt_budget = attempt_budget
         self.client = httpx.Client(timeout=timeout)
 
     @property
@@ -291,6 +297,17 @@ class CloudflareWorkersAIClient:
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]:
         if self.calls >= self.max_calls:
             raise LiveGateError("provider-call budget exhausted")
+        if self.attempt_budget is not None:
+            self.attempt_budget.consume(
+                call_class=call_class,
+                provider=CLOUDFLARE_PROVIDER,
+                reserve_tail_attempts=(
+                    1
+                    if call_class
+                    in {"aq_semantic_closure", "aq_semantic_closure_repair"}
+                    else 0
+                ),
+            )
         self.calls += 1
         started = time.monotonic()
         try:
@@ -364,11 +381,16 @@ class ProviderRoutingClient:
         fallback: MiniMaxClient,
         reviewer: MiniMaxClient,
         state: CloudflareRouterState,
+        attempt_budget: AnswerProviderAttemptBudget | None = None,
     ) -> None:
         self.cloudflare = cloudflare
         self.fallback = fallback
         self.reviewer = reviewer
         self.state = state
+        self.attempt_budget = attempt_budget or AnswerProviderAttemptBudget(4)
+        for client in (self.cloudflare, self.fallback, self.reviewer):
+            if client is not None and hasattr(client, "attempt_budget"):
+                client.attempt_budget = self.attempt_budget
         self.calls = 0
         self.cost = Decimal("0")
         self.closure_provider_initial = CLOUDFLARE_PROVIDER
@@ -381,7 +403,12 @@ class ProviderRoutingClient:
 
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]:
         if call_class == SEMANTIC_REVIEW_CALL_CLASS:
-            result = self.reviewer.call(payload, call_class)
+            result = self._call_provider(
+                self.reviewer,
+                payload,
+                call_class,
+                provider=MINIMAX_PROVIDER,
+            )
             self._record_attempt(call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, result)
             return result
 
@@ -392,7 +419,12 @@ class ProviderRoutingClient:
             self.closure_provider_final = MINIMAX_PROVIDER
             self.fallback_selected_evidence_digest = _selected_evidence_digest(payload)
             try:
-                result = self.fallback.call(payload, call_class)
+                result = self._call_provider(
+                    self.fallback,
+                    payload,
+                    call_class,
+                    provider=MINIMAX_PROVIDER,
+                )
             except LiveGateError as exc:
                 self._record_failed_attempt(
                     call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, exc
@@ -406,7 +438,12 @@ class ProviderRoutingClient:
             self.fallback_reason = FALLBACK_DISABLED_CONFIGURATION
             self.closure_provider_final = MINIMAX_PROVIDER
             try:
-                result = self.fallback.call(payload, call_class)
+                result = self._call_provider(
+                    self.fallback,
+                    payload,
+                    call_class,
+                    provider=MINIMAX_PROVIDER,
+                )
             except LiveGateError as exc:
                 self._record_failed_attempt(
                     call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, exc
@@ -416,7 +453,12 @@ class ProviderRoutingClient:
             return result
 
         try:
-            result = self.cloudflare.call(payload, call_class)
+            result = self._call_provider(
+                self.cloudflare,
+                payload,
+                call_class,
+                provider=CLOUDFLARE_PROVIDER,
+            )
         except CloudflareFallbackRequired as exc:
             self.failed_cloudflare_selected_evidence_digest = _selected_evidence_digest(payload)
             if not _cloudflare_fallback_eligible(exc.reason):
@@ -425,7 +467,12 @@ class ProviderRoutingClient:
             self._record_cloudflare_failure(exc.reason)
             self.fallback_selected_evidence_digest = _selected_evidence_digest(payload)
             try:
-                result = self.fallback.call(payload, call_class)
+                result = self._call_provider(
+                    self.fallback,
+                    payload,
+                    call_class,
+                    provider=MINIMAX_PROVIDER,
+                )
             except LiveGateError as fallback_exc:
                 self._record_failed_attempt(
                     call_class, MINIMAX_PROVIDER, MINIMAX_MODEL, fallback_exc
@@ -466,7 +513,30 @@ class ProviderRoutingClient:
             if self.fallback_used
             else None,
             "state_scope": snapshot["state_scope"],
+            "physical_attempt_budget": self.attempt_budget.snapshot(),
         }
+
+    def _call_provider(
+        self,
+        client: Any,
+        payload: Mapping[str, Any],
+        call_class: str,
+        *,
+        provider: str,
+    ) -> dict[str, Any]:
+        if getattr(client, "attempt_budget", None) is not self.attempt_budget:
+            self.attempt_budget.consume(
+                call_class=call_class,
+                provider=provider,
+                reserve_tail_attempts=(
+                    1
+                    if call_class
+                    in {"aq_semantic_closure", "aq_semantic_closure_repair"}
+                    else 0
+                ),
+                use_reserved_tail=call_class == SEMANTIC_REVIEW_CALL_CLASS,
+            )
+        return client.call(payload, call_class)
 
     def _record_cloudflare_failure(
         self, error_class: str, *, fallback_eligible: bool = True
@@ -566,6 +636,7 @@ def build_provider_routing_client(
     state: CloudflareRouterState | None = None,
 ) -> ProviderRoutingClient:
     router_state = state or default_router_state()
+    attempt_budget = AnswerProviderAttemptBudget(max_provider_calls)
     cloudflare_api_key = _first_env(
         "CLOUDFLARE_WORKER_AI_RESTFUL_API_KEY",
         "CLOUDFLARE_AI_TOKEN",
@@ -575,11 +646,13 @@ def build_provider_routing_client(
         os.environ.get("MINIMAX_API_KEY", ""),
         max_calls=max_provider_calls,
         max_cost=max_cost,
+        attempt_budget=attempt_budget,
     )
     reviewer = MiniMaxClient(
         os.environ.get("MINIMAX_API_KEY", ""),
         max_calls=max_provider_calls,
         max_cost=max_cost,
+        attempt_budget=attempt_budget,
     )
     cloudflare: CloudflareWorkersAIClient | None = None
     try:
@@ -588,6 +661,7 @@ def build_provider_routing_client(
             account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
             state=router_state,
             max_calls=max_provider_calls,
+            attempt_budget=attempt_budget,
         )
     except LiveGateError:
         cloudflare = None
@@ -596,6 +670,7 @@ def build_provider_routing_client(
         fallback=fallback,
         reviewer=reviewer,
         state=router_state,
+        attempt_budget=attempt_budget,
     )
 
 

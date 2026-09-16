@@ -42,6 +42,65 @@ class LiveGateError(RuntimeError):
     pass
 
 
+class AnswerProviderAttemptBudget:
+    """Request-scoped physical network-attempt ledger for answer providers."""
+
+    def __init__(self, max_physical_attempts: int = 4) -> None:
+        if max_physical_attempts < 1:
+            raise ValueError("max_physical_attempts must be positive")
+        self.max_physical_attempts = int(max_physical_attempts)
+        self.consumed_physical_attempts = 0
+        self.reserved_tail_attempts = 0
+        self.events: list[dict[str, Any]] = []
+        self._lock = threading.Lock()
+
+    def consume(
+        self,
+        *,
+        call_class: str = "",
+        provider: str = "",
+        reserve_tail_attempts: int = 0,
+        use_reserved_tail: bool = False,
+    ) -> int:
+        reserve_tail_attempts = max(0, int(reserve_tail_attempts))
+        with self._lock:
+            reserved_after = self.reserved_tail_attempts
+            if use_reserved_tail and reserved_after:
+                reserved_after -= 1
+            reserved_after = max(reserved_after, reserve_tail_attempts)
+            if (
+                self.consumed_physical_attempts + 1 + reserved_after
+                > self.max_physical_attempts
+            ):
+                raise LiveGateError(
+                    "answer-provider physical-attempt budget exhausted"
+                )
+            self.consumed_physical_attempts += 1
+            self.reserved_tail_attempts = reserved_after
+            attempt = self.consumed_physical_attempts
+            self.events.append(
+                {
+                    "physical_attempt": attempt,
+                    "call_class": str(call_class),
+                    "provider": str(provider),
+                    "reserved_tail_after": reserved_after,
+                }
+            )
+            return attempt
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "max_physical_attempts": self.max_physical_attempts,
+                "consumed_physical_attempts": self.consumed_physical_attempts,
+                "remaining_physical_attempts": (
+                    self.max_physical_attempts - self.consumed_physical_attempts
+                ),
+                "reserved_tail_attempts": self.reserved_tail_attempts,
+                "events": [dict(item) for item in self.events],
+            }
+
+
 class ProviderClient(Protocol):
     calls: int
     cost: Decimal
@@ -170,7 +229,14 @@ def _cost(usage: Mapping[str, int]) -> Decimal:
 
 
 class MiniMaxClient:
-    def __init__(self, api_key: str, *, max_calls: int, max_cost: Decimal) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        max_calls: int,
+        max_cost: Decimal,
+        attempt_budget: AnswerProviderAttemptBudget | None = None,
+    ) -> None:
         if not api_key:
             raise LiveGateError("MINIMAX_API_KEY missing")
         self.api_key = api_key
@@ -178,12 +244,25 @@ class MiniMaxClient:
         self.max_cost = max_cost
         self.calls = 0
         self.cost = Decimal("0")
+        self.attempt_budget = attempt_budget
 
     def call(self, payload: Mapping[str, Any], call_class: str) -> dict[str, Any]:
         last_error: Exception | None = None
         for network_attempt in range(4):
             if self.calls >= self.max_calls:
                 raise LiveGateError("provider-call budget exhausted")
+            if self.attempt_budget is not None:
+                self.attempt_budget.consume(
+                    call_class=call_class,
+                    provider="minimax-m3",
+                    reserve_tail_attempts=(
+                        1
+                        if call_class
+                        in {"aq_semantic_closure", "aq_semantic_closure_repair"}
+                        else 0
+                    ),
+                    use_reserved_tail=call_class == "aq_claim_semantic_entailment",
+                )
             self.calls += 1
             started = time.monotonic()
             try:
