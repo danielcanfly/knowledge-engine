@@ -3711,6 +3711,279 @@ def _fast_recovery_seed(
     )
 
 
+def _fast_seed_candidate(
+    *,
+    seed: FastRecoverySeed,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    evidence_by_id = {
+        str(item.get("evidence_id", "")): item
+        for item in evidence
+        if str(item.get("evidence_id", ""))
+    }
+    label_map = {
+        f"e{index}": evidence_by_id[evidence_id]
+        for index, evidence_id in enumerate(seed.citation_ids, start=1)
+    }
+    labels = list(label_map)
+    snippet_map = {
+        str(item.get("evidence_id", "")): str(item.get("exact_quote", ""))
+        for item in seed.support_refs
+    }
+    slot = {
+        "slot_id": "fast_seed",
+        "facet_id": seed.facet_ids[0],
+        "instruction": "Review the retained fast candidate against runtime-bound evidence.",
+        "allowed_evidence_ids": list(seed.citation_ids),
+        "allowed_evidence_labels": labels,
+    }
+    return runtime._runtime_bound_facet_local_candidate(
+        drafts={
+            "claims": [
+                {
+                    "slot_id": "fast_seed",
+                    "text": seed.answer_text,
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                }
+            ],
+            "model_explanations": [],
+        },
+        slots=[slot],
+        label_map=label_map,
+        snippet_map=snippet_map,
+        question=question,
+        intent_class=intent_class,
+        unresolved_required_ids=(),
+    )
+
+
+def _provider_attempts_remaining(provider_client: Any) -> int:
+    budget = getattr(provider_client, "attempt_budget", None)
+    if budget is not None and callable(getattr(budget, "snapshot", None)):
+        return int(budget.snapshot().get("remaining_physical_attempts", 0))
+    return max(0, 4 - int(getattr(provider_client, "calls", 0)))
+
+
+def _fast_seed_review(
+    *,
+    seed: FastRecoverySeed,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_client: Any,
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    candidate = _fast_seed_candidate(
+        seed=seed,
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+    )
+    calls: list[dict[str, Any]] = []
+    failures: list[str] = []
+    repair_attempted = False
+    try:
+        semantic_review, review_raw = runtime._call_runtime_bound_semantic_entailment_review(
+            provider_client=provider_client,
+            question=question,
+            intent_class=intent_class,
+            candidate=candidate,
+            evidence=evidence,
+        )
+        calls.append(runtime._compact_call_telemetry(review_raw, parse_ok=True))
+    except runtime.NativeSemanticReviewContractError as exc:
+        calls.append(runtime._compact_call_telemetry(exc.raw, parse_ok=False))
+        repair_attempted = True
+        try:
+            semantic_review, review_raw = (
+                runtime._call_runtime_bound_semantic_entailment_review(
+                    provider_client=provider_client,
+                    question=question,
+                    intent_class=intent_class,
+                    candidate=candidate,
+                    evidence=evidence,
+                    review_slots=exc.review_slots,
+                    repair=True,
+                    previous_failure=exc.code,
+                )
+            )
+            calls.append(runtime._compact_call_telemetry(review_raw, parse_ok=True))
+        except (runtime.NativeSemanticReviewContractError, LiveGateError) as repair_exc:
+            raw = getattr(repair_exc, "raw", {})
+            if raw:
+                calls.append(runtime._compact_call_telemetry(raw, parse_ok=False))
+            failures.append(str(getattr(repair_exc, "code", type(repair_exc).__name__)))
+            semantic_review = {}
+    except LiveGateError as exc:
+        failures.append(type(exc).__name__)
+        semantic_review = {}
+
+    if semantic_review:
+        failures.extend(runtime._semantic_review_blocking_failures(semantic_review))
+    if failures:
+        abstention = legacy._verified_abstention(
+            reason_codes=sorted({*failures, "SEMANTIC_CLOSURE_FAILED"}),
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+        abstention["answer_source"] = "safe_abstention"
+        return abstention, {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [
+                runtime._requirement_public(item)
+                for item in _runtime_semantic_requirements(requirements)
+            ],
+            "support_proof": [],
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": sorted({*failures, "SEMANTIC_CLOSURE_FAILED"}),
+            "provider_contract": "fast_seed_runtime_bound_review/v1",
+            "bp5c_r2_recovery": True,
+            "fast_seed_used": True,
+        }
+
+    try:
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                runtime._verification_candidate(candidate),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            semantic_review=semantic_review,
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+        answer["answer_text"] = runtime._render_reviewed_claim_text(
+            candidate=candidate,
+            semantic_review=semantic_review,
+        )
+        answer["answer_source"] = "fast_seed_verified_recovery"
+        return answer, {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [
+                runtime._requirement_public(item)
+                for item in _runtime_semantic_requirements(requirements)
+            ],
+            "support_proof": [],
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": [],
+            "semantic_review": dict(verified.get("semantic_review", {})),
+            "provider_contract": "fast_seed_runtime_bound_review/v1",
+            "bp5c_r2_recovery": True,
+            "fast_seed_used": True,
+        }
+    except (legacy.VerifiedAnswerGateError, ValueError, KeyError) as exc:
+        code = str(getattr(exc, "code", type(exc).__name__))
+        abstention = legacy._verified_abstention(
+            reason_codes=[code, "SEMANTIC_CLOSURE_FAILED"],
+            calls=calls,
+            repair_attempted=repair_attempted,
+        )
+        abstention["answer_source"] = "safe_abstention"
+        return abstention, {
+            "schema_version": "m26-aq-semantic-closure/v1",
+            "requirements": [
+                runtime._requirement_public(item)
+                for item in _runtime_semantic_requirements(requirements)
+            ],
+            "support_proof": [],
+            "endpoint_proof": dict(endpoint_proof),
+            "failures": [code, "SEMANTIC_CLOSURE_FAILED"],
+            "provider_contract": "fast_seed_runtime_bound_review/v1",
+            "bp5c_r2_recovery": True,
+            "fast_seed_used": True,
+        }
+
+
+def _consolidated_semantic_recovery(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    provider_client: Any,
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    fast_envelope: FastAttemptEnvelope | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    runtime_requirements = _runtime_semantic_requirements(requirements)
+    seed = _fast_recovery_seed(
+        envelope=fast_envelope,
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    if seed is not None:
+        verification, closure = _fast_seed_review(
+            seed=seed,
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_client=provider_client,
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
+        )
+        failures = [str(item) for item in closure.get("failures", ())]
+        semantic_block = any(item.startswith("SEMANTIC_REVIEW_BLOCKED:") for item in failures)
+        if semantic_block and _provider_attempts_remaining(provider_client) >= 2:
+            verification, closure = runtime._synthesize_and_verify(
+                question=question,
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                provider_client=provider_client,
+                requirements=runtime_requirements,
+                endpoint_proof=endpoint_proof,
+                max_attempts=1,
+            )
+            closure = {
+                **dict(closure),
+                "fast_seed_used": True,
+                "fast_seed_semantic_rewrite": True,
+            }
+    else:
+        verification, closure = runtime._synthesize_and_verify(
+            question=question,
+            trace_id=trace_id,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_client=provider_client,
+            requirements=runtime_requirements,
+            endpoint_proof=endpoint_proof,
+            max_attempts=2,
+        )
+    fingerprint = semantic_contract_fingerprint()
+    return (
+        {
+            **dict(verification),
+            "semantic_contract_fingerprint": fingerprint,
+        },
+        {
+            **dict(closure),
+            "bp5c_r2_recovery": True,
+            "semantic_contract": {
+                "schema_version": CONTRACT_SCHEMA_VERSION,
+                "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
+                "fingerprint": fingerprint,
+            },
+        },
+    )
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -3939,19 +4212,10 @@ def run_owner_arbitrary_query(
             status=fast_outcome.response.get("status", ""),
         )
         return fast_outcome.response
-    fast_seed = _fast_recovery_seed(
-        envelope=fast_outcome.envelope,
-        question=normalized_question,
-        intent_class=intent_class,
-        evidence=evidence,
-        requirements=requirements,
-    )
-    del fast_seed  # I2 retains the private seed; I3 owns recovery routing.
-
     legacy._emit_runtime_event(event_sink, "stage.started", stage="closure")
     legacy._emit_runtime_event(event_sink, "stage.started", stage="review")
     legacy._emit_runtime_event(event_sink, "stage.started", stage="verification")
-    verification, closure = synthesize_and_verify(
+    verification, closure = _consolidated_semantic_recovery(
         question=normalized_question,
         trace_id=trace_id,
         intent_class=intent_class,
@@ -3959,6 +4223,7 @@ def run_owner_arbitrary_query(
         provider_client=provider,
         requirements=requirements,
         endpoint_proof=endpoint_proof,
+        fast_envelope=fast_outcome.envelope,
     )
     closure = {
         **closure,
