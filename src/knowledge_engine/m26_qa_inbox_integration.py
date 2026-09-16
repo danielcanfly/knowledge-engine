@@ -16,10 +16,10 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from .config import Settings
 from .m26_admin_contract import AdminAPIError
 from .m26_admin_control_plane import require_capability
+from .m26_admin_production import QA_CAPABILITY_EXPORT_JSONL, QA_CAPABILITY_LIFECYCLE
 from .m26_admin_qa import (
     QA_CAPABILITY_DETAIL,
     QA_CAPABILITY_EVENTS,
-    QA_CAPABILITY_EXPORT,
     QaReadResult,
     install_admin_qa,
 )
@@ -38,6 +38,8 @@ from .storage import create_object_store
 
 QA_INBOX_PREFIX = "/v1/admin/qa/inbox"
 QA_MAX_CAPTURE_BYTES = 2_000_000
+# Deprecated compatibility name. Country trust now follows the public API's
+# qualified trusted-proxy CIDR boundary instead of an independent QA toggle.
 QA_COUNTRY_TRUST_ENV = "M26_QA_TRUST_CLOUDFLARE_COUNTRY"
 
 
@@ -298,13 +300,15 @@ def _single_message_then_receive(first: Message, receive: Receive) -> Receive:
 
 
 def _trusted_country(scope: Scope) -> str:
-    if os.environ.get(QA_COUNTRY_TRUST_ENV, "").strip().casefold() not in {"1", "true", "yes"}:
-        return "ZZ"
     headers = {
         key.decode("latin-1").casefold(): value.decode("latin-1")
         for key, value in scope.get("headers", [])
     }
-    if not headers.get("cf-ray"):
+    client = scope.get("client")
+    remote = str(client[0]) if isinstance(client, (list, tuple)) and client else ""
+    from .m26_public_api import _trusted_proxy
+
+    if not _trusted_proxy(remote) or not headers.get("cf-ray"):
         return "ZZ"
     return _normalize_country(headers.get("cf-ipcountry"))
 
@@ -480,7 +484,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         cluster_id: str,
         payload: QaLifecycleRequest,
     ) -> dict[str, Any]:
-        require_capability(request, QA_CAPABILITY_EXPORT, mutation=True)
+        require_capability(request, QA_CAPABILITY_LIFECYCLE, mutation=True)
         try:
             cluster = repository_provider().transition_cluster(
                 cluster_id,
@@ -524,7 +528,7 @@ def _inbox_router(repository_provider: Callable[[], SqliteQaRepository]) -> APIR
         },
     )
     async def export_jsonl(request: Request, payload: QaExportRequest) -> Response:
-        require_capability(request, QA_CAPABILITY_EXPORT, mutation=True)
+        require_capability(request, QA_CAPABILITY_EXPORT_JSONL, mutation=True)
         repository = repository_provider()
         try:
             filter_fields_set = any(
