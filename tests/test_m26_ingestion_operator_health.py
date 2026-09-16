@@ -101,4 +101,6 @@ def test_missing_audit_evidence_never_becomes_fake_zero_health():
     assert active["malformed_metadata"] is None
     assert active["embedding_mismatch"] is None
     assert "INDEX_HEALTH_AUDIT_EVIDENCE_UNAVAILABLE" in active["issues"]
-    assert health.data["overall_status"] == "unknown"
+    # Independent source-drift evidence may already make the overall state degraded.
+    # Missing audit evidence must never erase that stronger signal or become healthy.
+    assert health.data["overall_status"] != "healthy"
