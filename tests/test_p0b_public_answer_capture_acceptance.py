@@ -97,7 +97,7 @@ def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failur
     failed = _eventually_event(repo, event_id, "NOT_EVALUATED")
     assert failed["score"] is None
     assert failed["result"] is None
-    assert failed["evaluation_error_code"] == "CAPTURE_EVALUATION_ERROR"
+    assert failed["evaluation_error_code"] == "EVALUATOR_ERROR"
 
     # Evaluator failure changes evaluation state; it never erases the captured query.
     assert repo.list_events(range_name="90d", limit=10)["total"] == 1
