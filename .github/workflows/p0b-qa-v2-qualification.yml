@@ -11,6 +11,7 @@ on:
       - 'tests/test_qa_inbox_api_completeness.py'
       - 'tests/test_qa_inbox_v2_contract.py'
       - 'tests/test_m26_suggested_questions_admin.py'
+      - 'tests/test_p0b_public_answer_capture_acceptance.py'
       - 'tests/test_suggested_questions_promotion.py'
       - '.github/workflows/p0b-qa-v2-qualification.yml'
 
@@ -39,12 +40,14 @@ jobs:
             tests/test_qa_inbox_api_completeness.py \
             tests/test_qa_inbox_v2_contract.py \
             tests/test_m26_suggested_questions_admin.py \
+            tests/test_p0b_public_answer_capture_acceptance.py \
             tests/test_suggested_questions_promotion.py
       - name: Lint new P0-B contract surface
         run: |
           ruff check --ignore E501 \
             src/knowledge_engine/qa_answer_quality_repository_v2.py \
-            tests/test_qa_inbox_v2_contract.py
+            tests/test_qa_inbox_v2_contract.py \
+            tests/test_p0b_public_answer_capture_acceptance.py
       - name: Run P0-B contract tests
         run: |
           pytest -q \
@@ -52,4 +55,5 @@ jobs:
             tests/test_qa_inbox_api_completeness.py \
             tests/test_qa_inbox_v2_contract.py \
             tests/test_m26_suggested_questions_admin.py \
+            tests/test_p0b_public_answer_capture_acceptance.py \
             tests/test_suggested_questions_promotion.py
