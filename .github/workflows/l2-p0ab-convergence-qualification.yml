@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
@@ -27,6 +28,7 @@ jobs:
           set -euo pipefail
           git merge-base --is-ancestor b5662cd60cd6745bd4c2337688e4cf6dd20144f5 HEAD
           git merge-base --is-ancestor df91d35b2d5e7ebc79af430c1eed0475e944a655 HEAD
+          echo "backend_converged_sha=$(git rev-parse HEAD)"
       - name: Compile converged P0-A and P0-B surface
         run: |
           python -m compileall -q \
@@ -89,7 +91,8 @@ jobs:
               '/v1/admin/qa/inbox/summary',
               '/v1/admin/qa/inbox/clusters',
               '/v1/admin/qa/inbox/export-jsonl',
-              '/v1/admin/suggested-questions/promotions',
+              '/v1/admin/suggested-questions',
+              '/v1/admin/suggested-questions/promotions/preview',
               '/v1/answers',
           }
           missing = sorted(required - paths)
