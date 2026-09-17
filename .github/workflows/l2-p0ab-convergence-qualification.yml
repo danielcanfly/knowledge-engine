@@ -1,0 +1,98 @@
+name: L2 P0-A + P0-B convergence qualification
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  convergence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Verify both qualified lane heads are ancestors
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor b5662cd60cd6745bd4c2337688e4cf6dd20144f5 HEAD
+          git merge-base --is-ancestor df91d35b2d5e7ebc79af430c1eed0475e944a655 HEAD
+      - name: Compile converged P0-A and P0-B surface
+        run: |
+          python -m compileall -q \
+            src/knowledge_engine/m26_admin_ingestion.py \
+            src/knowledge_engine/m26_console_api.py \
+            src/knowledge_engine/m26_ingestion_health_read.py \
+            src/knowledge_engine/m26_ingestion_operator_health.py \
+            src/knowledge_engine/m26_ingestion_read_runtime.py \
+            src/knowledge_engine/m26_admin_production.py \
+            src/knowledge_engine/m26_qa_inbox_integration.py \
+            src/knowledge_engine/m26_suggested_questions_admin.py \
+            src/knowledge_engine/qa_answer_quality_repository_v2.py
+      - name: Preserve qualified lint boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m ruff check \
+            src/knowledge_engine/m26_admin_ingestion.py \
+            src/knowledge_engine/m26_console_api.py \
+            src/knowledge_engine/m26_ingestion_health_read.py \
+            src/knowledge_engine/m26_ingestion_operator_health.py \
+            src/knowledge_engine/m26_ingestion_read_runtime.py \
+            tests/test_m26_ingestion_operator_health.py \
+            tests/test_m26_ingestion_read_runtime.py
+          python -m ruff check --ignore E501 \
+            src/knowledge_engine/qa_answer_quality_repository_v2.py \
+            tests/test_qa_inbox_v2_contract.py \
+            tests/test_p0b_public_answer_capture_acceptance.py
+      - name: Shared P0-A + P0-B backend regression
+        run: |
+          pytest -q \
+            tests/test_m26_ingestion_operator_health.py \
+            tests/test_m26_ingestion_read_runtime.py \
+            tests/test_m26_admin_ingestion.py \
+            tests/test_m26_admin_ingestion_sync.py \
+            tests/test_m26_sqlite_ingestion.py \
+            tests/test_l3b_production_admin_binding.py \
+            tests/test_qa_inbox_api_completeness.py \
+            tests/test_qa_inbox_v2_contract.py \
+            tests/test_m26_suggested_questions_admin.py \
+            tests/test_p0b_public_answer_capture_acceptance.py \
+            tests/test_suggested_questions_promotion.py \
+            tests/test_qa_answer_quality.py
+      - name: Candidate-bound API seam census
+        run: |
+          python - <<'PY'
+          from knowledge_engine.m26_console_api import app
+          paths = set(app.openapi().get('paths', {}))
+          required = {
+              '/v1/admin/index/current',
+              '/v1/admin/index/health',
+              '/v1/admin/index/audits',
+              '/v1/admin/ingestion/scan',
+              '/v1/admin/ingestion/dry-runs',
+              '/v1/admin/ingestion/sync',
+              '/v1/admin/ingestion/jobs',
+              '/v1/admin/ingestion/jobs/{job_id}',
+              '/v1/admin/ingestion/jobs/{job_id}/retry',
+              '/v1/admin/qa/inbox/events',
+              '/v1/admin/qa/inbox/summary',
+              '/v1/admin/qa/inbox/clusters',
+              '/v1/admin/qa/inbox/export-jsonl',
+              '/v1/admin/suggested-questions/promotions',
+              '/v1/answers',
+          }
+          missing = sorted(required - paths)
+          assert not missing, f'missing converged API paths: {missing}'
+          print(f'converged_api_path_count={len(paths)}')
+          PY

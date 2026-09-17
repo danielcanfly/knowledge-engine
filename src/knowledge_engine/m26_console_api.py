@@ -11,6 +11,7 @@ from .m26_admin_settings import CANONICAL_ADMIN_API_VERSION, install_admin_setti
 from .m26_admin_usage import install_admin_usage
 from .m26_console_p05_ask_playground import router as playground_router
 from .m26_golden_questions_admin import install_golden_questions_admin
+from .m26_ingestion_read_runtime import enrich_read_authority_from_env
 from .m26_ingestion_runtime import (
     CombinedCapabilityProvider,
     build_runtime_ingestion_adapter_from_env,
@@ -25,7 +26,7 @@ from .m26_suggested_questions_admin import install_suggested_questions_admin
 def create_app():
     app = create_public_app()
     production_admin = production_admin_runtime_from_env()
-    durable_adapter = build_runtime_ingestion_adapter_from_env()
+    durable_adapter = enrich_read_authority_from_env(build_runtime_ingestion_adapter_from_env())
     durable_store = (
         durable_adapter.ledger if isinstance(durable_adapter, SQLiteIngestionAdapter) else None
     )
