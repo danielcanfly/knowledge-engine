@@ -10,7 +10,14 @@ from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_public_api, qa_answer_quality
 from knowledge_engine.m26_qa_inbox_integration import QaAnswerCaptureMiddleware
+from knowledge_engine.qa_answer_quality_evaluator import (
+    ANSWER_QUALITY_CRITERION_MAX,
+    AnswerQualityEvaluation,
+    StaticAnswerQualityEvaluator,
+    canonical_failure_provenance,
+)
 from knowledge_engine.qa_answer_quality_sqlite import SqliteQaRepository
+from knowledge_engine.qa_failure_clustering import FailureIntentFamily
 from knowledge_engine.storage import FileObjectStore
 
 
@@ -67,6 +74,51 @@ def _public_capture_app(
         evaluator_provider=lambda: evaluator,
     )
     return app
+
+
+def _answer(request_id: str) -> dict:
+    return {
+        "request_id": request_id,
+        "status": "answered",
+        "answer_text": "Grounded answer.",
+        "citations": [{"citation_id": "c1", "source_id": "s1"}],
+        "selected_evidence": [{"source_id": "s1", "quote": "support"}],
+        "integrity": {
+            "unsupported_accepted_claims": 0,
+            "material_claim_support_verified": True,
+            "citation_locator_valid": True,
+        },
+    }
+
+
+def _static_evaluator(*, result: str) -> StaticAnswerQualityEvaluator:
+    criteria = dict(ANSWER_QUALITY_CRITERION_MAX)
+    if result == "fail":
+        criteria["completeness_facets"] = 0
+        criteria["correctness_grounding"] = 20
+        score = sum(criteria.values())
+        stage, failure_class, signature = canonical_failure_provenance(
+            hard_fail_codes=(), criterion_scores=criteria
+        )
+        intent = FailureIntentFamily(task="explain", subjects=("qa",))
+    else:
+        score = sum(criteria.values())
+        stage = failure_class = signature = None
+        intent = None
+    return StaticAnswerQualityEvaluator(
+        AnswerQualityEvaluation(
+            score=score,
+            result=result,
+            criterion_scores=criteria,
+            hard_fail_codes=(),
+            failure_class=failure_class,
+            failure_stage=stage,
+            failure_signature=signature,
+            evaluator_provider="acceptance-provider",
+            evaluator_model="acceptance-model",
+            failure_intent=intent,
+        )
+    )
 
 
 def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failure(
@@ -144,3 +196,54 @@ def test_public_v1_answers_queue_saturation_preserves_durable_event(
     assert event["score"] is None
     assert event["result"] is None
     assert event["evaluation_error_code"] == "EVALUATION_QUEUE_SATURATED"
+
+
+def test_production_sqlite_pass_is_compact_and_fail_trace_redacts_secrets(tmp_path) -> None:
+    repo = SqliteQaRepository(
+        FileObjectStore(tmp_path / "objects"),
+        db_path=tmp_path / "qa.sqlite",
+    )
+    secret_token = "acceptance-super-secret-token"
+    secret_key = "acceptance-super-secret-api-key"
+    forensic = {
+        "authorization": f"Bearer {secret_token}",
+        "nested": {"api_key": secret_key},
+        "retrieval": {"selected": [{"source_id": "s1", "score": 0.9}]},
+    }
+
+    pass_event = repo.record_answer(
+        question="A passing question",
+        response=_answer("pass-compact"),
+        latency_ms=12,
+        trace=forensic,
+    )
+    passed = repo.evaluate_event(
+        pass_event["event_id"],
+        evaluator=_static_evaluator(result="pass"),
+        answer_payload=_answer("pass-compact"),
+        forensic_trace=forensic,
+    )
+    assert passed["result"] == "pass"
+    assert passed["failure_trace_key"] is None
+    assert "failure_trace" not in passed
+
+    fail_event = repo.record_answer(
+        question="A failing question",
+        response=_answer("fail-redacted"),
+        latency_ms=25,
+        trace=forensic,
+    )
+    failed = repo.evaluate_event(
+        fail_event["event_id"],
+        evaluator=_static_evaluator(result="fail"),
+        answer_payload=_answer("fail-redacted"),
+        forensic_trace=forensic,
+    )
+    assert failed["result"] == "fail"
+    assert failed["failure_trace_key"]
+    trace = failed["failure_trace"]
+    serialized = json.dumps(trace, ensure_ascii=False)
+    assert secret_token not in serialized
+    assert secret_key not in serialized
+    assert "[REDACTED]" in serialized
+    assert trace["raw_runtime_trace"]["retrieval"]["selected"][0]["source_id"] == "s1"
