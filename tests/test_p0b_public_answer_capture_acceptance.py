@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
-from knowledge_engine import m26_public_api
+from knowledge_engine import m26_public_api, qa_answer_quality
 from knowledge_engine.m26_qa_inbox_integration import QaAnswerCaptureMiddleware
 from knowledge_engine.qa_answer_quality_sqlite import SqliteQaRepository
 from knowledge_engine.storage import FileObjectStore
@@ -36,24 +36,18 @@ def _eventually_event(repo: SqliteQaRepository, event_id: str, status: str) -> d
     raise AssertionError(f"event {event_id} did not reach {status}")
 
 
-def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failure(
-    tmp_path, monkeypatch
-) -> None:
-    repo = SqliteQaRepository(
-        FileObjectStore(tmp_path / "objects"),
-        db_path=tmp_path / "qa.sqlite",
-    )
-    evaluator = _BlockingFailEvaluator()
+def _public_capture_app(
+    repo: SqliteQaRepository,
+    evaluator: object,
+    *,
+    request_id: str,
+) -> FastAPI:
     app = FastAPI()
-
-    # TestClient's synthetic client name is not an IP address. Country trust is
-    # orthogonal to this test, so force the public trusted-proxy predicate closed.
-    monkeypatch.setattr(m26_public_api, "_trusted_proxy", lambda _remote: False)
 
     @app.post("/v1/answers")
     async def public_answer() -> StreamingResponse:
         answer = {
-            "request_id": "public-capture-1",
+            "request_id": request_id,
             "status": "answered",
             "answer_text": "A grounded public answer that the visitor must receive before QA evaluation finishes.",
             "citations": [{"citation_id": "c1", "source_id": "s1"}],
@@ -72,6 +66,22 @@ def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failur
         repository_provider=lambda: repo,
         evaluator_provider=lambda: evaluator,
     )
+    return app
+
+
+def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failure(
+    tmp_path, monkeypatch
+) -> None:
+    repo = SqliteQaRepository(
+        FileObjectStore(tmp_path / "objects"),
+        db_path=tmp_path / "qa.sqlite",
+    )
+    evaluator = _BlockingFailEvaluator()
+
+    # TestClient's synthetic client name is not an IP address. Country trust is
+    # orthogonal to this test, so force the public trusted-proxy predicate closed.
+    monkeypatch.setattr(m26_public_api, "_trusted_proxy", lambda _remote: False)
+    app = _public_capture_app(repo, evaluator, request_id="public-capture-1")
 
     response = TestClient(app).post(
         "/v1/answers",
@@ -101,3 +111,36 @@ def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failur
 
     # Evaluator failure changes evaluation state; it never erases the captured query.
     assert repo.list_events(range_name="90d", limit=10)["total"] == 1
+
+
+def test_public_v1_answers_queue_saturation_preserves_durable_event(
+    tmp_path, monkeypatch
+) -> None:
+    repo = SqliteQaRepository(
+        FileObjectStore(tmp_path / "objects"),
+        db_path=tmp_path / "qa.sqlite",
+    )
+    evaluator = _BlockingFailEvaluator()
+    saturated = threading.BoundedSemaphore(value=1)
+    assert saturated.acquire(blocking=False)
+
+    monkeypatch.setattr(m26_public_api, "_trusted_proxy", lambda _remote: False)
+    monkeypatch.setattr(qa_answer_quality, "_CAPTURE_SLOTS", saturated)
+    app = _public_capture_app(repo, evaluator, request_id="public-capture-saturated")
+
+    response = TestClient(app).post(
+        "/v1/answers",
+        json={"question": "Does queue pressure erase this query?"},
+    )
+
+    assert response.status_code == 200
+    assert "public-capture-saturated" in response.text
+    assert evaluator.started.is_set() is False
+
+    page = repo.list_events(range_name="90d", limit=10)
+    assert page["total"] == 1
+    event = repo.get_event(page["items"][0]["event_id"])
+    assert event["evaluation_status"] == "NOT_EVALUATED"
+    assert event["score"] is None
+    assert event["result"] is None
+    assert event["evaluation_error_code"] == "EVALUATION_QUEUE_SATURATED"
