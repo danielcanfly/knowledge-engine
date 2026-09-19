@@ -31,6 +31,7 @@ SERIES_ENTRY_RE = re.compile(
 DISPLAY_ORDER_PREFIX_RE = re.compile(r"^\d+\.\s*")
 ENDING_NUMBER_RE = re.compile(r"(?:part-?|series-)?(\d+)$")
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
+OPENING_HEADING_RE = re.compile(r"^#{1,6}\s+\S")
 SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -409,6 +410,70 @@ def heading_sections(text: str, body_start_line: int) -> list[dict[str, Any]]:
     return sections
 
 
+def _preamble_is_eligible(lines: list[str]) -> bool:
+    nonempty = [line.strip() for line in lines if line.strip()]
+    if not nonempty:
+        return False
+    if all(OPENING_HEADING_RE.match(line) for line in nonempty):
+        return False
+    if nonempty[0].startswith(("```", "~~~")) and nonempty[-1].startswith(
+        ("```", "~~~")
+    ):
+        return False
+    if all(line.startswith(("    ", "\t")) for line in lines if line.strip()):
+        return False
+    wrapper = re.fullmatch(r"<([A-Za-z][\w-]*)\b[^>]*>", nonempty[0])
+    if wrapper is not None and nonempty[-1].casefold() == f"</{wrapper.group(1).casefold()}>":
+        return False
+    if all(
+        line.startswith("<!--")
+        or line.endswith("-->")
+        or re.fullmatch(r"</?[A-Za-z][^>]*>", line) is not None
+        or re.fullmatch(r"<([A-Za-z][^>]*)>.*</\1>", line) is not None
+        for line in nonempty
+    ):
+        return False
+    prose = " ".join(nonempty)
+    words = re.findall(r"[A-Za-z]{2,}", prose)
+    return len(words) >= 3 and re.fullmatch(r"[\w./:-]+", prose) is None
+
+
+def preamble_section(text: str, body_start_line: int) -> dict[str, Any] | None:
+    """Return one source-backed opening span without changing heading ordinals."""
+    lines = text.splitlines(keepends=True)
+    headings: list[int] = []
+    in_fence = False
+    fence_token = ""
+    for index, line_with_ending in enumerate(lines, start=1):
+        line = line_with_ending.rstrip("\r\n")
+        stripped = line.lstrip()
+        if stripped.startswith(("```", "~~~")):
+            token = stripped[:3]
+            if not in_fence:
+                in_fence = True
+                fence_token = token
+            elif token == fence_token:
+                in_fence = False
+                fence_token = ""
+            continue
+        if not in_fence and index >= body_start_line and HEADING_RE.match(line):
+            headings.append(index)
+    end_line = headings[0] - 1 if headings else len(lines)
+    if end_line < body_start_line:
+        return None
+    source_slice = "".join(lines[body_start_line - 1 : end_line])
+    if not _preamble_is_eligible(source_slice.splitlines()):
+        return None
+    return {
+        "heading": "preamble",
+        "heading_level": None,
+        "start_line": body_start_line,
+        "end_line": end_line,
+        "content": source_slice,
+        "content_sha256": sha256(source_slice),
+    }
+
+
 def build_nodes_and_edges(
     records: list[dict[str, Any]],
     raw_by_slug: dict[str, bytes],
@@ -510,6 +575,55 @@ def build_nodes_and_edges(
                         "end_line": section["end_line"],
                     },
                     "content_sha256": section["content_sha256"],
+                }
+            )
+            edges.extend(
+                [
+                    {
+                        "edge_id": stable_id(
+                            "edge", section_node_id, "part_of", article_node_id
+                        ),
+                        "source": section_node_id,
+                        "target": article_node_id,
+                        "type": "part_of",
+                        "status": "candidate_structural",
+                    },
+                    {
+                        "edge_id": stable_id(
+                            "edge", article_node_id, "contains", section_node_id
+                        ),
+                        "source": article_node_id,
+                        "target": section_node_id,
+                        "type": "contains",
+                        "status": "candidate_structural",
+                    },
+                ]
+            )
+        preamble = preamble_section(text, record["body_start_line"])
+        if preamble is not None:
+            section_node_id = stable_id(
+                "section_preamble",
+                record["article_id"],
+                preamble["content_sha256"],
+            )
+            nodes.append(
+                {
+                    "node_id": section_node_id,
+                    "node_type": "Section",
+                    "title": record["title"],
+                    "section_role": "preamble",
+                    "status": "candidate_structural",
+                    "source_article_id": record["article_id"],
+                    "parent_article_node_id": article_node_id,
+                    "heading_level": None,
+                    "source_locator": {
+                        "origin_repository": record["origin_repository"],
+                        "origin_commit": record["origin_commit"],
+                        "origin_path": record["origin_path"],
+                        "start_line": preamble["start_line"],
+                        "end_line": preamble["end_line"],
+                    },
+                    "content_sha256": preamble["content_sha256"],
                 }
             )
             edges.extend(
