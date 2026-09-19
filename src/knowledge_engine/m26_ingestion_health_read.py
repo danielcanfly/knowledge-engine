@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -21,6 +20,7 @@ from .m26_production_answer_bundle import (
     build_production_answer_compatibility_report,
     load_production_answer_bundle,
 )
+from .m26_runtime_read_cache import schedule_runtime_refresh
 
 
 def _digest(value: Any) -> str:
@@ -31,8 +31,6 @@ _AUDIT_CACHE_SCHEMA = "m26-index-health-audit-cache/v1"
 _AUDIT_CACHE_FILENAME = "m26-active-health-audit-v1.json"
 _AUDIT_CACHE_REFRESH_SECONDS = 15 * 60
 _AUDIT_CACHE_MAX_STALE_SECONDS = 60 * 60
-_AUDIT_REFRESH_LOCK = threading.Lock()
-_AUDIT_REFRESHING: set[str] = set()
 
 
 def _audit_cache_path() -> Path:
@@ -91,27 +89,13 @@ def _write_cached_health_audit(identity: Mapping[str, str], audit: Mapping[str, 
 
 
 def _schedule_health_audit_refresh(*, store: Any, identity: Mapping[str, str]) -> None:
-    refresh_key = _digest(dict(identity))
-    with _AUDIT_REFRESH_LOCK:
-        if refresh_key in _AUDIT_REFRESHING:
-            return
-        _AUDIT_REFRESHING.add(refresh_key)
-
-    def run() -> None:
-        try:
-            audit = build_active_health_audit(store=store)
-            _write_cached_health_audit(identity, audit)
-        except Exception:
-            pass
-        finally:
-            with _AUDIT_REFRESH_LOCK:
-                _AUDIT_REFRESHING.discard(refresh_key)
-
-    threading.Thread(
-        target=run,
-        daemon=True,
-        name="m26-index-health-audit-refresh",
-    ).start()
+    # Heavy audits load the full production bundle and Qdrant census. Run them
+    # in a short-lived subprocess so temporary heap is returned to the OS, and
+    # share the runtime refresh single-flight/serialization seam with other
+    # materialized ingestion reads. The worker resolves current authority again
+    # before writing, so stale caller identity cannot poison the cache.
+    del store, identity
+    schedule_runtime_refresh("health")
 
 
 def _cached_or_refreshing_health_audit(*, store: Any, active: Mapping[str, Any]) -> dict[str, Any]:

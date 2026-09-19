@@ -963,8 +963,10 @@ class SQLiteIngestionAdapter:
         )
         return _current_index_observation(
             ledger=self.ledger,
-            source_observer=self.source_observer,
-            active_manifest_observer=self.active_manifest_observer,
+            source_observer=getattr(self, "read_source_observer", self.source_observer),
+            active_manifest_observer=getattr(
+                self, "read_active_manifest_observer", self.active_manifest_observer
+            ),
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=[],
             finalization_authorized=finalization_authorized,
@@ -1614,8 +1616,10 @@ class SQLiteIngestionReadAuthority:
     def current_index(self) -> ReadObservation:
         return _current_index_observation(
             ledger=self.ledger,
-            source_observer=self.source_observer,
-            active_manifest_observer=self.active_manifest_observer,
+            source_observer=getattr(self, "read_source_observer", self.source_observer),
+            active_manifest_observer=getattr(
+                self, "read_active_manifest_observer", self.active_manifest_observer
+            ),
             candidate_manifest_observer=self.candidate_manifest_observer,
             missing_seams=list(self.missing_seams),
             finalization_authorized=False,

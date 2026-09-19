@@ -17,6 +17,7 @@ from .m26_ingestion_runtime import (
     GitHubBlogSource,
     LocalBlogSource,
 )
+from .m26_runtime_read_cache import materialized_runtime_observer
 from .m26_sqlite_ingestion import (
     SQLiteIngestionAdapter,
     SQLiteIngestionReadAuthority,
@@ -80,13 +81,26 @@ def enrich_read_authority_from_env(adapter: Any) -> Any:
 
     store = _object_store()
 
+    materialization_enabled = bool(os.getenv("CACHE_DIR", "").strip())
+
     # A fully qualified mutable adapter already owns the correct ingestion engine.
-    # Only decorate its active observer with additional read-only health evidence.
     if isinstance(adapter, SQLiteIngestionAdapter):
-        adapter.active_manifest_observer = _health_enriched_active(
-            adapter.active_manifest_observer,
-            store,
-        )
+        if materialization_enabled:
+            # Preserve live observers for mutation/finalization authority. Only the
+            # read path is materialized so operator polling cannot fan out remote
+            # source/R2/Qdrant work or retain large audit heaps in uvicorn.
+            if callable(adapter.source_observer):
+                adapter.read_source_observer = materialized_runtime_observer("source")
+            if callable(adapter.active_manifest_observer):
+                adapter.read_active_manifest_observer = _health_enriched_active(
+                    materialized_runtime_observer("active"),
+                    store,
+                )
+        else:
+            adapter.active_manifest_observer = _health_enriched_active(
+                adapter.active_manifest_observer,
+                store,
+            )
         return adapter
 
     if not isinstance(adapter, SQLiteIngestionReadAuthority):
@@ -110,7 +124,20 @@ def enrich_read_authority_from_env(adapter: Any) -> Any:
         else:
             read_missing.append("production_object_store_read")
 
-    active_observer = _health_enriched_active(active_observer, store)
+    if materialization_enabled:
+        read_source_observer = (
+            materialized_runtime_observer("source")
+            if callable(source_observer)
+            else source_observer
+        )
+        read_active_observer = (
+            _health_enriched_active(materialized_runtime_observer("active"), store)
+            if callable(active_observer)
+            else active_observer
+        )
+    else:
+        read_source_observer = source_observer
+        read_active_observer = _health_enriched_active(active_observer, store)
 
     if source_observer is None:
         read_missing.append("published_blog_read")
@@ -119,14 +146,17 @@ def enrich_read_authority_from_env(adapter: Any) -> Any:
     if candidate_observer is None:
         read_missing.append("candidate_manifest_read")
 
-    return SQLiteIngestionReadAuthority(
+    result = SQLiteIngestionReadAuthority(
         adapter.ledger,
         sorted(set(read_missing)),
         source_observer=source_observer,
-        active_manifest_observer=active_observer,
+        active_manifest_observer=read_active_observer,
         candidate_manifest_observer=candidate_observer,
         finalization_mode=adapter.finalization_mode,
     )
+    result.read_source_observer = read_source_observer
+    result.read_active_manifest_observer = read_active_observer
+    return result
 
 
 __all__ = ["enrich_read_authority_from_env"]
