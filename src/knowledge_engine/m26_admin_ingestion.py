@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
+from starlette.concurrency import run_in_threadpool
 
 from .m26_admin_contract import AdminAPIError
 from .m26_admin_control_plane import (
@@ -158,13 +159,15 @@ def _router() -> APIRouter:
 
     @router.get("/index/current", operation_id="getCurrentIndex")
     async def current_index(request: Request) -> dict[str, Any]:
-        return _read_envelope(request, _adapter(request).current_index())
+        observation = await run_in_threadpool(_adapter(request).current_index)
+        return _read_envelope(request, observation)
 
     @router.get("/index/health", operation_id="getIndexHealth")
     async def index_health(request: Request) -> dict[str, Any]:
+        observation = await run_in_threadpool(_adapter(request).current_index)
         return _read_envelope(
             request,
-            build_operator_index_health(_adapter(request).current_index()),
+            build_operator_index_health(observation),
         )
 
     @router.post("/index/audits", status_code=202, operation_id="startIndexAudit")

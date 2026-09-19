@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
 
+from knowledge_engine import m26_admin_ingestion as ingestion_module
 from knowledge_engine.m26_admin_contract import AdminAPIError
 from knowledge_engine.m26_admin_ingestion import (
     ConfirmJobRequest,
@@ -135,3 +137,48 @@ def test_legacy_enabled_state_cannot_authorize_mutation_without_canonical_mappin
     assert caught.value.code == "ADMIN_CAPABILITY_CANONICAL_MAPPING_REQUIRED"
     assert caught.value.details["effective_state"] == "unavailable"
     assert caught.value.details["mutation_authorized"] is False
+
+
+def _route_endpoint(operation_id: str):
+    return next(
+        route.endpoint
+        for route in ingestion_module._router().routes
+        if getattr(route, "operation_id", None) == operation_id
+    )
+
+
+def _read_request(adapter):
+    return SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(m26_ingestion_adapter=adapter)),
+        state=SimpleNamespace(admin_request_id="admreq_test"),
+    )
+
+
+def test_index_current_offloads_blocking_adapter_read(monkeypatch) -> None:
+    adapter = UnavailableIngestionAdapter()
+    calls: list[object] = []
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        calls.append(fn)
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(ingestion_module, "run_in_threadpool", fake_run_in_threadpool)
+    response = asyncio.run(_route_endpoint("getCurrentIndex")(_read_request(adapter)))
+
+    assert calls == [adapter.current_index]
+    assert response["availability"]["status"] == "unavailable"
+
+
+def test_index_health_offloads_blocking_adapter_read(monkeypatch) -> None:
+    adapter = UnavailableIngestionAdapter()
+    calls: list[object] = []
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        calls.append(fn)
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(ingestion_module, "run_in_threadpool", fake_run_in_threadpool)
+    response = asyncio.run(_route_endpoint("getIndexHealth")(_read_request(adapter)))
+
+    assert calls == [adapter.current_index]
+    assert response["availability"]["status"] == "unavailable"
