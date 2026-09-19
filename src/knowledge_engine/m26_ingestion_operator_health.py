@@ -15,6 +15,30 @@ def _count(value: Any) -> int | None:
     return value
 
 
+def _operator_overall_status(
+    active: Mapping[str, Any] | None,
+    source: Mapping[str, Any] | None,
+    *,
+    audit_issues: list[str],
+) -> str:
+    """Return owner-facing health for the active production knowledge system.
+
+    Candidate/finalization readiness remains available elsewhere in the read model,
+    but an inactive historical candidate must not downgrade the primary operator
+    health of an otherwise healthy active production index.
+    """
+
+    active_status = str((active or {}).get("status") or "unknown")
+    source_status = str((source or {}).get("status") or "unknown")
+    if active_status == "unavailable" or source_status == "unavailable":
+        return "unavailable"
+    if active_status == "degraded" or source_status == "drifted":
+        return "degraded"
+    if active_status != "healthy" or source_status != "current" or audit_issues:
+        return "unknown"
+    return "healthy"
+
+
 def build_operator_index_health(observation: ReadObservation) -> ReadObservation:
     """Project read-only production audit evidence into the v2 operator contract.
 
@@ -110,8 +134,11 @@ def build_operator_index_health(observation: ReadObservation) -> ReadObservation
         if audit_issues and active_view.get("status") == "healthy":
             active_view["status"] = "unknown"
 
-    if audit_issues and health.get("overall_status") == "healthy":
-        health["overall_status"] = "unknown"
+    health["overall_status"] = _operator_overall_status(
+        active_view,
+        source_view,
+        audit_issues=audit_issues,
+    )
 
     return ReadObservation(
         availability=built.availability,

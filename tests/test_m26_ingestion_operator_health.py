@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from knowledge_engine import m26_ingestion_operator_health as operator_health_module
 from knowledge_engine.m26_admin_ingestion_core import ReadObservation
 from knowledge_engine.m26_ingestion_operator_health import build_operator_index_health
 
@@ -72,6 +73,59 @@ def _observation(*, with_audit: bool = True) -> ReadObservation:
     )
 
 
+def _built_health(
+    *,
+    active_status: str = "healthy",
+    source_status: str = "current",
+    candidate_status: str = "unknown",
+    candidate_issues: list[str] | None = None,
+    running_jobs: list[dict[str, object]] | None = None,
+) -> ReadObservation:
+    candidate_issues = candidate_issues or []
+    issues = list(candidate_issues)
+    return ReadObservation(
+        availability="available",
+        source="sqlite_ingestion_health_authority",
+        freshness="live",
+        observed_at="2026-09-19T01:00:00Z",
+        data={
+            "schema_version": "m26-index-health/v2",
+            "overall_status": "unknown" if candidate_issues else "healthy",
+            "active_production_index": {
+                "status": active_status,
+                "issues": [] if active_status == "healthy" else ["ACTIVE_ISSUE"],
+                "vector_lexical_parity": "proven" if active_status == "healthy" else "mismatch",
+            },
+            "candidate_index": {
+                "status": candidate_status,
+                "issues": candidate_issues,
+            },
+            "source_state": {
+                "status": source_status,
+                "issues": [] if source_status == "current" else ["SOURCE_ISSUE"],
+                "diff_vs_active": {
+                    "added": [],
+                    "changed": [],
+                    "removed": [],
+                    "unchanged": ["article-a", "article-b"],
+                },
+            },
+            "jobs": {
+                "running": running_jobs or [],
+                "last_successful": None,
+                "last_failed": None,
+                "retryable_failed_count": 0,
+            },
+            "promotion_readiness": {
+                "status": "blocked" if candidate_issues else "not_ready",
+                "candidate_only": True,
+                "active_pointer_authorized": False,
+                "blockers": candidate_issues,
+            },
+            "issues": issues,
+        },
+    )
+
 def test_projects_real_operator_health_counts_from_qualified_evidence():
     health = build_operator_index_health(_observation())
 
@@ -104,3 +158,65 @@ def test_missing_audit_evidence_never_becomes_fake_zero_health():
     # Independent source-drift evidence may already make the overall state degraded.
     # Missing audit evidence must never erase that stronger signal or become healthy.
     assert health.data["overall_status"] != "healthy"
+
+
+def test_historical_candidate_mismatch_does_not_pollute_operator_health(monkeypatch):
+    built = _built_health(
+        candidate_status="unknown",
+        candidate_issues=["INDEX_CANDIDATE_PARITY_MISMATCH"],
+    )
+    monkeypatch.setattr(operator_health_module, "build_index_health", lambda _observation: built)
+
+    health = build_operator_index_health(_observation())
+
+    assert health.data["overall_status"] == "healthy"
+    assert health.data["active_production_index"]["status"] == "healthy"
+    assert health.data["source_state"]["status"] == "current"
+    assert health.data["candidate_index"]["status"] == "unknown"
+    assert "INDEX_CANDIDATE_PARITY_MISMATCH" in health.data["candidate_index"]["issues"]
+    assert "INDEX_CANDIDATE_PARITY_MISMATCH" in health.data["issues"]
+
+
+def test_genuine_active_degradation_still_fails_closed(monkeypatch):
+    built = _built_health(active_status="degraded", candidate_status="absent")
+    monkeypatch.setattr(operator_health_module, "build_index_health", lambda _observation: built)
+
+    health = build_operator_index_health(_observation())
+
+    assert health.data["overall_status"] == "degraded"
+
+
+def test_genuine_source_drift_still_fails_closed(monkeypatch):
+    built = _built_health(source_status="drifted", candidate_status="absent")
+    monkeypatch.setattr(operator_health_module, "build_index_health", lambda _observation: built)
+
+    health = build_operator_index_health(_observation())
+
+    assert health.data["overall_status"] == "degraded"
+
+
+def test_missing_active_audit_evidence_still_fails_closed_when_base_is_green(monkeypatch):
+    built = _built_health(candidate_status="absent")
+    monkeypatch.setattr(operator_health_module, "build_index_health", lambda _observation: built)
+
+    health = build_operator_index_health(_observation(with_audit=False))
+
+    assert health.data["overall_status"] == "unknown"
+    assert health.data["active_production_index"]["status"] == "unknown"
+    assert "INDEX_HEALTH_AUDIT_EVIDENCE_UNAVAILABLE" in health.data["issues"]
+
+
+def test_running_candidate_remains_observable_without_downgrading_active_health(monkeypatch):
+    running = [{"job_id": "job-running", "status": "RUNNING", "phase": "candidate_write"}]
+    built = _built_health(
+        candidate_status="building",
+        candidate_issues=[],
+        running_jobs=running,
+    )
+    monkeypatch.setattr(operator_health_module, "build_index_health", lambda _observation: built)
+
+    health = build_operator_index_health(_observation())
+
+    assert health.data["overall_status"] == "healthy"
+    assert health.data["candidate_index"]["status"] == "building"
+    assert health.data["jobs"]["running"] == running
