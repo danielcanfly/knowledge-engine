@@ -214,7 +214,12 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
     }
 
 
-def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, Any]:
+def build_pack_artifacts(
+    pack: Mapping[str, Any],
+    release_id: str,
+    *,
+    expected_semantic_documents: int | None = None,
+) -> dict[str, Any]:
     article_by_id = pack["article_by_id"]
     source_bytes = pack["source_bytes"]
     nodes = pack["nodes"]
@@ -444,7 +449,12 @@ def build_pack_artifacts(pack: Mapping[str, Any], release_id: str) -> dict[str, 
     ]
     lexical.sort(key=lambda item: (item["concept_id"], item["section_id"]))
     semantic.sort(key=lambda item: item["section_id"])
-    if len(semantic) != COUNTS["semantic_documents"]:
+    expected_semantic = (
+        COUNTS["semantic_documents"]
+        if expected_semantic_documents is None
+        else expected_semantic_documents
+    )
+    if len(semantic) != expected_semantic:
         raise IntegrityError(
             "M25-BLOG-LIVE-022 semantic document population drift"
         )

@@ -15,6 +15,10 @@ from . import m26_pa7_arbitrary_query_runtime as legacy
 from . import m26_pa7_semantic_closure_runtime as runtime
 from .m26_gemini_dense_fallback import M26_GEMINI_CANDIDATE_RELEASE_ID
 from .m26_pa5_v8_live import LiveGateError, MiniMaxClient
+from .m26_preamble_r1_candidate_release import (
+    PREAMBLE_R1_RELEASE_ID,
+    preamble_r1_authority_mismatch,
+)
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
 from .m26_verified_answer_citation_gate import canonical_sha256
 
@@ -3518,6 +3522,14 @@ def _contract_event_sink(
 
 
 def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
+    if bundle.release_id == PREAMBLE_R1_RELEASE_ID:
+        mismatch = preamble_r1_authority_mismatch(bundle)
+        if mismatch is not None:
+            raise legacy.PA7ArbitraryQueryError(
+                mismatch,
+                "preamble Repair-1 candidate does not match its canonical release authority",
+            )
+        return
     if bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
         runtime._assert_full_production_graph(bundle)
         return
