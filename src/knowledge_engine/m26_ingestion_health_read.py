@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
 from typing import Any
 
 from .m26_active_release_dense import ActiveReleaseDenseConfig, ActiveReleaseQdrantDenseChannel
@@ -21,6 +25,120 @@ from .m26_production_answer_bundle import (
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+_AUDIT_CACHE_SCHEMA = "m26-index-health-audit-cache/v1"
+_AUDIT_CACHE_FILENAME = "m26-active-health-audit-v1.json"
+_AUDIT_CACHE_REFRESH_SECONDS = 15 * 60
+_AUDIT_CACHE_MAX_STALE_SECONDS = 60 * 60
+_AUDIT_REFRESH_LOCK = threading.Lock()
+_AUDIT_REFRESHING: set[str] = set()
+
+
+def _audit_cache_path() -> Path:
+    root = Path(os.getenv("CACHE_DIR", ".artifacts/cache") or ".artifacts/cache").expanduser()
+    return root / _AUDIT_CACHE_FILENAME
+
+
+def _active_cache_identity(value: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        "release_id": str(value.get("release_id") or ""),
+        "manifest_sha256": str(value.get("manifest_sha256") or ""),
+        "qdrant_collection": str(value.get("qdrant_collection") or ""),
+    }
+
+
+def _read_cached_health_audit(
+    identity: Mapping[str, str],
+) -> tuple[dict[str, Any] | None, float | None]:
+    path = _audit_cache_path()
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, ValueError, TypeError):
+        return None, None
+    if not isinstance(cached, Mapping) or cached.get("schema_version") != _AUDIT_CACHE_SCHEMA:
+        return None, None
+    observed_identity = cached.get("active_identity")
+    if not isinstance(observed_identity, Mapping) or any(
+        str(observed_identity.get(key) or "") != str(identity.get(key) or "")
+        for key in ("release_id", "manifest_sha256", "qdrant_collection")
+    ):
+        return None, None
+    audit = cached.get("audit")
+    if not isinstance(audit, Mapping):
+        return None, None
+    cached_at = cached.get("cached_at_epoch")
+    if not isinstance(cached_at, (int, float)):
+        return None, None
+    age_seconds = max(0.0, time.time() - float(cached_at))
+    return dict(audit), age_seconds
+
+
+def _write_cached_health_audit(identity: Mapping[str, str], audit: Mapping[str, Any]) -> None:
+    if str(audit.get("release_id") or "") != str(identity.get("release_id") or ""):
+        return
+    path = _audit_cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": _AUDIT_CACHE_SCHEMA,
+        "cached_at_epoch": time.time(),
+        "active_identity": dict(identity),
+        "audit": dict(audit),
+    }
+    staging = path.with_name(path.name + "." + _digest(dict(identity))[:12] + ".tmp")
+    staging.write_bytes(canonical_json_bytes(payload))
+    os.replace(staging, path)
+
+
+def _schedule_health_audit_refresh(*, store: Any, identity: Mapping[str, str]) -> None:
+    refresh_key = _digest(dict(identity))
+    with _AUDIT_REFRESH_LOCK:
+        if refresh_key in _AUDIT_REFRESHING:
+            return
+        _AUDIT_REFRESHING.add(refresh_key)
+
+    def run() -> None:
+        try:
+            audit = build_active_health_audit(store=store)
+            _write_cached_health_audit(identity, audit)
+        except Exception:
+            pass
+        finally:
+            with _AUDIT_REFRESH_LOCK:
+                _AUDIT_REFRESHING.discard(refresh_key)
+
+    threading.Thread(
+        target=run,
+        daemon=True,
+        name="m26-index-health-audit-refresh",
+    ).start()
+
+
+def _cached_or_refreshing_health_audit(*, store: Any, active: Mapping[str, Any]) -> dict[str, Any]:
+    identity = _active_cache_identity(active)
+    if not all(identity.values()):
+        return {
+            "schema_version": "m26-index-health-audit/v1",
+            "status": "unavailable",
+            "reason_code": "INDEX_HEALTH_ACTIVE_IDENTITY_UNAVAILABLE",
+            "issues": ["INDEX_HEALTH_ACTIVE_IDENTITY_UNAVAILABLE"],
+        }
+    cached, age_seconds = _read_cached_health_audit(identity)
+    if cached is not None and age_seconds is not None:
+        if age_seconds <= _AUDIT_CACHE_REFRESH_SECONDS:
+            return cached
+        _schedule_health_audit_refresh(store=store, identity=identity)
+        if age_seconds <= _AUDIT_CACHE_MAX_STALE_SECONDS:
+            return cached
+    else:
+        _schedule_health_audit_refresh(store=store, identity=identity)
+    return {
+        "schema_version": "m26-index-health-audit/v1",
+        "status": "unavailable",
+        "release_id": identity["release_id"],
+        "reason_code": "INDEX_HEALTH_AUDIT_REFRESH_PENDING",
+        "issues": ["INDEX_HEALTH_AUDIT_REFRESH_PENDING"],
+    }
 
 
 def _rows(value: Any) -> list[Mapping[str, Any]]:
@@ -329,7 +447,7 @@ def enrich_active_observer_with_health(
 ) -> Callable[[], Mapping[str, Any]]:
     def observe() -> Mapping[str, Any]:
         value = dict(observer())
-        audit = build_active_health_audit(store=store)
+        audit = _cached_or_refreshing_health_audit(store=store, active=value)
         if audit.get("release_id") not in {None, value.get("release_id")}:
             audit = {
                 "schema_version": "m26-index-health-audit/v1",
