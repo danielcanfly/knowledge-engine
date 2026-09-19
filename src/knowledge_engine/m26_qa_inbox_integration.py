@@ -265,7 +265,16 @@ class QaAnswerCaptureMiddleware:
                     payload
                     for name, payload in events
                     if name
-                    in {"model_started", "model_completed", "stage_started", "stage_completed"}
+                    in {
+                        "model_started",
+                        "model_completed",
+                        "stage_started",
+                        "stage_completed",
+                        "model.started",
+                        "model.completed",
+                        "stage.started",
+                        "stage.completed",
+                    }
                 ],
                 "sse_terminal": error or {"status": "ok"},
                 "timing": {"total_ms": latency_ms},

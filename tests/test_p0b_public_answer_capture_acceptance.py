@@ -76,7 +76,22 @@ def _public_capture_app(
             "answer": answer["answer_text"],
             "citations": answer["citations"],
         }
-        body = f"event: answer.completed\ndata: {json.dumps(public_event)}\n\n"
+        model_started = {
+            "request_id": request_id,
+            "type": "model.started",
+            "provider": "cloudflare",
+            "model": "@cf/openai/gpt-oss-120b",
+        }
+        model_completed = {
+            **model_started,
+            "type": "model.completed",
+            "status": "completed",
+        }
+        body = (
+            f"event: model.started\ndata: {json.dumps(model_started)}\n\n"
+            f"event: model.completed\ndata: {json.dumps(model_completed)}\n\n"
+            f"event: answer.completed\ndata: {json.dumps(public_event)}\n\n"
+        )
         return StreamingResponse(iter([body]), media_type="text/event-stream")
 
     app.add_middleware(
@@ -232,6 +247,29 @@ def test_public_v1_answers_queue_saturation_preserves_durable_event(
     assert event["score"] is None
     assert event["result"] is None
     assert event["evaluation_error_code"] == "EVALUATION_QUEUE_SATURATED"
+
+
+def test_public_capture_preserves_current_dotted_provider_events(tmp_path, monkeypatch) -> None:
+    repo = SqliteQaRepository(
+        FileObjectStore(tmp_path / "objects"),
+        db_path=tmp_path / "qa.sqlite",
+    )
+    monkeypatch.setattr(m26_public_api, "_trusted_proxy", lambda _remote: False)
+    app = _public_capture_app(repo, _static_evaluator(result="fail"), request_id="provider-events")
+
+    response = TestClient(app).post(
+        "/v1/answers",
+        json={"question": "Which provider produced this answer?"},
+    )
+    assert response.status_code == 200
+
+    page = repo.list_events(range_name="90d", limit=10)
+    assert page["total"] == 1
+    event = _eventually_event(repo, page["items"][0]["event_id"], "ANSWERED")
+    provider_events = event["failure_trace"]["raw_runtime_trace"]["provider_events"]
+    assert [item["type"] for item in provider_events] == ["model.started", "model.completed"]
+    assert provider_events[0]["provider"] == "cloudflare"
+    assert provider_events[0]["model"] == "@cf/openai/gpt-oss-120b"
 
 
 def test_production_sqlite_pass_is_compact_and_fail_trace_redacts_secrets(tmp_path) -> None:
