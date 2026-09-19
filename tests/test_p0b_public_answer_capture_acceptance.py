@@ -9,7 +9,12 @@ from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 
 from knowledge_engine import m26_public_api, qa_answer_quality
-from knowledge_engine.m26_qa_inbox_integration import QaAnswerCaptureMiddleware
+from knowledge_engine.m26_qa_inbox_integration import (
+    QaAnswerCaptureMiddleware,
+    _error_reason_codes,
+    _terminal_answer,
+    _terminal_error,
+)
 from knowledge_engine.qa_answer_quality_evaluator import (
     ANSWER_QUALITY_CRITERION_MAX,
     AnswerQualityEvaluation,
@@ -65,7 +70,13 @@ def _public_capture_app(
                 "citation_locator_valid": True,
             },
         }
-        body = f"event: answer\ndata: {json.dumps(answer)}\n\n"
+        public_event = {
+            "request_id": request_id,
+            "type": "answer.completed",
+            "answer": answer["answer_text"],
+            "citations": answer["citations"],
+        }
+        body = f"event: answer.completed\ndata: {json.dumps(public_event)}\n\n"
         return StreamingResponse(iter([body]), media_type="text/event-stream")
 
     app.add_middleware(
@@ -119,6 +130,31 @@ def _static_evaluator(*, result: str) -> StaticAnswerQualityEvaluator:
             failure_intent=intent,
         )
     )
+
+
+def test_public_sse_terminal_contract_normalizes_current_event_names() -> None:
+    completed = _terminal_answer(
+        [
+            (
+                "answer.completed",
+                {
+                    "request_id": "req-current",
+                    "answer": "Grounded current-contract answer.",
+                    "citations": [{"citation_id": "c1"}],
+                },
+            )
+        ]
+    )
+    assert completed is not None
+    assert completed["answer_text"] == "Grounded current-contract answer."
+    assert completed["status"] == "owner_only_cited_answer"
+    assert completed["safe_abstention"] is False
+
+    failed = _terminal_error(
+        [("answer.failed", {"request_id": "req-failed", "code": "ANSWER_TIMEOUT"})]
+    )
+    assert failed is not None
+    assert _error_reason_codes(failed) == ["ANSWER_TIMEOUT"]
 
 
 def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failure(

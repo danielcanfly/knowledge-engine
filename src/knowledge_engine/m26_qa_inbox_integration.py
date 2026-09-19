@@ -242,8 +242,8 @@ class QaAnswerCaptureMiddleware:
             if not question:
                 return
             events = _parse_sse(response_body.decode("utf-8", errors="replace"))
-            answer = next((payload for name, payload in reversed(events) if name == "answer"), None)
-            error = next((payload for name, payload in reversed(events) if name == "error"), None)
+            answer = _terminal_answer(events)
+            error = _terminal_error(events)
             correlation_id = _correlation_id(events)
             if not isinstance(answer, Mapping):
                 answer = {
@@ -356,6 +356,40 @@ def _parse_sse(value: str) -> list[tuple[str, dict[str, Any]]]:
     return events
 
 
+def _terminal_answer(events: list[tuple[str, dict[str, Any]]]) -> dict[str, Any] | None:
+    for name, payload in reversed(events):
+        if name == "answer":
+            return dict(payload)
+        if name in {"answer.completed", "answer.partial"}:
+            normalized = dict(payload)
+            normalized.setdefault("answer_text", str(payload.get("answer") or ""))
+            normalized.setdefault(
+                "status",
+                "owner_only_cited_answer"
+                if name == "answer.completed"
+                else "owner_only_partial_answer",
+            )
+            normalized.setdefault("safe_abstention", False)
+            return normalized
+        if name == "answer.abstained":
+            normalized = dict(payload)
+            normalized.setdefault("answer_text", "")
+            normalized.setdefault("status", "safe_abstention")
+            normalized.setdefault("safe_abstention", True)
+            code = str(payload.get("code") or "").strip()
+            if code and "reason_codes" not in normalized:
+                normalized["reason_codes"] = [code]
+            return normalized
+    return None
+
+
+def _terminal_error(events: list[tuple[str, dict[str, Any]]]) -> dict[str, Any] | None:
+    for name, payload in reversed(events):
+        if name in {"error", "answer.failed"}:
+            return dict(payload)
+    return None
+
+
 def _correlation_id(events: list[tuple[str, dict[str, Any]]]) -> str:
     for _, payload in events:
         candidate = payload.get("correlation_id") or payload.get("request_id")
@@ -367,6 +401,9 @@ def _correlation_id(events: list[tuple[str, dict[str, Any]]]) -> str:
 def _error_reason_codes(error: Mapping[str, Any] | None) -> list[str]:
     if not isinstance(error, Mapping):
         return []
+    code = error.get("code")
+    if code:
+        return [str(code)]
     detail = error.get("detail")
     if isinstance(detail, Mapping):
         code = detail.get("code")
