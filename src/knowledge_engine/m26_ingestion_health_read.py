@@ -30,7 +30,6 @@ def _digest(value: Any) -> str:
 _AUDIT_CACHE_SCHEMA = "m26-index-health-audit-cache/v1"
 _AUDIT_CACHE_FILENAME = "m26-active-health-audit-v1.json"
 _AUDIT_CACHE_REFRESH_SECONDS = 15 * 60
-_AUDIT_CACHE_MAX_STALE_SECONDS = 60 * 60
 
 
 def _audit_cache_path() -> Path:
@@ -111,11 +110,13 @@ def _cached_or_refreshing_health_audit(*, store: Any, active: Mapping[str, Any])
     if cached is not None and age_seconds is not None:
         if age_seconds <= _AUDIT_CACHE_REFRESH_SECONDS:
             return cached
+        # The cache is keyed to the exact active release identity. When that
+        # identity still matches, old health evidence is safer and more useful
+        # to operators than a synthetic "unavailable" while the heavy audit
+        # refreshes. Identity mismatch still fails closed below.
         _schedule_health_audit_refresh(store=store, identity=identity)
-        if age_seconds <= _AUDIT_CACHE_MAX_STALE_SECONDS:
-            return cached
-    else:
-        _schedule_health_audit_refresh(store=store, identity=identity)
+        return cached
+    _schedule_health_audit_refresh(store=store, identity=identity)
     return {
         "schema_version": "m26-index-health-audit/v1",
         "status": "unavailable",

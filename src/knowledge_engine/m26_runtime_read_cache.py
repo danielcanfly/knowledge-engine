@@ -17,7 +17,6 @@ LOGGER = logging.getLogger(__name__)
 
 _CACHE_SCHEMA = "m26-runtime-read-cache/v1"
 _REFRESH_SECONDS = {"source": 5 * 60, "active": 60}
-_MAX_STALE_SECONDS = {"source": 60 * 60, "active": 15 * 60}
 _REFRESH_TIMEOUT_SECONDS = {"source": 45, "active": 20, "health": 150}
 _REFRESHING: set[str] = set()
 _REFRESH_LOCK = threading.Lock()
@@ -187,11 +186,14 @@ def materialized_runtime_observer(role: str):
         if payload is not None and age_seconds is not None:
             if age_seconds <= _REFRESH_SECONDS[role]:
                 return payload
+            # A matching materialized snapshot remains safe read evidence even
+            # when old. Serve it immediately and refresh in the background so an
+            # idle operator page never turns a healthy production index into a
+            # synthetic outage. Mutation/finalization authority still uses the
+            # live observers, not this materialized read path.
             schedule_runtime_refresh(role)
-            if age_seconds <= _MAX_STALE_SECONDS[role]:
-                return payload
-        else:
-            schedule_runtime_refresh(role)
+            return payload
+        schedule_runtime_refresh(role)
         raise RuntimeReadRefreshPending(f"M26_{role.upper()}_READ_REFRESH_PENDING")
 
     return observe

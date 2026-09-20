@@ -57,7 +57,29 @@ def test_stale_materialized_observer_serves_cache_and_singleflight_refreshes(
     assert calls == ["active"]
 
 
-def test_missing_or_too_old_cache_returns_pending_without_running_live_observer(
+
+
+def test_very_old_materialized_observer_serves_cache_while_refreshing(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    read_cache.write_materialized_read_cache("active", _payload("active"))
+    path = read_cache.materialized_cache_path("active")
+    body = json.loads(path.read_text(encoding="utf-8"))
+    body["cached_at_epoch"] = time.time() - (24 * 60 * 60)
+    path.write_text(json.dumps(body), encoding="utf-8")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        read_cache, "schedule_runtime_refresh", lambda role: calls.append(role) or True
+    )
+
+    observed = read_cache.materialized_runtime_observer("active")()
+
+    assert observed["release_id"] == "release-a"
+    assert calls == ["active"]
+
+
+def test_missing_cache_returns_pending_without_running_live_observer(
     monkeypatch, tmp_path
 ):
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))

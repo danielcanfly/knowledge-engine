@@ -96,12 +96,12 @@ def test_mismatched_full_audit_is_never_written_to_active_cache(monkeypatch, tmp
     assert not health_read._audit_cache_path().exists()
 
 
-def test_cache_older_than_max_stale_window_fails_closed(monkeypatch, tmp_path):
+def test_very_old_same_release_cache_is_served_while_refreshing(monkeypatch, tmp_path):
     monkeypatch.setenv("CACHE_DIR", str(tmp_path))
     health_read._write_cached_health_audit(_identity(), _audit())
     cache_path = health_read._audit_cache_path()
     payload = json.loads(cache_path.read_text(encoding="utf-8"))
-    payload["cached_at_epoch"] = time.time() - health_read._AUDIT_CACHE_MAX_STALE_SECONDS - 1
+    payload["cached_at_epoch"] = time.time() - (24 * 60 * 60)
     cache_path.write_text(json.dumps(payload), encoding="utf-8")
     scheduled: list[dict[str, str]] = []
     monkeypatch.setattr(
@@ -115,6 +115,6 @@ def test_cache_older_than_max_stale_window_fails_closed(monkeypatch, tmp_path):
         active=_identity(),
     )
 
-    assert observed["status"] == "unavailable"
-    assert observed["reason_code"] == "INDEX_HEALTH_AUDIT_REFRESH_PENDING"
+    assert observed["status"] == "healthy"
+    assert observed["release_id"] == "release-a"
     assert scheduled == [_identity()]
