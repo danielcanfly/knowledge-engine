@@ -30,6 +30,15 @@ def test_s6_admin_openapi_exposes_qa_inbox_and_suggested_questions_contract() ->
         "evaluation_status",
         "country",
         "lifecycle",
+        "failure_type",
+        "score_min",
+        "score_max",
+        "latency_min_ms",
+        "latency_max_ms",
+        "release",
+        "index_revision",
+        "provider",
+        "model",
         "limit",
         "cursor",
     }
@@ -54,6 +63,15 @@ def test_s6_admin_openapi_exposes_qa_inbox_and_suggested_questions_contract() ->
         "evaluation_status",
         "country",
         "lifecycle",
+        "failure_type",
+        "score_min",
+        "score_max",
+        "latency_min_ms",
+        "latency_max_ms",
+        "release",
+        "index_revision",
+        "provider",
+        "model",
     }
     assert export_properties["mode"]["enum"] == ["new", "selected", "current_filter"]
     export_headers = paths["/v1/admin/qa/inbox/export-jsonl"]["post"]["responses"]["200"]["headers"]

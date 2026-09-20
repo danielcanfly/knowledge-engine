@@ -33,12 +33,12 @@ def test_deploy_requires_exact_sha_and_defers_public_identity_gate_by_default() 
     assert "/v1/answers/health" in deploy
 
 
-def test_standard_compose_uses_canonical_public_runtime_contract() -> None:
+def test_standard_compose_uses_canonical_console_runtime_contract() -> None:
     compose = (WORKFLOW.parents[2] / "docker-compose.yml").read_text(encoding="utf-8")
     dockerfile = (WORKFLOW.parents[2] / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "knowledge_engine.m26_public_api:app" in compose
+    assert "knowledge_engine.m26_console_api:app" in compose
     assert "M26_PUBLIC_QUOTA_DB" in compose
     assert "m26-daily-ip-rate-limit-data" in compose
-    assert "knowledge_engine.m26_public_api:app" in dockerfile
+    assert "knowledge_engine.m26_console_api:app" in dockerfile
     assert "/v1/answers/health" in dockerfile
