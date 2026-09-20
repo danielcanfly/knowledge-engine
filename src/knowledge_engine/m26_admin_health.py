@@ -261,6 +261,15 @@ def _canonical_api_observation(request: Request, observed_at: str) -> dict[str, 
 
 
 def _production_observation(request: Request, observed_at: str) -> dict[str, Any]:
+    observer = getattr(request.app.state, "admin_health_production_observer", None)
+    if callable(observer):
+        try:
+            value = observer()
+        except Exception:
+            value = None
+        if isinstance(value, Mapping):
+            return dict(value)
+
     loader = getattr(
         request.app.state,
         "admin_health_bundle_loader",

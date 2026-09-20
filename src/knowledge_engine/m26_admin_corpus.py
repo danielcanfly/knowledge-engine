@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, FastAPI, Query, Request
 
 from .m26_admin_contract import AdminAPIError, canonical_json_bytes, new_request_id, redact
 from .m26_production_answer_bundle import load_production_answer_bundle
+from .m26_runtime_read_cache import RuntimeReadRefreshPending, materialized_runtime_observer
 
 CONTRACT_VERSION = "1.1.0-gate-a-repair-a"
 CORPUS_SOURCE = "corpus_reconciliation_read_model"
@@ -59,31 +62,43 @@ class ObjectStoreCorpusAdapter:
             value = _text(row.get(key))
             if value:
                 return value
+        payload = row.get("payload")
+        if isinstance(payload, Mapping):
+            for key in ("source_id", "document_id", "id"):
+                value = _text(payload.get(key))
+                if value:
+                    return value
         return None
 
     def read(self) -> Mapping[str, Any]:
         bundle = load_production_answer_bundle(store=self.store)
         active = bundle.active_release
-        source_rows = self._rows(bundle.source_documents, "documents", "sources", "entries")
-        if not source_rows:
-            source_rows = self._rows(
-                bundle.document_source_index,
-                "entries",
-                "sources",
-                "documents",
-                "rows",
-            )
+        source_document_rows = self._rows(
+            bundle.source_documents, "documents", "sources", "entries"
+        )
+        source_index_rows = self._rows(
+            bundle.document_source_index,
+            "entries",
+            "sources",
+            "documents",
+            "rows",
+        )
         lexical_rows = self._rows(bundle.lexical_index, "documents")
         semantic_rows = self._rows(bundle.semantic_inputs, "documents")
         provenance_rows = self._rows(bundle.provenance, "records")
         if semantic_rows and len(semantic_rows) != active.semantic_point_count:
             raise ValueError("active semantic artifact count does not match release authority")
 
-        source_by_id = {
-            source_id: dict(row)
-            for row in source_rows
-            if (source_id := self._source_id(row)) is not None
-        }
+        source_by_id: dict[str, dict[str, Any]] = {}
+        # Source documents carry canonical document identity while the source index
+        # carries richer operator metadata such as canonical_url/title. Merge them
+        # by stable source_id rather than picking one artifact family and losing
+        # evidence from the other.
+        for row in [*source_document_rows, *source_index_rows]:
+            source_id = self._source_id(row)
+            if source_id is None:
+                continue
+            source_by_id.setdefault(source_id, {}).update(dict(row))
         lexical_by_id: dict[str, list[Mapping[str, Any]]] = {}
         for row in lexical_rows:
             source_id = self._source_id(row)
@@ -94,12 +109,15 @@ class ObjectStoreCorpusAdapter:
             source_id = self._source_id(row)
             if source_id:
                 semantic_by_id.setdefault(source_id, []).append(row)
-        provenance_ids = {
-            source_id
-            for record in provenance_rows
-            for source in self._rows(record, "sources")
-            if (source_id := self._source_id(source)) is not None
-        }
+        provenance_ids: set[str] = set()
+        for record in provenance_rows:
+            direct_source_id = self._source_id(record)
+            if direct_source_id is not None:
+                provenance_ids.add(direct_source_id)
+            for source in self._rows(record, "sources"):
+                nested_source_id = self._source_id(source)
+                if nested_source_id is not None:
+                    provenance_ids.add(nested_source_id)
         source_ids = sorted(set(source_by_id) | set(lexical_by_id) | set(semantic_by_id))
 
         sources: list[dict[str, Any]] = []
@@ -175,8 +193,35 @@ class ObjectStoreCorpusAdapter:
         }
 
 
-def object_store_corpus_adapter_from_env() -> ObjectStoreCorpusAdapter | None:
+class MaterializedCorpusAdapter:
+    """Serve the compact corpus reconciliation snapshot from the runtime cache.
+
+    Heavy immutable-release loading is scheduled in the existing single-flight
+    subprocess refresh path. The uvicorn request process never performs that
+    work synchronously.
+    """
+
+    def __init__(self) -> None:
+        self._observe = materialized_runtime_observer("corpus")
+
+    def read(self) -> Mapping[str, Any]:
+        try:
+            return dict(self._observe())
+        except RuntimeReadRefreshPending as exc:
+            raise AdminAPIError(
+                status_code=503,
+                code="ADMIN_CORPUS_REFRESH_PENDING",
+                message="Corpus reconciliation snapshot is being refreshed",
+                retryable=True,
+                details={"availability": "unavailable"},
+            ) from exc
+
+
+def object_store_corpus_adapter_from_env() -> CorpusAdapter | None:
     try:
+        if os.getenv("CACHE_DIR", "").strip():
+            return MaterializedCorpusAdapter()
+
         from .config import Settings
         from .storage import create_object_store
 
@@ -196,8 +241,24 @@ def _slug(source: Mapping[str, Any]) -> str:
     explicit = _text(source.get("slug"))
     if explicit:
         return explicit.casefold()
-    leaf = (_text(source.get("source_path")) or "").rsplit("/", 1)[-1]
-    return leaf.rsplit(".", 1)[0].casefold()
+    canonical_url = _text(source.get("canonical_url"))
+    if canonical_url:
+        path = urlsplit(canonical_url).path.rstrip("/")
+        leaf = path.rsplit("/", 1)[-1]
+        if leaf:
+            return leaf.casefold()
+    source_path = (_text(source.get("source_path")) or "").strip("/")
+    if source_path:
+        leaf = source_path.rsplit("/", 1)[-1]
+        stem = leaf.rsplit(".", 1)[0]
+        if stem.casefold() != "index":
+            return stem.casefold()
+        # Many blog sources end in index.md; the leaf alone is not a logical
+        # slug. Use the parent path so unrelated articles are not all labelled
+        # duplicates merely because they use the index filename convention.
+        parent = source_path.rsplit("/", 1)[0] if "/" in source_path else source_path
+        return parent.casefold()
+    return ""
 
 
 def _language(source: Mapping[str, Any], artifact: Mapping[str, Any]) -> str | None:
@@ -497,6 +558,7 @@ def install_admin_corpus(
 __all__ = [
     "CONTRACT_VERSION",
     "CorpusReadService",
+    "MaterializedCorpusAdapter",
     "ObjectStoreCorpusAdapter",
     "UnavailableCorpusAdapter",
     "install_admin_corpus",

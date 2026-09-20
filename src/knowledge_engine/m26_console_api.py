@@ -6,10 +6,12 @@ from .m26_admin_corpus import install_admin_corpus, object_store_corpus_adapter_
 from .m26_admin_health import install_admin_health
 from .m26_admin_ingestion import install_admin_ingestion_routes
 from .m26_admin_overview import install_admin_overview
-from .m26_admin_production import production_admin_runtime_from_env
+from .m26_admin_production import SqliteAuditHistoryReader, production_admin_runtime_from_env
 from .m26_admin_settings import CANONICAL_ADMIN_API_VERSION, install_admin_settings
 from .m26_admin_usage import install_admin_usage
+from .m26_console_health_runtime import materialized_console_health_observer
 from .m26_console_p05_ask_playground import router as playground_router
+from .m26_golden_production_provider import packaged_golden_evaluation_provider
 from .m26_golden_questions_admin import install_golden_questions_admin
 from .m26_ingestion_read_runtime import enrich_read_authority_from_env
 from .m26_ingestion_runtime import (
@@ -51,7 +53,11 @@ def create_app():
     app.include_router(playground_router())
     install_suggested_questions_admin(app)
     install_admin_usage(app)
-    install_admin_health(app)
+    health_observer = materialized_console_health_observer()
+    if health_observer is not None:
+        app.state.admin_health_production_observer = health_observer.production_observation
+        app.state.admin_overview_release_observer = health_observer.release_observation
+    install_admin_health(app, observer=health_observer)
     install_jobs_rollback_routes(
         app,
         evidence_provider=(
@@ -59,9 +65,16 @@ def create_app():
         ),
         include_job_reads=False,
     )
-    install_golden_questions_admin(app)
+    install_golden_questions_admin(app, provider=packaged_golden_evaluation_provider())
     install_admin_settings(app)
-    install_admin_audit(app)
+    install_admin_audit(
+        app,
+        reader=(
+            SqliteAuditHistoryReader(production_admin.store)
+            if production_admin is not None
+            else None
+        ),
+    )
     app.title = "M26 LLM-Wiki Public + Admin API"
     app.version = CANONICAL_ADMIN_API_VERSION
     return app

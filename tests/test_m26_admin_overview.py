@@ -77,7 +77,7 @@ def test_overview_returns_partial_envelope_without_fabricated_metrics() -> None:
 
     sections = payload["data"]["sections"]
     assert tuple(sections) == OVERVIEW_SECTION_IDS
-    assert sections["release_index"]["status"] == "unknown"
+    assert sections["release_index"]["status"] == "read_only"
     assert sections["release_index"]["value"]["release_id"] == "release-test"
     assert sections["public_ask"]["status"] == "healthy"
 

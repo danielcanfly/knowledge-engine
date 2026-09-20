@@ -280,3 +280,31 @@ def test_admin_health_is_read_only_and_no_store() -> None:
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-request-id"] == response.json()["request_id"]
+
+
+
+def test_materialized_production_observer_prevents_sync_bundle_loader_call() -> None:
+    app = make_app()
+    calls = {"loader": 0}
+
+    def exploding_loader():
+        calls["loader"] += 1
+        raise AssertionError("heavy production bundle loader must not run")
+
+    app.state.admin_health_bundle_loader = exploding_loader
+    app.state.admin_health_production_observer = lambda: {
+        "status": "healthy",
+        "source": "materialized_active_release_cache",
+        "observed_at": "2026-09-20T06:55:00Z",
+        "freshness": "near_live",
+        "latency_ms": 0,
+        "detail": "Bounded materialized release evidence.",
+        "observed": "sha256:pointer",
+    }
+
+    payload = TestClient(app).get("/v1/admin/health", headers=admin_headers()).json()
+
+    assert calls["loader"] == 0
+    production = dependency(payload, "production")
+    assert production["status"] == "healthy"
+    assert production["source"] == "materialized_active_release_cache"

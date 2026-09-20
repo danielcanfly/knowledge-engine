@@ -234,6 +234,7 @@ def _retrieval_only_after_translation(
     translated_question: str,
     owner_subject_hash: str,
     top_k: int,
+    requested_release_id: str | None = None,
     event_sink: Any = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
@@ -277,6 +278,7 @@ def _retrieval_only_after_translation(
     intent_class = _intent_class(normalized_question)
     bundle = load_production_answer_bundle()
     active_release_id = _active_release_id(bundle)
+    _validate_release(requested_release_id, active_release_id=active_release_id)
     if bundle.release_id != active_release_id:
         raise AdminAPIError(
             status_code=503,
@@ -443,8 +445,6 @@ def router() -> APIRouter:
     )
     async def inspect_retrieval(payload: PlaygroundRequest, request: Request) -> dict[str, Any]:
         require_capability(request, "playground.retrieve", mutation=False)
-        bundle = load_production_answer_bundle()
-        _validate_release(payload.release_id, active_release_id=_active_release_id(bundle))
         trace = _blank_trace()
         events: list[Mapping[str, Any]] = []
         root = request.app.state.root
@@ -458,6 +458,7 @@ def router() -> APIRouter:
                 translated_question=translated,
                 owner_subject_hash=_runtime_owner_subject_hash(request),
                 top_k=payload.top_k,
+                requested_release_id=payload.release_id,
                 event_sink=events.append,
             )
 

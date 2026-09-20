@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .m26_admin_audit import AuditHistorySnapshot
 from .m26_admin_contract import (
     AdminConfigurationError,
     AuditEvent,
@@ -24,6 +25,12 @@ QA_CAPABILITY_EXPORT_JSONL = "qa.export_jsonl"
 QA_CAPABILITY_LIFECYCLE = "qa.lifecycle"
 SUGGESTED_QUESTIONS_REVIEW_CAPABILITY = "suggested_questions.review"
 SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY = "suggested_questions.publish"
+AUDIT_READ_CAPABILITY = "audit.read"
+GOLDEN_READ_CAPABILITY = "evaluation.golden.read"
+RUNS_READ_CAPABILITY = "evaluation.runs.read"
+PLAYGROUND_RETRIEVE_CAPABILITY = "playground.retrieve"
+PLAYGROUND_ASK_CAPABILITY = "playground.ask"
+
 L3B_MUTATION_CAPABILITY_IDS = frozenset(
     {
         QA_CAPABILITY_EXPORT_JSONL,
@@ -31,10 +38,18 @@ L3B_MUTATION_CAPABILITY_IDS = frozenset(
         SUGGESTED_QUESTIONS_REVIEW_CAPABILITY,
     }
 )
-L3B_CAPABILITY_IDS = (
+PRODUCT_READ_CAPABILITY_IDS = (
+    AUDIT_READ_CAPABILITY,
+    GOLDEN_READ_CAPABILITY,
+    PLAYGROUND_ASK_CAPABILITY,
+    PLAYGROUND_RETRIEVE_CAPABILITY,
     QA_CAPABILITY_DETAIL,
     QA_CAPABILITY_EVENTS,
     QA_CAPABILITY_EXPORT,
+    RUNS_READ_CAPABILITY,
+)
+L3B_CAPABILITY_IDS = (
+    *PRODUCT_READ_CAPABILITY_IDS,
     QA_CAPABILITY_EXPORT_JSONL,
     QA_CAPABILITY_LIFECYCLE,
     SUGGESTED_QUESTIONS_REVIEW_CAPABILITY,
@@ -69,7 +84,12 @@ class _CanonicalL3BCapabilityGate(CapabilityGate):
 
 
 class QualifiedL3BCapabilityProvider:
-    """Expose only the QA/SQ capabilities qualified by the L3-B production lane."""
+    """Canonical production capability registry.
+
+    The class name is kept for import compatibility with the earlier L3-B lane,
+    but read capabilities are now product-scoped. Mutation authority remains
+    exactly the previously-qualified set.
+    """
 
     def __init__(self) -> None:
         self._gates = {
@@ -77,7 +97,11 @@ class QualifiedL3BCapabilityProvider:
                 capability_id=capability_id,
                 state=(
                     "disabled"
-                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    if capability_id
+                    in {
+                        SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY,
+                        PLAYGROUND_ASK_CAPABILITY,
+                    }
                     else "enabled"
                     if capability_id in L3B_MUTATION_CAPABILITY_IDS
                     else "read_only"
@@ -85,24 +109,34 @@ class QualifiedL3BCapabilityProvider:
                 reason_code=(
                     L3B_SUGGESTED_QUESTIONS_PUBLISH_BLOCKED_REASON
                     if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
-                    else "L3B_QA_V2_MUTATION_QUALIFIED"
+                    else "PLAYGROUND_FULL_ASK_EXPLICIT_COST_AUTHORITY_REQUIRED"
+                    if capability_id == PLAYGROUND_ASK_CAPABILITY
+                    else "PRODUCT_MUTATION_AUTHORITY_QUALIFIED"
                     if capability_id in L3B_MUTATION_CAPABILITY_IDS
-                    else "L3B_QA_PRODUCTION_QUALIFIED"
+                    else "PRODUCT_READ_CAPABILITY_QUALIFIED"
                 ),
-                source="l3b_production_qualification",
+                source="production_admin_capability_registry",
                 resource_identity={
-                    "lane": "L3B_QA_P0",
-                    "binding": "qualified-production-runtime/v2",
+                    "binding": "qualified-production-runtime/v3",
+                    "scope": "daniel-console",
                 },
                 evidence_digest=L3B_QUALIFICATION_DIGEST,
                 qualification_status=(
                     "blocked_authority"
-                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    if capability_id
+                    in {
+                        SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY,
+                        PLAYGROUND_ASK_CAPABILITY,
+                    }
                     else "qualified"
                 ),
                 effective_state=(
                     "unavailable"
-                    if capability_id == SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY
+                    if capability_id
+                    in {
+                        SUGGESTED_QUESTIONS_PUBLISH_CAPABILITY,
+                        PLAYGROUND_ASK_CAPABILITY,
+                    }
                     else "enabled"
                     if capability_id in L3B_MUTATION_CAPABILITY_IDS
                     else "read_only"
@@ -210,6 +244,67 @@ class SqliteAdminControlStore:
             row = connection.execute("SELECT COUNT(*) AS count FROM admin_audit_events").fetchone()
         return int(row["count"] if row is not None else 0)
 
+    def read_audit_events(self, *, limit: int = 500) -> tuple[list[dict[str, Any]], int]:
+        """Read a bounded newest-first audit window without changing the ledger."""
+        bounded_limit = max(1, min(int(limit), 1000))
+        with self._connect() as connection:
+            total_row = connection.execute(
+                "SELECT COUNT(*) AS count FROM admin_audit_events"
+            ).fetchone()
+            rows = connection.execute(
+                "SELECT observed_at, payload_json FROM admin_audit_events "
+                "ORDER BY observed_at DESC LIMIT ?",
+                (bounded_limit,),
+            ).fetchall()
+        events: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(str(row["payload_json"]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if isinstance(payload, dict):
+                events.append(payload)
+        total = int(total_row["count"] if total_row is not None else 0)
+        return events, total
+
+
+class SqliteAuditHistoryReader:
+    """Bounded read adapter over the already-durable Admin audit ledger."""
+
+    def __init__(self, store: SqliteAdminControlStore, *, limit: int = 500) -> None:
+        self.store = store
+        self.limit = max(1, min(int(limit), 1000))
+
+    def read(self, request: Any) -> AuditHistorySnapshot:
+        del request
+        events, total = self.store.read_audit_events(limit=self.limit)
+        observed_at = None
+        for event in events:
+            value = event.get("observed_at")
+            if isinstance(value, str) and value:
+                observed_at = value if observed_at is None else max(observed_at, value)
+        digest = hashlib.sha256(
+            json.dumps(
+                events,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return AuditHistorySnapshot(
+            events=events,
+            source="durable_admin_audit_sqlite",
+            observed_at=observed_at,
+            freshness="near_live" if observed_at else "unknown",
+            resource_identity={
+                "kind": "sqlite_admin_audit",
+                "window_limit": self.limit,
+                "total_count": total,
+            },
+            evidence_digest=digest,
+            complete=total <= self.limit,
+        )
+
 
 @dataclass(frozen=True)
 class ProductionAdminRuntime:
@@ -252,5 +347,6 @@ __all__ = [
     "ProductionAdminRuntime",
     "QualifiedL3BCapabilityProvider",
     "SqliteAdminControlStore",
+    "SqliteAuditHistoryReader",
     "production_admin_runtime_from_env",
 ]

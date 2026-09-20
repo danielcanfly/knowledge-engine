@@ -28,11 +28,16 @@ from knowledge_engine.m26_admin_production import (
 from knowledge_engine.m26_admin_settings import install_admin_settings
 
 
-def test_qualified_provider_exposes_only_l3b_capabilities() -> None:
+def test_qualified_provider_exposes_product_read_capabilities_without_new_mutations() -> None:
     provider = QualifiedL3BCapabilityProvider()
     gates = provider.list_capabilities()
     assert [gate.capability_id for gate in gates] == sorted(L3B_CAPABILITY_IDS)
     assert {gate.capability_id: gate.state for gate in gates} == {
+        "audit.read": "read_only",
+        "evaluation.golden.read": "read_only",
+        "evaluation.runs.read": "read_only",
+        "playground.ask": "disabled",
+        "playground.retrieve": "read_only",
         "qa.event.read": "read_only",
         "qa.events.read": "read_only",
         "qa.export_jsonl": "enabled",
@@ -41,7 +46,7 @@ def test_qualified_provider_exposes_only_l3b_capabilities() -> None:
         "suggested_questions.review": "enabled",
         "suggested_questions.publish": "disabled",
     }
-    assert all(gate.source == "l3b_production_qualification" for gate in gates)
+    assert all(gate.source == "production_admin_capability_registry" for gate in gates)
     assert provider.get_capability("ingestion.execute") is None
     assert provider.get_capability("index.activate") is None
 
@@ -120,7 +125,10 @@ def test_production_provider_direct_gate_separates_review_from_publish_authority
     assert require_capability(request, "qa.events.read").state == "read_only"
     assert require_capability(request, "qa.export_jsonl", mutation=True).state == "enabled"
     assert require_capability(request, "qa.lifecycle", mutation=True).state == "enabled"
-    assert require_capability(request, "suggested_questions.review", mutation=True).state == "enabled"
+    assert (
+        require_capability(request, "suggested_questions.review", mutation=True).state
+        == "enabled"
+    )
     with pytest.raises(AdminAPIError) as legacy_export_error:
         require_capability(request, "qa.export_markdown", mutation=True)
     assert legacy_export_error.value.status_code == 409

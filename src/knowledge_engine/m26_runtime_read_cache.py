@@ -16,8 +16,8 @@ from .m26_admin_contract import canonical_json_bytes
 LOGGER = logging.getLogger(__name__)
 
 _CACHE_SCHEMA = "m26-runtime-read-cache/v1"
-_REFRESH_SECONDS = {"source": 5 * 60, "active": 60}
-_REFRESH_TIMEOUT_SECONDS = {"source": 45, "active": 20, "health": 150}
+_REFRESH_SECONDS = {"source": 5 * 60, "active": 60, "corpus": 5 * 60}
+_REFRESH_TIMEOUT_SECONDS = {"source": 45, "active": 20, "corpus": 60, "health": 150}
 _REFRESHING: set[str] = set()
 _REFRESH_LOCK = threading.Lock()
 _REFRESH_RUN_LOCK = threading.Lock()
@@ -32,7 +32,7 @@ def _cache_root() -> Path:
 
 
 def materialized_cache_path(role: str) -> Path:
-    if role not in {"source", "active"}:
+    if role not in {"source", "active", "corpus"}:
         raise ValueError(f"unsupported materialized read role: {role}")
     return _cache_root() / f"m26-runtime-{role}-observation-v1.json"
 
