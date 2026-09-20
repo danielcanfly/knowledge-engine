@@ -7311,7 +7311,12 @@ def _select_diverse_candidates(
         priority.append(protected_definition)
         priority_ids.add(str(protected_definition.get("section_id", "")))
     seed_candidates = sorted(
-        [item for item in ranked if int(item.get("seed_rank", 999)) <= 5],
+        [
+            item
+            for item in ranked
+            if int(item.get("seed_rank", 999)) <= 5
+            and str(item.get("section_id", "")) not in priority_ids
+        ],
         key=lambda item: (int(item.get("seed_rank", 999)), str(item.get("section_id", ""))),
     )
     priority.extend(seed_candidates)
