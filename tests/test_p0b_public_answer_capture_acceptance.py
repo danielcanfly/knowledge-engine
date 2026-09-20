@@ -61,7 +61,10 @@ def _public_capture_app(
         answer = {
             "request_id": request_id,
             "status": "answered",
-            "answer_text": "A grounded public answer that the visitor must receive before QA evaluation finishes.",
+            "answer_text": (
+                "A grounded public answer that the visitor must receive "
+                "before QA evaluation finishes."
+            ),
             "citations": [{"citation_id": "c1", "source_id": "s1"}],
             "selected_evidence": [{"source_id": "s1", "quote": "support"}],
             "integrity": {
@@ -216,9 +219,7 @@ def test_public_v1_answers_is_visitor_first_and_durable_before_evaluation_failur
     assert repo.list_events(range_name="90d", limit=10)["total"] == 1
 
 
-def test_public_v1_answers_queue_saturation_preserves_durable_event(
-    tmp_path, monkeypatch
-) -> None:
+def test_public_v1_answers_queue_saturation_preserves_durable_event(tmp_path, monkeypatch) -> None:
     repo = SqliteQaRepository(
         FileObjectStore(tmp_path / "objects"),
         db_path=tmp_path / "qa.sqlite",

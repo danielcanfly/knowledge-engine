@@ -5,8 +5,9 @@ import argparse
 import hashlib
 import json
 import pathlib
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any
 
 EXPECTED_STATUS = "M26_E4_V3_ORACLE_ISOLATED_RUNTIME_PASS"
 EXPECTED_RELEASE_ID = "m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440"
@@ -31,7 +32,9 @@ REQUIRED_ZERO_AUTHORITY = {
 
 
 def canonical_json_bytes(value: Any) -> bytes:
-    return (json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    ).encode("utf-8")
 
 
 def sha256_value(value: Any) -> str:
@@ -86,8 +89,14 @@ def require_zero_authority(authority: Mapping[str, Any], prefix: str) -> dict[st
 
 def verify_binding_identity(binding: Mapping[str, Any], prefix: str) -> None:
     require_equal(binding.get("release_id"), EXPECTED_RELEASE_ID, f"{prefix}.release_id")
-    require_equal(binding.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, f"{prefix}.qdrant_collection")
-    require_equal(binding.get("semantic_point_count"), EXPECTED_SEMANTIC_POINT_COUNT, f"{prefix}.semantic_point_count")
+    require_equal(
+        binding.get("qdrant_collection"), EXPECTED_QDRANT_COLLECTION, f"{prefix}.qdrant_collection"
+    )
+    require_equal(
+        binding.get("semantic_point_count"),
+        EXPECTED_SEMANTIC_POINT_COUNT,
+        f"{prefix}.semantic_point_count",
+    )
     require_equal(binding.get("node_count"), EXPECTED_NODE_COUNT, f"{prefix}.node_count")
     require_equal(binding.get("edge_count"), EXPECTED_EDGE_COUNT, f"{prefix}.edge_count")
 
@@ -110,11 +119,30 @@ def main() -> int:
     require_equal(receipt.get("status"), EXPECTED_STATUS, "receipt.status")
     receipt_binding = require_mapping(receipt.get("binding"), "receipt.binding")
     verify_binding_identity(receipt_binding, "receipt.binding")
-    require_equal(receipt_binding.get("source_head_sha"), EXPECTED_SOURCE_HEAD_SHA, "binding.source_head_sha")
-    require_equal(receipt_binding.get("source_commit_sha"), EXPECTED_SOURCE_COMMIT_SHA, "binding.source_commit_sha")
-    require_equal(receipt_binding.get("admission_sha256"), EXPECTED_ADMISSION_SHA256, "binding.admission_sha256")
+    require_equal(
+        receipt_binding.get("source_head_sha"), EXPECTED_SOURCE_HEAD_SHA, "binding.source_head_sha"
+    )
+    require_equal(
+        receipt_binding.get("source_commit_sha"),
+        EXPECTED_SOURCE_COMMIT_SHA,
+        "binding.source_commit_sha",
+    )
+    require_equal(
+        receipt_binding.get("admission_sha256"),
+        EXPECTED_ADMISSION_SHA256,
+        "binding.admission_sha256",
+    )
 
-    for key in ("release_id", "qdrant_collection", "source_head_sha", "source_commit_sha", "admission_sha256", "semantic_point_count", "node_count", "edge_count"):
+    for key in (
+        "release_id",
+        "qdrant_collection",
+        "source_head_sha",
+        "source_commit_sha",
+        "admission_sha256",
+        "semantic_point_count",
+        "node_count",
+        "edge_count",
+    ):
         require_equal(binding_json.get(key), receipt_binding.get(key), f"binding_json.{key}")
 
     endpoint = require_mapping(receipt.get("endpoint"), "receipt.endpoint")
@@ -123,23 +151,39 @@ def main() -> int:
         raise SystemExit("isolated runtime bound forbidden production host_port 18087")
     if int(endpoint.get("host_port", 0)) <= 0:
         raise SystemExit("endpoint.host_port invalid")
-    require_equal(endpoint.get("answer_endpoint_invoked"), False, "endpoint.answer_endpoint_invoked")
+    require_equal(
+        endpoint.get("answer_endpoint_invoked"), False, "endpoint.answer_endpoint_invoked"
+    )
 
     liveness = require_mapping(receipt.get("liveness"), "receipt.liveness")
     require_equal(liveness.get("status"), "http_reachable", "liveness.status")
     http_status = int(liveness.get("http_status", 0))
     if http_status < 200 or http_status >= 500:
-        raise SystemExit(f"liveness.http_status must prove reachable HTTP server, observed {http_status}")
+        raise SystemExit(
+            f"liveness.http_status must prove reachable HTTP server, observed {http_status}"
+        )
 
     route_inventory = require_mapping(receipt.get("route_inventory"), "receipt.route_inventory")
-    require_equal(route_inventory.get("status"), "M26_E4_V3_ROUTE_INVENTORY_PASS", "route_inventory.status")
-    require_equal(route_inventory.get("answer_endpoint_invoked"), False, "route_inventory.answer_endpoint_invoked")
+    require_equal(
+        route_inventory.get("status"), "M26_E4_V3_ROUTE_INVENTORY_PASS", "route_inventory.status"
+    )
+    require_equal(
+        route_inventory.get("answer_endpoint_invoked"),
+        False,
+        "route_inventory.answer_endpoint_invoked",
+    )
     if int(route_inventory.get("route_count", 0)) <= 0:
         raise SystemExit("route_inventory.route_count must be positive")
 
     binding_probe = require_mapping(receipt.get("binding_probe"), "receipt.binding_probe")
-    require_equal(binding_probe.get("status"), "M26_E4_V3_BINDING_PROBE_PASS", "binding_probe.status")
-    require_equal(binding_probe.get("compatibility_status"), "compatible", "binding_probe.compatibility_status")
+    require_equal(
+        binding_probe.get("status"), "M26_E4_V3_BINDING_PROBE_PASS", "binding_probe.status"
+    )
+    require_equal(
+        binding_probe.get("compatibility_status"),
+        "compatible",
+        "binding_probe.compatibility_status",
+    )
     verify_binding_identity(binding_probe, "binding_probe")
     probe_authority = require_mapping(binding_probe.get("authority"), "binding_probe.authority")
     require_zero_authority(probe_authority, "binding_probe.authority")
@@ -149,9 +193,17 @@ def main() -> int:
         raise SystemExit("binding_probe.optional_pointer_written must be false")
 
     auth_bootstrap = require_mapping(receipt.get("auth_bootstrap"), "receipt.auth_bootstrap")
-    require_equal(auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed")
-    require_equal(auth_bootstrap.get("base_container_env_mutated"), False, "auth_bootstrap.base_container_env_mutated")
-    require_equal(auth_bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only")
+    require_equal(
+        auth_bootstrap.get("secret_values_exposed"), False, "auth_bootstrap.secret_values_exposed"
+    )
+    require_equal(
+        auth_bootstrap.get("base_container_env_mutated"),
+        False,
+        "auth_bootstrap.base_container_env_mutated",
+    )
+    require_equal(
+        auth_bootstrap.get("candidate_env_only"), True, "auth_bootstrap.candidate_env_only"
+    )
     require_equal(auth_bootstrap.get("localhost_only"), True, "auth_bootstrap.localhost_only")
 
     authority = require_mapping(receipt.get("authority"), "receipt.authority")
@@ -189,14 +241,23 @@ def main() -> int:
     }
     verification["verification_sha256"] = sha256_value(verification)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(verification, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    output.write_text(
+        json.dumps(verification, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     print("M26_E4_V3_ORACLE_ISOLATED_RUNTIME_VERIFICATION_PASS")
-    print(json.dumps({
-        "release_id": EXPECTED_RELEASE_ID,
-        "host_port": verification["host_port"],
-        "receipt_sha256": verification["receipt_sha256"],
-        "verification_sha256": verification["verification_sha256"],
-    }, ensure_ascii=False, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "release_id": EXPECTED_RELEASE_ID,
+                "host_port": verification["host_port"],
+                "receipt_sha256": verification["receipt_sha256"],
+                "verification_sha256": verification["verification_sha256"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

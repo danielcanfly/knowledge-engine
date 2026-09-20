@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import hashlib
 import json
-import pathlib
 import subprocess
 from typing import Any
 
@@ -63,7 +61,7 @@ def env_summary(rows: list[str]) -> tuple[dict[str, str], dict[str, dict[str, in
 
 
 def runtime_module_hashes(container: str) -> dict[str, Any]:
-    script = r'''
+    script = r"""
 import importlib, hashlib, json, pathlib
 mods = REPLACE_MODULES
 out = {}
@@ -72,16 +70,20 @@ for name in mods:
         mod = importlib.import_module(name)
         path = pathlib.Path(mod.__file__).resolve()
         data = path.read_bytes()
-        out[name] = {"path": str(path), "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+        out[name] = {
+            "path": str(path),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "bytes": len(data),
+        }
     except Exception as exc:
         out[name] = {"error": type(exc).__name__ + ":" + str(exc)[:160]}
 print(json.dumps(out, sort_keys=True))
-'''.replace("REPLACE_MODULES", repr(RUNTIME_MODULES))
+""".replace("REPLACE_MODULES", repr(RUNTIME_MODULES))
     return json.loads(run(["docker", "exec", container, "python", "-c", script]))
 
 
 def sha_runtime_candidates(container: str) -> dict[str, str]:
-    script = r'''
+    script = r"""
 import hashlib, json, pathlib
 out = {}
 for root in ("/app", "/workspace", "/opt"):
@@ -96,7 +98,7 @@ for root in ("/app", "/workspace", "/opt"):
         if b"m26" in data or b"knowledge_engine" in data or b"FULL_PRODUCTION_RELEASE_ID" in data:
             out[str(path)] = hashlib.sha256(data).hexdigest()
 print(json.dumps(out, sort_keys=True))
-'''
+"""
     return json.loads(run(["docker", "exec", container, "python", "-c", script]))
 
 
@@ -114,7 +116,10 @@ def main() -> None:
 
     image_meta = json.loads(run(["docker", "image", "inspect", image_id]))[0]
     ports = {
-        key: [{"host_ip": row.get("HostIp"), "host_port": row.get("HostPort")} for row in (value or [])]
+        key: [
+            {"host_ip": row.get("HostIp"), "host_port": row.get("HostPort")}
+            for row in (value or [])
+        ]
         for key, value in (network_settings.get("Ports") or {}).items()
     }
     mounts = [

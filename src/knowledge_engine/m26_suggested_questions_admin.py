@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import base64
+import contextlib
 import hashlib
 import json
 import os
@@ -526,7 +527,9 @@ class GitHubSuggestedQuestionsPublisher:
         readback_source = base64.b64decode(readback_payload["content"]).decode("utf-8")
         readback_questions = parse_homepage_question_source(readback_source)
         readback_normalized = {" ".join(item.casefold().split()) for item in readback_questions}
-        verified = all(" ".join(item.casefold().split()) in readback_normalized for item in additions)
+        verified = all(
+            " ".join(item.casefold().split()) in readback_normalized for item in additions
+        )
         if not verified or str(readback_payload.get("sha") or "") != new_blob:
             raise SuggestedQuestionsSourceUnavailable(
                 "SUGGESTED_QUESTIONS_READBACK_MISMATCH",
@@ -550,7 +553,9 @@ class CanonicalSuggestedQuestionRerunner:
         gate_path: Path | None = None,
     ) -> None:
         self.root = root or Path(os.environ.get("M26_QUERY_ROOT", "."))
-        self.gate_path = gate_path or Path(os.environ.get("M26_QUERY_GATE_PATH", str(DEFAULT_GATE_PATH)))
+        self.gate_path = gate_path or Path(
+            os.environ.get("M26_QUERY_GATE_PATH", str(DEFAULT_GATE_PATH))
+        )
 
     def run(self, question: str) -> Mapping[str, Any]:
         owner_hash = ""
@@ -738,7 +743,7 @@ def _mark_published_from_readback(
             and isinstance(item.get("suggested_questions_evaluation"), Mapping)
             else {}
         )
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             qa_repository.record_suggested_questions_evaluation(
                 str(event_id),
                 status="published",
@@ -747,15 +752,12 @@ def _mark_published_from_readback(
                 else None,
                 result=str(sq_payload.get("result") or "pass"),
                 rubric_version=str(
-                    sq_payload.get("rubric_version")
-                    or "SUGGESTED_QUESTIONS_OWNER_RUBRIC_v1"
+                    sq_payload.get("rubric_version") or "SUGGESTED_QUESTIONS_OWNER_RUBRIC_v1"
                 ),
                 promotion_id=str(record["promotion_id"]),
                 production_published=True,
                 publication_revision=snapshot.revision,
             )
-        except (KeyError, AttributeError):
-            pass
     return updated
 
 
@@ -838,9 +840,7 @@ def _router() -> APIRouter:
                 object_id=operation_id,
                 metadata={"event_count": len(payload.event_ids)},
             )
-            return _promotion_response(
-                request, record, replayed=True, operation_id=operation_id
-            )
+            return _promotion_response(request, record, replayed=True, operation_id=operation_id)
 
         source = request.app.state.suggested_questions_source
         try:
@@ -891,9 +891,7 @@ def _router() -> APIRouter:
             object_id=operation_id,
             metadata={"summary": record.get("summary", {})},
         )
-        return _promotion_response(
-            request, record, replayed=False, operation_id=operation_id
-        )
+        return _promotion_response(request, record, replayed=False, operation_id=operation_id)
 
     @router.get(
         "/suggested-questions/promotions/{promotion_id}",
@@ -969,9 +967,7 @@ def _router() -> APIRouter:
                 )
             except Exception as exc:
                 raise _promotion_error(exc) from exc
-            return _promotion_response(
-                request, published, replayed=True, operation_id=operation_id
-            )
+            return _promotion_response(request, published, replayed=True, operation_id=operation_id)
 
         source = request.app.state.suggested_questions_source
         try:
@@ -1052,9 +1048,7 @@ def _router() -> APIRouter:
                 else None,
             },
         )
-        return _promotion_response(
-            request, record, replayed=replayed, operation_id=operation_id
-        )
+        return _promotion_response(request, record, replayed=replayed, operation_id=operation_id)
 
     @router.put("/suggested-questions", operation_id="updateSuggestedQuestions", status_code=202)
     async def update_suggested_questions(
@@ -1116,9 +1110,7 @@ def install_suggested_questions_admin(
     registry = getattr(app.state, "admin_mutation_registry", None)
     if registry is not None:
         registry.register("POST", "/v1/admin/suggested-questions/promotions/preview")
-        registry.register(
-            "POST", "/v1/admin/suggested-questions/promotions/{promotion_id}/publish"
-        )
+        registry.register("POST", "/v1/admin/suggested-questions/promotions/{promotion_id}/publish")
     app.include_router(_router())
     app.state.suggested_questions_admin_installed = True
     return app

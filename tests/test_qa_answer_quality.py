@@ -18,7 +18,10 @@ def good_response(request_id: str = "req_1") -> dict:
     return {
         "request_id": request_id,
         "status": "answered",
-        "answer": "A grounded answer that is deliberately long enough to satisfy the completeness signal. "
+        "answer": (
+            "A grounded answer that is deliberately long enough "
+            "to satisfy the completeness signal. "
+        )
         * 2,
         "citations": [{"citation_id": "c1", "source_id": "s1"}],
         "source_cards": [{"source_id": "s1"}],
@@ -216,7 +219,10 @@ def test_sqlite_v1_rows_migrate_as_legacy_provenance(tmp_path) -> None:
               failure_signature TEXT, cluster_id TEXT, failure_trace_key TEXT,
               suggested_questions_json TEXT NOT NULL
             );
-            INSERT INTO qa_events VALUES('legacy-1','2026-09-07T00:00:00Z','Q',90,'pass',3,'ZZ','{}','{}','{}','d','t',NULL,NULL,NULL,NULL,'{}');
+            INSERT INTO qa_events VALUES(
+              'legacy-1','2026-09-07T00:00:00Z','Q',90,'pass',3,'ZZ',
+              '{}','{}','{}','d','t',NULL,NULL,NULL,NULL,'{}'
+            );
             """
         )
     repo = SqliteQaRepository(FileObjectStore(tmp_path / "objects"), db_path=db_path)

@@ -146,12 +146,8 @@ def test_country_capture_uses_only_explicit_trusted_edge_metadata(monkeypatch) -
     monkeypatch.setenv("M26_QA_TRUST_CLOUDFLARE_COUNTRY", "true")
     assert _trusted_country(scope((b"cf-ipcountry", b"TW"))) == "ZZ"
     assert _trusted_country(spoofed) == "TW"
-    assert _trusted_country(
-        scope((b"cf-ray", b"edge-ray"), (b"cf-ipcountry", b"Taiwan"))
-    ) == "ZZ"
-    assert _trusted_country(
-        scope((b"cf-ray", b"edge-ray"), (b"cf-ipcountry", b"\xe5a"))
-    ) == "ZZ"
+    assert _trusted_country(scope((b"cf-ray", b"edge-ray"), (b"cf-ipcountry", b"Taiwan"))) == "ZZ"
+    assert _trusted_country(scope((b"cf-ray", b"edge-ray"), (b"cf-ipcountry", b"\xe5a"))) == "ZZ"
 
 
 def test_country_normalization_unknowns_and_strict_filters(tmp_path) -> None:
@@ -242,9 +238,7 @@ def test_country_filter_is_consistent_for_list_and_current_filter_export(tmp_pat
     listed = repo.list_events(**common, country="tW")
     listed_clusters = {item["cluster_id"] for item in listed["items"]}
     exported = repo.export_filtered_failures(**common, country="Tw")
-    exported_clusters = {
-        json.loads(line)["cluster_id"] for line in exported["jsonl"].splitlines()
-    }
+    exported_clusters = {json.loads(line)["cluster_id"] for line in exported["jsonl"].splitlines()}
     assert listed_clusters == exported_clusters == {tw["cluster_id"]}
     assert json.loads(exported["jsonl"])["sample_traces"][0]["country"] == "TW"
     selected = repo.export_selected_failures(event_ids=[tw["event_id"]])
@@ -333,9 +327,14 @@ def test_current_filter_export_dedupes_events_to_clusters_and_can_reexport_visib
         if not trace.get("unavailable")
     )
     assert repo.export_new_failures() == {"created": False, "reason": "NO_NEW_FAILURES"}
-    assert next(
-        cluster for cluster in repo.list_clusters() if cluster["cluster_id"] == first["cluster_id"]
-    )["lifecycle"] == "EXPORTED"
+    assert (
+        next(
+            cluster
+            for cluster in repo.list_clusters()
+            if cluster["cluster_id"] == first["cluster_id"]
+        )["lifecycle"]
+        == "EXPORTED"
+    )
 
     filtered = repo.export_filtered_failures(
         range_name="custom",
@@ -374,12 +373,19 @@ def test_current_filter_export_dedupes_events_to_clusters_and_can_reexport_visib
     assert repeated["reused"] is True
     assert repeated["batch_id"] == filtered["batch_id"]
     assert repeated["jsonl"] == filtered["jsonl"]
-    assert next(
-        cluster for cluster in repo.list_clusters() if cluster["cluster_id"] == first["cluster_id"]
-    )["lifecycle"] == "EXPORTED"
+    assert (
+        next(
+            cluster
+            for cluster in repo.list_clusters()
+            if cluster["cluster_id"] == first["cluster_id"]
+        )["lifecycle"]
+        == "EXPORTED"
+    )
 
 
-def test_selected_export_maps_events_and_clusters_without_duplicate_cluster_records(tmp_path) -> None:
+def test_selected_export_maps_events_and_clusters_without_duplicate_cluster_records(
+    tmp_path,
+) -> None:
     repo = _repo(tmp_path)
     routing = FailureIntentFamily(task="compare", subjects=("replanning", "routing"))
     first = _record_fail(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
@@ -107,10 +108,12 @@ class ObjectStoreSuggestedQuestionsPromotionStore:
                 only_if_absent=True,
             )
             return body_payload
-        except ReleaseConflictError:
+        except ReleaseConflictError as exc:
             existing = self.get(promotion_id)
             if _json_bytes(existing) != body:
-                raise SuggestedQuestionsPromotionError("promotion operation identity already contains different content")
+                raise SuggestedQuestionsPromotionError(
+                    "promotion operation identity already contains different content"
+                ) from exc
             return existing
 
     def replace(self, promotion_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -239,7 +242,9 @@ def build_promotion_preview(
 
     for event in events:
         event_id = str(event.get("event_id") or "")
-        if event.get("status") == "rejected" and event.get("reason_codes") == ["QA_EVENT_NOT_FOUND"]:
+        if event.get("status") == "rejected" and event.get("reason_codes") == [
+            "QA_EVENT_NOT_FOUND"
+        ]:
             candidates.append(event)
             continue
         question = str(event.get("question") or "").strip()
@@ -370,7 +375,6 @@ def build_promotion_preview(
     }
 
 
-
 def record_preview_evaluations(
     record: Mapping[str, Any],
     qa_repository: SuggestedQuestionQaRepository,
@@ -410,6 +414,7 @@ def record_preview_evaluations(
         except (KeyError, AttributeError):
             continue
 
+
 def publish_promotion(
     *,
     record: Mapping[str, Any],
@@ -420,7 +425,9 @@ def publish_promotion(
     qa_repository: SuggestedQuestionQaRepository,
 ) -> dict[str, Any]:
     if record.get("status") == "published":
-        publication = record.get("publication") if isinstance(record.get("publication"), Mapping) else {}
+        publication = (
+            record.get("publication") if isinstance(record.get("publication"), Mapping) else {}
+        )
         prior_selection = [str(item) for item in publication.get("selected_event_ids", [])]
         chosen = _unique_ids(selected_event_ids)
         if chosen != prior_selection:
@@ -464,7 +471,7 @@ def publish_promotion(
     for event_id in chosen:
         item = by_id[event_id]
         sq_payload = item.get("suggested_questions_evaluation")
-        try:
+        with contextlib.suppress(KeyError, AttributeError):
             qa_repository.record_suggested_questions_evaluation(
                 event_id,
                 status="published",
@@ -475,8 +482,6 @@ def publish_promotion(
                 production_published=True,
                 publication_revision=str(publication.get("revision") or "") or None,
             )
-        except (KeyError, AttributeError):
-            pass
     return updated
 
 

@@ -165,8 +165,7 @@ class QualifiedQaRepositoryV2(SqliteQaRepository):
                 if non_failures:
                     connection.rollback()
                     raise ValueError(
-                        "selected events must be clustered failures: "
-                        + ",".join(non_failures[:10])
+                        "selected events must be clustered failures: " + ",".join(non_failures[:10])
                     )
                 cluster_id_set.update(str(cluster_id) for cluster_id in found.values())
             if len(cluster_id_set) > 500:
@@ -180,8 +179,7 @@ class QualifiedQaRepositoryV2(SqliteQaRepository):
             if missing_clusters:
                 connection.rollback()
                 raise ValueError(
-                    "unknown or legacy selected cluster_ids: "
-                    + ",".join(missing_clusters[:10])
+                    "unknown or legacy selected cluster_ids: " + ",".join(missing_clusters[:10])
                 )
             return self._materialize_v2_export(
                 connection,
@@ -412,7 +410,10 @@ class QualifiedQaRepositoryV2(SqliteQaRepository):
             )
             if transition_primary:
                 connection.execute(
-                    "UPDATE qa_clusters SET lifecycle='EXPORTED',export_history_json=? WHERE cluster_id=?",
+                    (
+                        "UPDATE qa_clusters SET lifecycle='EXPORTED',"
+                        "export_history_json=? WHERE cluster_id=?"
+                    ),
                     (_dump(history[-20:]), cluster["cluster_id"]),
                 )
             else:
@@ -421,7 +422,11 @@ class QualifiedQaRepositoryV2(SqliteQaRepository):
                     (_dump(history[-20:]), cluster["cluster_id"]),
                 )
         connection.execute(
-            "INSERT INTO qa_exports(batch_id,created_at,cluster_count,membership_json,object_key,sha256) VALUES(?,?,?,?,?,?)",
+            (
+                "INSERT INTO qa_exports("
+                "batch_id,created_at,cluster_count,membership_json,object_key,sha256"
+                ") VALUES(?,?,?,?,?,?)"
+            ),
             (
                 batch_id,
                 exported_at,
@@ -533,12 +538,8 @@ def _event_filter_clauses(
     release = _bounded_text(release, label="release")
     if release:
         clauses.append(
-            "(COALESCE(json_extract("
-            + prefix
-            + "release_identity_json,'$.release_id'),'')=? OR "
-            "COALESCE(json_extract("
-            + prefix
-            + "release_identity_json,'$.build_sha'),'')=?)"
+            "(COALESCE(json_extract(" + prefix + "release_identity_json,'$.release_id'),'')=? OR "
+            "COALESCE(json_extract(" + prefix + "release_identity_json,'$.build_sha'),'')=?)"
         )
         params.extend([release, release])
 
@@ -548,9 +549,7 @@ def _event_filter_clauses(
             "(COALESCE(json_extract("
             + prefix
             + "index_identity_json,'$.manifest_sha256'),'')=? OR "
-            "COALESCE(json_extract("
-            + prefix
-            + "index_identity_json,'$.pointer_digest'),'')=? OR "
+            "COALESCE(json_extract(" + prefix + "index_identity_json,'$.pointer_digest'),'')=? OR "
             "COALESCE(json_extract("
             + prefix
             + "index_identity_json,'$.resolved_gate_sha256'),'')=?)"
@@ -581,9 +580,7 @@ def _filter_snapshot(**values: Any) -> dict[str, Any]:
     return result
 
 
-def _cluster_export_stats(
-    connection: sqlite3.Connection, cluster_id: str
-) -> dict[str, Any]:
+def _cluster_export_stats(connection: sqlite3.Connection, cluster_id: str) -> dict[str, Any]:
     rows = connection.execute(
         "SELECT timestamp,release_identity_json FROM qa_events "
         "WHERE cluster_id=? ORDER BY timestamp ASC",

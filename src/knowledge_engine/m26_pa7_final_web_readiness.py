@@ -358,8 +358,8 @@ def run_final_web_product_readiness(
     manifest = validate_final_web_formal_test_manifest(formal_manifest)
     closure.reject_secret_or_raw_persistence(browser_evidence, label="browser_evidence")
 
-    from .m26_pa5_v8_live import MiniMaxClient
     from .m26_aq_semantic_contract import run_owner_arbitrary_query
+    from .m26_pa5_v8_live import MiniMaxClient
 
     budgets = _object(manifest["budgets"], "manifest.budgets")
     provider = provider_client

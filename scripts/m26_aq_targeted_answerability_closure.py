@@ -12,8 +12,8 @@ from typing import Any
 
 from knowledge_engine.m26_aq_semantic_contract import (
     CANONICAL_RUNTIME_ENTRYPOINT,
-    provider_neutral_downstream_fingerprint,
     PROVIDER_NEUTRAL_DOWNSTREAM_STAGES,
+    provider_neutral_downstream_fingerprint,
     runtime_contract_identity,
     semantic_contract_fingerprint,
 )

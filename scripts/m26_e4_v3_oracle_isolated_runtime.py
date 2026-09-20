@@ -45,7 +45,9 @@ def require_binding(binding: dict[str, Any], key: str) -> Any:
 
 
 def container_env_rows(container: str) -> list[str]:
-    raw = stdout(["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}"])
+    raw = stdout(
+        ["docker", "inspect", container, "--format", "{{range .Config.Env}}{{println .}}{{end}}"]
+    )
     return [line for line in raw.splitlines() if "=" in line]
 
 
@@ -69,10 +71,12 @@ def write_env_file(path: pathlib.Path, env: dict[str, str]) -> None:
     path.chmod(0o600)
 
 
-def choose_container_port(inspected: dict[str, Any], env: dict[str, str], explicit: str | None) -> str:
+def choose_container_port(
+    inspected: dict[str, Any], env: dict[str, str], explicit: str | None
+) -> str:
     if explicit:
         return explicit
-    ports = ((inspected.get("NetworkSettings") or {}).get("Ports") or {})
+    ports = (inspected.get("NetworkSettings") or {}).get("Ports") or {}
     for preferred in ("8080/tcp", "8789/tcp"):
         if preferred in ports:
             return preferred.split("/", 1)[0]
@@ -107,7 +111,9 @@ def ensure_isolated_health_auth(env: dict[str, str], binding: dict[str, Any]) ->
     token_source = "base_env"
     owner_hash_source = "base_env"
     if not env.get("M26_QUERY_BACKEND_TOKEN"):
-        env["M26_QUERY_BACKEND_TOKEN"] = "m26-e4-v3-isolated-health-" + isolated_digest("backend-token", binding)
+        env["M26_QUERY_BACKEND_TOKEN"] = "m26-e4-v3-isolated-health-" + isolated_digest(
+            "backend-token", binding
+        )
         token_source = "isolated_synthetic_localhost_only"
     if not env.get("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"):
         env["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"] = isolated_digest("owner-subject-hash", binding)
@@ -131,7 +137,7 @@ def build_sitecustomize(binding: dict[str, Any]) -> str:
     node_count = int(require_binding(binding, "node_count"))
     edge_count = int(require_binding(binding, "edge_count"))
     semantic_point_count = int(require_binding(binding, "semantic_point_count"))
-    return f'''from __future__ import annotations
+    return f"""from __future__ import annotations
 # M26 E4_V3 isolated Oracle binding overlay.
 # Runtime/semantic/translation logic remains loaded from the frozen base image.
 # This file only rebases production-answer bundle identity constants for the
@@ -161,7 +167,7 @@ if pab is not None:
         pab._load_production_answer_bundle_from_env.cache_clear()
     except Exception:
         pass
-'''
+"""
 
 
 def request_http_reachability(port: int) -> dict[str, Any]:
@@ -207,7 +213,7 @@ def request_http_reachability(port: int) -> dict[str, Any]:
 
 
 def run_route_inventory(container: str) -> dict[str, Any]:
-    py = r'''
+    py = r"""
 import json
 try:
     from knowledge_engine.m26_production_api import app
@@ -230,7 +236,7 @@ out = {
     "answer_endpoint_invoked": False,
 }
 print(json.dumps(out, sort_keys=True))
-'''
+"""
     result = run(["docker", "exec", container, "python", "-c", py], check=False)
     if result.returncode != 0:
         detail = (result.stdout + "\n" + result.stderr)[-2000:]
@@ -242,7 +248,7 @@ print(json.dumps(out, sort_keys=True))
 
 
 def run_binding_probe(container: str) -> dict[str, Any]:
-    py = r'''
+    py = r"""
 import json
 from botocore.exceptions import ClientError
 from knowledge_engine import m26_production_answer_bundle as pab
@@ -276,7 +282,11 @@ bundle = pab.load_production_answer_bundle(store=E4V3ReadThroughStore())
 report = pab.build_production_answer_compatibility_report(bundle, qdrant_point_count=4424)
 out = {
     "schema_version": "m26-e4-v3-in-container-binding-probe/v2",
-    "status": "M26_E4_V3_BINDING_PROBE_PASS" if report.get("status") == "compatible" else "M26_E4_V3_BINDING_PROBE_FAIL",
+    "status": (
+        "M26_E4_V3_BINDING_PROBE_PASS"
+        if report.get("status") == "compatible"
+        else "M26_E4_V3_BINDING_PROBE_FAIL"
+    ),
     "release_id": bundle.release_id,
     "manifest_sha256": bundle.manifest_sha256,
     "qdrant_collection": pab.FULL_PRODUCTION_QDRANT_COLLECTION,
@@ -300,7 +310,7 @@ out = {
     },
 }
 print(json.dumps(out, sort_keys=True))
-'''
+"""
     result = run(["docker", "exec", container, "python", "-c", py], check=False)
     if result.returncode != 0:
         detail = (result.stdout + "\n" + result.stderr)[-2000:]
@@ -314,13 +324,24 @@ print(json.dumps(out, sort_keys=True))
     if value.get("status") != "M26_E4_V3_BINDING_PROBE_PASS":
         raise SystemExit("M26_E4_V3_BINDING_PROBE_NOT_PASS:" + json.dumps(value, sort_keys=True))
     if value.get("release_id") != EXPECTED_RELEASE_ID:
-        raise SystemExit("M26_E4_V3_BINDING_PROBE_RELEASE_MISMATCH:" + json.dumps(value, sort_keys=True))
+        raise SystemExit(
+            "M26_E4_V3_BINDING_PROBE_RELEASE_MISMATCH:" + json.dumps(value, sort_keys=True)
+        )
     if value.get("qdrant_collection") != EXPECTED_QDRANT_COLLECTION:
-        raise SystemExit("M26_E4_V3_BINDING_PROBE_QDRANT_MISMATCH:" + json.dumps(value, sort_keys=True))
+        raise SystemExit(
+            "M26_E4_V3_BINDING_PROBE_QDRANT_MISMATCH:" + json.dumps(value, sort_keys=True)
+        )
     if value.get("semantic_point_count") != EXPECTED_SEMANTIC_POINT_COUNT:
-        raise SystemExit("M26_E4_V3_BINDING_PROBE_SEMANTIC_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
-    if value.get("node_count") != EXPECTED_NODE_COUNT or value.get("edge_count") != EXPECTED_EDGE_COUNT:
-        raise SystemExit("M26_E4_V3_BINDING_PROBE_GRAPH_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True))
+        raise SystemExit(
+            "M26_E4_V3_BINDING_PROBE_SEMANTIC_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True)
+        )
+    if (
+        value.get("node_count") != EXPECTED_NODE_COUNT
+        or value.get("edge_count") != EXPECTED_EDGE_COUNT
+    ):
+        raise SystemExit(
+            "M26_E4_V3_BINDING_PROBE_GRAPH_COUNT_MISMATCH:" + json.dumps(value, sort_keys=True)
+        )
     if value.get("optional_pointer_written") is not False:
         raise SystemExit("M26_E4_V3_BINDING_PROBE_OPTIONAL_POINTER_WRITE_DETECTED")
     return value
@@ -331,7 +352,9 @@ def main() -> int:
     parser.add_argument("--binding-json", required=True)
     parser.add_argument("--base-container", default=DEFAULT_BASE_CONTAINER)
     parser.add_argument("--candidate-container", default=DEFAULT_CANDIDATE_CONTAINER)
-    parser.add_argument("--host-port", type=int, default=int(os.environ.get("M26_E4_V3_HOST_PORT", "18187")))
+    parser.add_argument(
+        "--host-port", type=int, default=int(os.environ.get("M26_E4_V3_HOST_PORT", "18187"))
+    )
     parser.add_argument("--container-port", default=os.environ.get("M26_E4_V3_CONTAINER_PORT", ""))
     parser.add_argument("--work-dir", default="/tmp/m26-e4-v3-oracle-isolated-runtime")
     args = parser.parse_args()
@@ -363,18 +386,25 @@ def main() -> int:
     env["M26_QUERY_BUILD_SHA"] = f"m26-e4-v3-isolated-{release_id}-520aed"
     env["M26_E4_V3_ISOLATED_RUNTIME"] = "true"
     env["M26_PA7_DENSE_COLLECTION"] = qdrant_collection
-    env["PYTHONPATH"] = f"/tmp/m26_e4_v3_sitecustomize:{env.get('PYTHONPATH','')}".rstrip(":")
+    env["PYTHONPATH"] = f"/tmp/m26_e4_v3_sitecustomize:{env.get('PYTHONPATH', '')}".rstrip(":")
     auth_bootstrap = ensure_isolated_health_auth(env, binding)
     env_file = work_dir / "candidate.env"
     write_env_file(env_file, env)
 
     docker_args = [
-        "docker", "run", "-d",
-        "--name", args.candidate_container,
-        "--restart", "no",
-        "--env-file", str(env_file),
-        "-v", f"{overlay_dir}:/tmp/m26_e4_v3_sitecustomize:ro",
-        "-p", f"127.0.0.1:{args.host_port}:{container_port}",
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        args.candidate_container,
+        "--restart",
+        "no",
+        "--env-file",
+        str(env_file),
+        "-v",
+        f"{overlay_dir}:/tmp/m26_e4_v3_sitecustomize:ro",
+        "-p",
+        f"127.0.0.1:{args.host_port}:{container_port}",
         image_id,
     ]
     container_id = stdout(docker_args)
@@ -383,7 +413,10 @@ def main() -> int:
     last_error = ""
     for _ in range(30):
         time.sleep(2)
-        status = run(["docker", "inspect", args.candidate_container, "--format", "{{.State.Running}}"], check=False)
+        status = run(
+            ["docker", "inspect", args.candidate_container, "--format", "{{.State.Running}}"],
+            check=False,
+        )
         if status.returncode != 0 or status.stdout.strip() != "true":
             logs = run(["docker", "logs", "--tail", "80", args.candidate_container], check=False)
             raise SystemExit("M26_E4_V3_CANDIDATE_CONTAINER_NOT_RUNNING:" + logs.stdout[-1000:])

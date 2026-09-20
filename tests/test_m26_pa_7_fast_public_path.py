@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest import mock
 
 import pytest
 
@@ -42,7 +41,10 @@ def fast_path_bundle() -> tuple[Any, dict[str, Any], dict[str, Any]]:
         "retrieval_metadata": {"relation_types": []},
         "channels": ["lexical"],
     }
-    lexical_result = {"backend_identity": {"backend": "lex"}, "results": [{"section_id": document["section_id"]}]}
+    lexical_result = {
+        "backend_identity": {"backend": "lex"},
+        "results": [{"section_id": document["section_id"]}],
+    }
     dense_result = {"backend_identity": {"backend": "dense"}, "candidates": []}
     return bundle, evidence, {"lexical": lexical_result, "dense": dense_result}
 
@@ -109,7 +111,11 @@ def test_fast_public_path_publishes_single_call_answer(
     )
 
     monkeypatch.setattr(runtime, "load_production_answer_bundle", lambda: bundle)
-    monkeypatch.setattr(runtime, "_run_lexical_primary_retrieval", lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]))
+    monkeypatch.setattr(
+        runtime,
+        "_run_lexical_primary_retrieval",
+        lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]),
+    )
     monkeypatch.setattr(runtime, "_select_evidence", lambda **_kwargs: [evidence])
     monkeypatch.setattr(runtime, "_has_meaningful_overlap", lambda _question, _evidence: True)
 
@@ -129,15 +135,26 @@ def test_fast_public_path_publishes_single_call_answer(
     assert response["answer_text"] == "A skill is a method an agent follows for a class of task."
     assert response["citations"][0]["citation_id"] == "claim_1_ref_1"
     assert response["answer_claims"][0]["citation_ids"] == ["claim_1_ref_1"]
-    assert response["provider_routing"]["provider_attempts"][0]["call_class"] == "aq_fast_answer_synthesis"
+    assert (
+        response["provider_routing"]["provider_attempts"][0]["call_class"]
+        == "aq_fast_answer_synthesis"
+    )
     assert response["semantic_closure"] == {}
 
 
 @pytest.mark.parametrize(
     ("provider_factory", "expected_reason"),
     [
-        (lambda: FastAnswerProvider(answer_text="Fine answer", citation_ids=["missing"]), "PROVIDER_OUTPUT_INVALID"),
-        (lambda: LeakyProvider(answer_text="The definition head is hidden here.", citation_ids=["ev_skill"]), "PROVIDER_OUTPUT_INVALID"),
+        (
+            lambda: FastAnswerProvider(answer_text="Fine answer", citation_ids=["missing"]),
+            "PROVIDER_OUTPUT_INVALID",
+        ),
+        (
+            lambda: LeakyProvider(
+                answer_text="The definition head is hidden here.", citation_ids=["ev_skill"]
+            ),
+            "PROVIDER_OUTPUT_INVALID",
+        ),
     ],
 )
 def test_fast_public_path_abstains_without_semantic_retry(
@@ -150,7 +167,11 @@ def test_fast_public_path_abstains_without_semantic_retry(
     provider = provider_factory()
 
     monkeypatch.setattr(runtime, "load_production_answer_bundle", lambda: bundle)
-    monkeypatch.setattr(runtime, "_run_lexical_primary_retrieval", lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]))
+    monkeypatch.setattr(
+        runtime,
+        "_run_lexical_primary_retrieval",
+        lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]),
+    )
     monkeypatch.setattr(runtime, "_select_evidence", lambda **_kwargs: [evidence])
     monkeypatch.setattr(runtime, "_has_meaningful_overlap", lambda _question, _evidence: True)
 

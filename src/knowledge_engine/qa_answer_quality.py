@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import math
@@ -8,7 +9,7 @@ import threading
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from statistics import median
 from typing import Any
 
@@ -217,7 +218,7 @@ class QaRepository:
             trace_key = f"{self.prefix}/failures/{event_id}.json"
             event["failure_trace_key"] = trace_key
             body = _json_bytes(failure_trace)
-            try:
+            with contextlib.suppress(ReleaseConflictError):
                 self.store.put(
                     trace_key,
                     body,
@@ -225,8 +226,6 @@ class QaRepository:
                     sha256=sha256_bytes(body),
                     only_if_absent=True,
                 )
-            except ReleaseConflictError:
-                pass
 
         def apply(index: dict[str, Any]) -> dict[str, Any]:
             events = index.setdefault("events", {})
@@ -921,7 +920,7 @@ def _resolve_range(
     from_ts: str | None,
     to_ts: str | None,
 ) -> tuple[datetime, datetime]:
-    end = _parse_ts(to_ts) if to_ts else datetime.now(timezone.utc)
+    end = _parse_ts(to_ts) if to_ts else datetime.now(UTC)
     if range_name == "custom":
         if not from_ts:
             raise ValueError("custom range requires from")
@@ -950,12 +949,12 @@ def _parse_ts(value: str | None) -> datetime:
         raise ValueError("timestamp is required")
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _quality_series(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:

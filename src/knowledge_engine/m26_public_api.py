@@ -829,7 +829,6 @@ def _terminal_event_from_dto(dto: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-
 def _publish_qa_internal_context(request_id: str, dto: Mapping[str, Any]) -> None:
     """Publish evidence to the in-process QA observer without changing public SSE."""
     allowed = {
@@ -867,6 +866,7 @@ def consume_qa_internal_context(request_id: str) -> dict[str, Any]:
     if item is None or time.monotonic() - item[0] > _QA_INTERNAL_CONTEXT_TTL_SECONDS:
         return {}
     return item[1]
+
 
 def _public_citations(value: Any) -> list[dict[str, Any]]:
     result = []
@@ -1076,7 +1076,9 @@ def _owner_bypass_matches(request: Request) -> bool:
     supplied = request.headers.get(OWNER_BYPASS_HEADER, "")
     if not expected_digest or not supplied:
         return False
-    if len(expected_digest) != 64 or any(char not in "0123456789abcdef" for char in expected_digest):
+    if len(expected_digest) != 64 or any(
+        char not in "0123456789abcdef" for char in expected_digest
+    ):
         return False
     supplied_digest = hashlib.sha256(supplied.encode("utf-8")).hexdigest()
     return hmac.compare_digest(supplied_digest, expected_digest)

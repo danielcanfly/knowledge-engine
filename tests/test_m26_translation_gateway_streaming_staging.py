@@ -108,21 +108,25 @@ def test_translation_answers_sse_streams_runtime_stage_and_model_events(
         sink = kwargs["event_sink"]
         sink({"type": "stage.started", "stage": "retrieval", "status": "started"})
         sink({"type": "stage.completed", "stage": "retrieval", "status": "completed"})
-        sink({
-            "type": "model.started",
-            "role": "closure",
-            "provider": "cloudflare",
-            "model": "@cf/meta/llama",
-            "attempt": 1,
-        })
-        sink({
-            "type": "model.completed",
-            "role": "closure",
-            "provider": "cloudflare",
-            "model": "@cf/meta/llama",
-            "attempt": 1,
-            "status": "ok",
-        })
+        sink(
+            {
+                "type": "model.started",
+                "role": "closure",
+                "provider": "cloudflare",
+                "model": "@cf/meta/llama",
+                "attempt": 1,
+            }
+        )
+        sink(
+            {
+                "type": "model.completed",
+                "role": "closure",
+                "provider": "cloudflare",
+                "model": "@cf/meta/llama",
+                "attempt": 1,
+                "status": "ok",
+            }
+        )
         return {"answer_text": "A grounded supported answer."}
 
     monkeypatch.setattr(
@@ -131,7 +135,9 @@ def test_translation_answers_sse_streams_runtime_stage_and_model_events(
         fake_run_owner_translation_gateway_for_web,
     )
 
-    client = TestClient(public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json")))
+    client = TestClient(
+        public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json"))
+    )
 
     with client.stream("POST", "/v1/answers", json={"question": "What is safe?"}) as response:
         text = "".join(response.iter_text())
@@ -212,7 +218,9 @@ def test_translation_answers_ignores_event_sink_exceptions(
         fake_run_owner_translation_gateway_for_web,
     )
 
-    client = TestClient(public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json")))
+    client = TestClient(
+        public_gateway_module.create_app(root=Path.cwd(), gate_path=Path("gate.json"))
+    )
     response = client.post("/v1/answers", json={"question": "What is safe?"})
 
     assert response.status_code == 200

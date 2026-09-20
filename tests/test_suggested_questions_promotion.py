@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -158,7 +159,10 @@ class FakeRerunner:
             "status": "answered",
             "terminal_status": "answered",
             "trace_id": "trace-1",
-            "answer_text": "A grounded answer about the requested concept and its practical implications.",
+            "answer_text": (
+                "A grounded answer about the requested concept "
+                "and its practical implications."
+            ),
             "citations": [{"source_id": "source-1"}],
             "sources": [{"source_id": "source-1"}],
             "integrity": {
@@ -295,7 +299,11 @@ def test_owner_rubric_is_separate_six_dimension_100_point_contract() -> None:
 def test_article_index_and_exact_existing_duplicate_are_hard_failures() -> None:
     codes = deterministic_hard_fail_codes(
         question="What does the article Part 2 say?",
-        answer_payload={"status": "answered", "answer_text": "answer", "citations": [{"source_id": "s1"}]},
+        answer_payload={
+            "status": "answered",
+            "answer_text": "answer",
+            "citations": [{"source_id": "s1"}],
+        },
         existing_questions=["What does the article Part 2 say?"],
         batch_questions=["What does the article Part 2 say?"],
     )
@@ -334,7 +342,9 @@ def test_preview_requires_historical_aq_pass_and_never_calls_publisher(tmp_path:
 
 
 def test_preview_is_durable_and_idempotent(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, _, publisher, _, store, _ = _make_app(tmp_path, qa_repo=qa)
     client = TestClient(app)
     headers = _headers("sq-preview-idempotency-0002")
@@ -357,7 +367,9 @@ def test_preview_is_durable_and_idempotent(tmp_path: Path) -> None:
 
 
 def test_preview_requires_idempotency_key_via_registered_mutation_route(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, *_ = _make_app(tmp_path, qa_repo=qa)
     response = TestClient(app).post(
         "/v1/admin/suggested-questions/promotions/preview",
@@ -369,7 +381,9 @@ def test_preview_requires_idempotency_key_via_registered_mutation_route(tmp_path
 
 
 def test_publish_is_explicit_cas_guarded_readback_verified_and_idempotent(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, source, publisher, _, store, _ = _make_app(tmp_path, qa_repo=qa)
     client = TestClient(app)
     preview = client.post(
@@ -404,7 +418,9 @@ def test_publish_is_explicit_cas_guarded_readback_verified_and_idempotent(tmp_pa
 
 
 def test_publish_fails_closed_on_revision_drift_before_mutation(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, source, publisher, _, _, _ = _make_app(tmp_path, qa_repo=qa)
     client = TestClient(app)
     preview = client.post(
@@ -516,7 +532,9 @@ def test_preview_store_failure_does_not_project_event_metadata(tmp_path: Path) -
         def create(self, promotion_id: str, payload: Mapping[str, Any]) -> dict[str, Any]:
             raise RuntimeError("store unavailable")
 
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     source = FakeSource()
     publisher = FakePublisher(source)
     app = FastAPI()
@@ -548,7 +566,9 @@ def test_preview_store_failure_does_not_project_event_metadata(tmp_path: Path) -
 
 
 def test_successful_preview_and_publish_are_audited(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, _, _, _, _, audit = _make_app(tmp_path, qa_repo=qa)
     client = TestClient(app)
     preview_response = client.post(
@@ -569,7 +589,9 @@ def test_successful_preview_and_publish_are_audited(tmp_path: Path) -> None:
 
 
 def test_get_promotion_reads_durable_preview_record(tmp_path: Path) -> None:
-    qa = FakeQaRepository({"evt-1": _eligible_event("evt-1", "How should agents verify completion?")})
+    qa = FakeQaRepository(
+        {"evt-1": _eligible_event("evt-1", "How should agents verify completion?")}
+    )
     app, *_ = _make_app(tmp_path, qa_repo=qa)
     client = TestClient(app)
     preview = client.post(
@@ -610,8 +632,7 @@ def test_concrete_github_publisher_uses_blob_cas_and_readback_without_live_netwo
         def __init__(self) -> None:
             super().__init__(token="test-token")
             self.source_text = (
-                "export const M26_HOME_SUGGESTED_QUESTIONS = Object.freeze([\n"
-                "  'One?',\n]);\n"
+                "export const M26_HOME_SUGGESTED_QUESTIONS = Object.freeze([\n  'One?',\n]);\n"
             )
             self.blob = "blob-a"
             self.put_count = 0
