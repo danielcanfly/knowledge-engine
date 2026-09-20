@@ -7218,6 +7218,13 @@ def _rerank_candidates(
                         "source_coverage_score": float(source_coverage["coverage_score"]),
                     }
             item["answer_bearing_relevance"] = answer_bearing
+            item["definition_lexical_protected"] = _is_definition_lexical_protected(
+                candidate=item,
+                document=document,
+                focus=focus,
+            )
+        else:
+            item["definition_lexical_protected"] = False
         item["rerank_score"] = (
             float(item.get("score", 0.0))
             + channel_count * 0.35
@@ -7289,6 +7296,20 @@ def _select_diverse_candidates(
     ranked = [dict(candidate) for candidate in candidates]
     priority: list[dict[str, Any]] = []
     priority_ids: set[str] = set()
+    protected_definition_candidates = [
+        item for item in ranked if item.get("definition_lexical_protected") is True
+    ]
+    if protected_definition_candidates:
+        protected_definition = min(
+            protected_definition_candidates,
+            key=lambda item: (
+                int(item.get("seed_rank", 999)),
+                -float(item.get("answer_bearing_relevance", {}).get("score", 0.0)),
+                str(item.get("section_id", "")),
+            ),
+        )
+        priority.append(protected_definition)
+        priority_ids.add(str(protected_definition.get("section_id", "")))
     seed_candidates = sorted(
         [item for item in ranked if int(item.get("seed_rank", 999)) <= 5],
         key=lambda item: (int(item.get("seed_rank", 999)), str(item.get("section_id", ""))),
@@ -7392,10 +7413,39 @@ def _candidate_public_metadata(candidate: Mapping[str, Any]) -> dict[str, Any]:
         "answer_bearing_relevance": dict(candidate.get("answer_bearing_relevance", {}))
         if isinstance(candidate.get("answer_bearing_relevance"), Mapping)
         else {},
+        "definition_lexical_protected": bool(candidate.get("definition_lexical_protected")),
         "source_coverage": dict(candidate.get("source_coverage", {}))
         if isinstance(candidate.get("source_coverage"), Mapping)
         else {},
     }
+
+
+def _is_definition_lexical_protected(
+    *,
+    candidate: Mapping[str, Any],
+    document: Mapping[str, Any],
+    focus: _AnswerBearingQueryFocus,
+) -> bool:
+    """Keep one source-backed literal definition head ahead of diversity anchors."""
+    if focus.relation != "definition" or "lexical" not in candidate.get("channels", set()):
+        return False
+    relevance = candidate.get("answer_bearing_relevance")
+    if not isinstance(relevance, Mapping) or not relevance.get("answer_bearing"):
+        return False
+    definition_head = focus.subject_phrases[0] if focus.subject_phrases else ""
+    return bool(
+        definition_head
+        and _contains_definition_head_literal(_document_text(document), definition_head)
+    )
+
+
+def _contains_definition_head_literal(text: str, definition_head: str) -> bool:
+    tokens = _normalized_relevance_text(definition_head).split()
+    if not tokens:
+        return False
+    phrase = r"[\s-]+".join(re.escape(token) for token in tokens)
+    pattern = rf"(?<![a-z0-9-]){phrase}(?![a-z0-9-])"
+    return re.search(pattern, str(text).casefold()) is not None
 
 
 def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> float:

@@ -1370,6 +1370,42 @@ def test_definition_reranker_prefers_subject_and_context_anchor() -> None:
     assert ranked[0]["answer_bearing_relevance"]["relation"] == "definition"
 
 
+def test_definition_literal_lexical_evidence_survives_diversity_priority() -> None:
+    question = "What is an agent harness?"
+    documents = {
+        "definition": _document(
+            "definition",
+            title="Agent harness definition",
+            body="An agent harness is a bounded system that coordinates tools and methods.",
+            source_id="definition_source",
+        ),
+    }
+    candidates = []
+    for rank in range(1, 6):
+        section_id = f"distractor_{rank}"
+        documents[section_id] = _document(
+            section_id,
+            title="Agent systems",
+            body="Agent systems use harnesses to coordinate tools and methods.",
+            source_id=f"distractor_source_{rank}",
+        )
+        candidates.append(
+            _rerank_candidate(section_id, score=20.0 - rank, rank=rank)
+        )
+    candidates.append(_rerank_candidate("definition", score=8.0, rank=13))
+
+    ranked = runtime_module._rerank_candidates(
+        candidates,
+        budget=4,
+        documents=documents,
+        question=question,
+    )
+    selected = runtime_module._select_diverse_candidates(ranked, budget=4)
+
+    assert selected[0]["section_id"] == "definition"
+    assert selected[0]["definition_lexical_protected"] is True
+
+
 def test_tradeoff_reranker_abstains_without_explicit_tradeoff_language() -> None:
     question = "What trade-off does Widget Harness describe?"
     documents = {
