@@ -68,6 +68,7 @@ MAX_QUERY_CHARS = 2_000
 MAX_EVIDENCE_ITEMS = 3
 MAX_BUNDLE_EVIDENCE_ITEMS = 5
 MAX_CANDIDATE_POOL_ITEMS = 40
+DENSE_CORROBORATING_SEED_RATIO_THRESHOLD = 0.93
 MAX_DYNAMIC_EVIDENCE_ITEMS = 16
 MAX_PARENT_SECTIONS_PER_EVIDENCE = 3
 DEFAULT_DENSE_SEARCH_DEADLINE_SECONDS = 2.0
@@ -6494,6 +6495,7 @@ def _build_candidate_pool(
         candidate["channels"].add("dense")
         candidate["score"] += float(item.get("score", 0.0)) + 0.5 / rank
         candidate["dense"] = dict(item)
+        candidate["dense_rank"] = rank
         candidate["seed_rank"] = min(int(candidate.get("seed_rank", 999)), rank)
     if allow_graph_expansion:
         _add_graph_expanded_candidates(
@@ -6508,15 +6510,56 @@ def _build_candidate_pool(
         candidates.values(),
         key=lambda item: (-float(item["score"]), item["section_id"]),
     )
+    dense_protected_ids = _dense_seed_admission_section_ids(
+        documents=documents,
+        dense_candidates=dense_candidates,
+    )
+    protected_dense = sorted(
+        [item for item in ranked if str(item.get("section_id", "")) in dense_protected_ids],
+        key=lambda item: (
+            int(item.get("dense_rank", 999)),
+            str(item.get("section_id", "")),
+        ),
+    )
     protected_seed_ranks = {7, 8, 9, 14, 20, 33}
-    protected = [
+    protected_coverage = [
         item
         for item in ranked
         if isinstance(item.get("source_coverage"), Mapping)
         and int(item.get("seed_rank", 999)) in protected_seed_ranks
+        and str(item.get("section_id", "")) not in dense_protected_ids
     ]
+    protected = protected_dense + protected_coverage
     protected_ids = {str(item.get("section_id", "")) for item in protected}
     return (protected + [item for item in ranked if str(item.get("section_id", "")) not in protected_ids])[:MAX_CANDIDATE_POOL_ITEMS]
+
+
+def _dense_seed_admission_section_ids(
+    *,
+    documents: Mapping[str, Mapping[str, Any]],
+    dense_candidates: Sequence[Any],
+) -> set[str]:
+    protected: set[str] = set()
+    if not dense_candidates:
+        return protected
+    first_id = str(dense_candidates[0].get("section_id", ""))
+    if first_id in documents:
+        protected.add(first_id)
+    if len(dense_candidates) < 2:
+        return protected
+    second_id = str(dense_candidates[1].get("section_id", ""))
+    if second_id not in documents or first_id not in documents:
+        return protected
+    first_score = float(dense_candidates[0].get("score", 0.0) or 0.0)
+    second_score = float(dense_candidates[1].get("score", 0.0) or 0.0)
+    if first_score <= 0.0:
+        return protected
+    same_source = str(documents[first_id].get("source_id", "")) == str(
+        documents[second_id].get("source_id", "")
+    )
+    if same_source and second_score / first_score >= DENSE_CORROBORATING_SEED_RATIO_THRESHOLD:
+        protected.add(second_id)
+    return protected
 
 
 def _empty_candidate(section_id: str) -> dict[str, Any]:
@@ -7284,15 +7327,27 @@ def _select_diverse_candidates(
     selected: list[dict[str, Any]] = []
     source_counts: Counter[str] = Counter()
     concept_counts: Counter[str] = Counter()
+    dual_channel_source_exceptions: set[str] = set()
     for candidate in ordered_candidates:
         section_id = str(candidate["section_id"])
         source_key = str(candidate.get("source_id") or section_id.split("#", 1)[0])
         concept_key = str(candidate.get("concept_id") or source_key)
-        if source_counts[source_key] >= 2 or concept_counts[concept_key] >= 3:
+        channels = {str(item) for item in candidate.get("channels", set())}
+        source_limit_reached = source_counts[source_key] >= 2
+        concept_limit_reached = concept_counts[concept_key] >= 3
+        dual_channel_exception = (
+            source_limit_reached
+            and not concept_limit_reached
+            and source_key not in dual_channel_source_exceptions
+            and {"lexical", "dense"}.issubset(channels)
+        )
+        if (source_limit_reached and not dual_channel_exception) or concept_limit_reached:
             continue
         selected.append(dict(candidate))
         source_counts[source_key] += 1
         concept_counts[concept_key] += 1
+        if dual_channel_exception:
+            dual_channel_source_exceptions.add(source_key)
         if len(selected) >= budget:
             break
     if len(selected) < min(budget, len(candidates)):
