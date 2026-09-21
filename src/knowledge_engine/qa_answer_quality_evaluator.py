@@ -240,15 +240,66 @@ def build_semantic_evaluation_input(
     return package
 
 
+def _balanced_json_object_candidates(text: str) -> list[str]:
+    candidates: list[str] = []
+    start: int | None = None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text):
+        if start is None:
+            if char == "{":
+                start = index
+                depth = 1
+                in_string = False
+                escaped = False
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                candidates.append(text[start : index + 1])
+                start = None
+    return candidates
+
+
 def _parse_provider_json(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     text = str(value or "").strip()
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I)
+    # Some provider models emit a private reasoning wrapper before the requested
+    # answer even when the prompt asks for JSON-only output. Ignore only a
+    # complete leading <think> block; the scored payload still has to satisfy
+    # the exact server-owned Answer Quality contract below.
+    text = re.sub(r"(?is)^\s*<think>.*?</think>\s*", "", text, count=1).strip()
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.I).strip()
     try:
         parsed = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise AnswerQualityEvaluationError("semantic evaluator output is not valid JSON") from exc
+    except json.JSONDecodeError:
+        parsed_candidates: list[dict[str, Any]] = []
+        for candidate in _balanced_json_object_candidates(text):
+            try:
+                parsed_candidate = json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed_candidate, dict):
+                parsed_candidates.append(parsed_candidate)
+        if len(parsed_candidates) != 1:
+            raise AnswerQualityEvaluationError(
+                "semantic evaluator output must contain exactly one valid JSON object"
+            ) from None
+        parsed = parsed_candidates[0]
     if not isinstance(parsed, dict):
         raise AnswerQualityEvaluationError("semantic evaluator output must be a JSON object")
     return parsed
@@ -301,7 +352,8 @@ class ProviderAnswerQualityEvaluator:
             "Evidence-only grounding is mandatory. A safe abstention is appropriate when the supplied "
             "evidence cannot support an answer; an unexplained or answerable abstention is a hard fail. "
             "Do not score homepage, Suggested Questions, topic balance, corpus representativeness, or "
-            "question-framing dimensions. Return JSON with criterion_scores containing exactly: "
+            "question-framing dimensions. Return exactly one raw JSON object with no markdown, prose, "
+            "or reasoning wrapper. The JSON must contain criterion_scores containing exactly: "
             f"{rubric}; also return hard_fail_codes as an array. Separately return question_intent "
             "for failure clustering as an object with task, subjects, and qualifiers. task must be one "
             "of compare, explain, how_to, enumerate, diagnose, design, evaluate, locate, summarize, other. "

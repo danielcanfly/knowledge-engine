@@ -97,6 +97,33 @@ def test_semantic_prompt_contains_complete_operational_rubric_and_untrusted_boun
     assert "Suggested Questions" in prompt
 
 
+def test_semantic_adapter_accepts_one_json_object_after_reasoning_wrapper() -> None:
+    payload = json.dumps(
+        {"criterion_scores": ANSWER_QUALITY_CRITERION_MAX, "hard_fail_codes": []}
+    )
+    provider = CapturingProvider(
+        "<think>Internal reasoning that is not part of the contract.</think>\n"
+        "Here is the requested evaluation:\n"
+        + payload
+    )
+    result = ProviderAnswerQualityEvaluator(
+        provider, provider_name="qualified-provider", model="qualified-model"
+    ).evaluate(question="Q", answer_payload=response("wrapped"), forensic_trace=None)
+    assert result.score == 100
+    assert result.result == "pass"
+
+
+def test_semantic_adapter_rejects_ambiguous_multiple_json_objects() -> None:
+    payload = json.dumps(
+        {"criterion_scores": ANSWER_QUALITY_CRITERION_MAX, "hard_fail_codes": []}
+    )
+    provider = CapturingProvider(payload + "\n" + payload)
+    with pytest.raises(ValueError, match="exactly one valid JSON object"):
+        ProviderAnswerQualityEvaluator(
+            provider, provider_name="qualified-provider", model="qualified-model"
+        ).evaluate(question="Q", answer_payload=response("ambiguous"), forensic_trace=None)
+
+
 def test_missing_provider_provenance_is_rejected() -> None:
     provider = CapturingProvider(
         json.dumps({"criterion_scores": ANSWER_QUALITY_CRITERION_MAX, "hard_fail_codes": []})

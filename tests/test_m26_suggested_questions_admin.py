@@ -14,6 +14,7 @@ from knowledge_engine.m26_admin_control_plane import (
     install_admin_control_plane,
 )
 from knowledge_engine.m26_suggested_questions_admin import (
+    GitHubSuggestedQuestionsSource,
     SuggestedQuestionsSnapshot,
     install_suggested_questions_admin,
     parse_homepage_question_source,
@@ -100,6 +101,17 @@ def make_app(*, publish_enabled: bool = False) -> FastAPI:
     )
     install_suggested_questions_admin(app, source=FakeSource())
     return app
+
+
+def test_source_read_token_falls_back_to_existing_knowledge_source_credential(
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("KNOWLEDGE_SOURCE_READ_TOKEN", "shared-read-token")
+    assert GitHubSuggestedQuestionsSource().token == "shared-read-token"
+
+    monkeypatch.setenv("M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN", "dedicated-read-token")
+    assert GitHubSuggestedQuestionsSource().token == "dedicated-read-token"
 
 
 def test_parser_reads_frozen_homepage_array_without_inventing_metadata() -> None:

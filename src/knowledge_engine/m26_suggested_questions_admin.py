@@ -52,6 +52,7 @@ DEFAULT_REPOSITORY = "danielcanfly/daniel-blog"
 DEFAULT_SOURCE_PATH = "src/data/m26-home-suggested-questions.mjs"
 DEFAULT_SOURCE_REF = "main"
 SOURCE_TOKEN_ENV = "M26_SUGGESTED_QUESTIONS_GITHUB_TOKEN"
+SOURCE_TOKEN_FALLBACK_ENV = "KNOWLEDGE_SOURCE_READ_TOKEN"
 WRITE_TOKEN_ENV = "M26_SUGGESTED_QUESTIONS_GITHUB_WRITE_TOKEN"
 
 
@@ -134,7 +135,11 @@ class GitHubSuggestedQuestionsSource:
         self.repository = repository
         self.source_path = source_path
         self.source_ref = source_ref
-        self.token = token if token is not None else os.getenv(SOURCE_TOKEN_ENV)
+        self.token = (
+            token
+            if token is not None
+            else os.getenv(SOURCE_TOKEN_ENV) or os.getenv(SOURCE_TOKEN_FALLBACK_ENV)
+        )
         self.timeout_seconds = timeout_seconds
 
     def _json(self, url: str) -> dict[str, Any]:
