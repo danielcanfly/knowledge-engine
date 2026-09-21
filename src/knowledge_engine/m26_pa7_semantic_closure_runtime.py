@@ -802,6 +802,128 @@ def _facet_local_provider_slots(
     return slots
 
 
+def _compact_entity_identity_slots(
+    slots: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    compacted = [dict(slot) for slot in slots]
+    entity_slots = [
+        slot
+        for slot in compacted
+        if str(slot.get("facet_id", "")).startswith("entity_")
+    ]
+    material_slots = [
+        slot
+        for slot in compacted
+        if not str(slot.get("facet_id", "")).startswith("entity_")
+    ]
+    if not entity_slots or not material_slots:
+        return compacted
+
+    removed_ids: set[str] = set()
+    for entity_slot in entity_slots:
+        entity_ids = {
+            str(item)
+            for item in entity_slot.get("allowed_evidence_ids", [])
+            if str(item)
+        }
+        target = max(
+            material_slots,
+            key=lambda slot: (
+                len(
+                    entity_ids
+                    & {
+                        str(item)
+                        for item in slot.get("allowed_evidence_ids", [])
+                        if str(item)
+                    }
+                ),
+                -len(slot.get("allowed_evidence_ids", [])),
+                str(slot.get("slot_id", "")),
+            ),
+        )
+        entity_facet_id = str(entity_slot.get("facet_id", ""))
+        co_facet_ids = [
+            str(item) for item in target.get("co_facet_ids", []) if str(item)
+        ]
+        if entity_facet_id not in co_facet_ids:
+            co_facet_ids.append(entity_facet_id)
+        target["co_facet_ids"] = co_facet_ids
+
+        requirement = entity_slot.get("requirement")
+        exact_phrase = (
+            str(requirement.exact_phrase).strip()
+            if isinstance(requirement, SemanticRequirement)
+            else ""
+        )
+        if exact_phrase:
+            target["instruction"] = (
+                f"Explicitly name {exact_phrase}. "
+                + str(target.get("instruction", ""))
+            ).strip()
+
+        merged_pairs: list[tuple[str, str]] = []
+        seen_pairs: set[tuple[str, str]] = set()
+        for source in (target, entity_slot):
+            for label, evidence_id in zip(
+                source.get("allowed_evidence_labels", []),
+                source.get("allowed_evidence_ids", []),
+                strict=False,
+            ):
+                pair = (str(label), str(evidence_id))
+                if not all(pair) or pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                merged_pairs.append(pair)
+        target["allowed_evidence_labels"] = [label for label, _ in merged_pairs]
+        target["allowed_evidence_ids"] = [evidence_id for _, evidence_id in merged_pairs]
+
+        target_quotes = dict(target.get("support_quote_by_evidence_id", {}))
+        entity_quotes = dict(entity_slot.get("support_quote_by_evidence_id", {}))
+        has_identity_quote = bool(
+            exact_phrase
+            and any(
+                exact_phrase.casefold() in str(text).casefold()
+                for text in target_quotes.values()
+            )
+        )
+        if exact_phrase and not has_identity_quote:
+            for evidence_id, quote in entity_quotes.items():
+                if exact_phrase.casefold() in str(quote).casefold():
+                    target_quotes[str(evidence_id)] = str(quote)
+                    has_identity_quote = True
+                    break
+        for evidence_id, quote in entity_quotes.items():
+            target_quotes.setdefault(str(evidence_id), str(quote))
+        target["support_quote_by_evidence_id"] = target_quotes
+
+        existing_evidence = list(target.get("evidence", []))
+        if exact_phrase and not any(
+            exact_phrase.casefold() in str(item.get("text", "")).casefold()
+            for item in existing_evidence
+            if isinstance(item, Mapping)
+        ):
+            entity_evidence = next(
+                (
+                    dict(item)
+                    for item in entity_slot.get("evidence", [])
+                    if isinstance(item, Mapping)
+                    and exact_phrase.casefold()
+                    in str(item.get("text", "")).casefold()
+                ),
+                None,
+            )
+            if entity_evidence is not None:
+                entity_evidence["context_index"] = len(existing_evidence) + 1
+                existing_evidence.append(entity_evidence)
+        target["evidence"] = existing_evidence
+        removed_ids.add(str(entity_slot.get("slot_id", "")))
+
+    kept = [slot for slot in compacted if str(slot.get("slot_id", "")) not in removed_ids]
+    for index, slot in enumerate(kept, start=1):
+        slot["slot_id"] = f"slot_{index}"
+    return kept
+
+
 def _facet_local_provider_payload(
     *,
     question: str,
@@ -850,11 +972,13 @@ def _facet_local_provider_payload(
         support_classification=support_classification,
         facet_ledger=facet_ledger,
     )
-    slots = _facet_local_provider_slots(
-        requirements=requirements,
-        facet_ledger=facet_ledger,
-        label_map=label_map,
-        snippet_map=snippet_map,
+    slots = _compact_entity_identity_slots(
+        _facet_local_provider_slots(
+            requirements=requirements,
+            facet_ledger=facet_ledger,
+            label_map=label_map,
+            snippet_map=snippet_map,
+        )
     )
     claim_slot_by_claim_id = {
         f"{slot['slot_id']}_claim": str(slot["slot_id"])
@@ -1269,10 +1393,18 @@ def _runtime_bound_facet_local_candidate(
         legacy_claim_id = str(draft.get("legacy_claim_id", "")).strip()
         if legacy_claim_id and legacy_claim_id in claim_by_legacy_id:
             existing = claim_by_legacy_id[legacy_claim_id]
-            facet_id = str(slot["facet_id"])
-            if facet_id not in existing["facet_ids"]:
-                existing["facet_ids"].append(facet_id)
-                existing["covers"].append(facet_id)
+            merged_facet_ids = [
+                str(slot["facet_id"]),
+                *[
+                    str(item)
+                    for item in slot.get("co_facet_ids", [])
+                    if str(item)
+                ],
+            ]
+            for facet_id in merged_facet_ids:
+                if facet_id not in existing["facet_ids"]:
+                    existing["facet_ids"].append(facet_id)
+                    existing["covers"].append(facet_id)
             existing_labels = set(existing["evidence_labels"])
             existing_refs = {
                 (str(item["evidence_id"]), str(item["locator_id"]))
@@ -1291,15 +1423,27 @@ def _runtime_bound_facet_local_candidate(
         if claim_id in used_claim_ids:
             claim_id = f"{slot['slot_id']}_claim"
         used_claim_ids.add(claim_id)
+        claim_facet_ids = list(
+            dict.fromkeys(
+                [
+                    str(slot["facet_id"]),
+                    *[
+                        str(item)
+                        for item in slot.get("co_facet_ids", [])
+                        if str(item)
+                    ],
+                ]
+            )
+        )
         claim = {
                 "claim_id": claim_id,
                 "claim_type": str(draft["claim_type"]),
                 "claim_role": _infer_claim_role(intent_class=intent_class, claim_type=str(draft["claim_type"])),
                 "surface_text": str(draft["text"]),
-                "facet_ids": [str(slot["facet_id"])],
+                "facet_ids": claim_facet_ids,
                 "support_mode": "exact_quote",
                 "evidence_labels": list(slot["allowed_evidence_labels"]),
-                "covers": [str(slot["facet_id"])],
+                "covers": list(claim_facet_ids),
                 "unanswered_dimensions": [],
                 "support_refs": refs,
             }

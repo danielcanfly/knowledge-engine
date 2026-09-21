@@ -442,3 +442,70 @@ def test_exact_phrase_facet_local_quote_contains_required_identity() -> None:
 
     assert "production router" in quote.casefold()
     assert "escape path" in quote.casefold()
+
+
+def test_entity_identity_slot_compacts_into_material_claim_slot() -> None:
+    entity_requirement = closure.SemanticRequirement(
+        requirement_id="entity_production_router",
+        instruction="Name and address production router explicitly.",
+        evidence_terms=("production router",),
+        visible_patterns=(r"production\\ router",),
+        exact_phrase="production router",
+    )
+    decision_requirement = closure.SemanticRequirement(
+        requirement_id="router_decision",
+        instruction="Explain how the router selects a downstream path.",
+        evidence_terms=("router", "path", "route"),
+        visible_patterns=(r"router.{0,100}(?:path|route)",),
+    )
+    slots = [
+        {
+            "slot_id": "slot_1",
+            "facet_id": "entity_production_router",
+            "instruction": entity_requirement.instruction,
+            "requirement": entity_requirement,
+            "allowed_evidence_ids": ["ev-identity"],
+            "allowed_evidence_labels": ["e1"],
+            "support_quote_by_evidence_id": {
+                "ev-identity": "A production router needs an escape path."
+            },
+            "evidence": [
+                {
+                    "context_index": 1,
+                    "evidence_type": "passage",
+                    "title": "Router",
+                    "section": "Escape path",
+                    "text": "A production router needs an escape path.",
+                }
+            ],
+        },
+        {
+            "slot_id": "slot_2",
+            "facet_id": "router_decision",
+            "instruction": decision_requirement.instruction,
+            "requirement": decision_requirement,
+            "allowed_evidence_ids": ["ev-decision"],
+            "allowed_evidence_labels": ["e2"],
+            "support_quote_by_evidence_id": {
+                "ev-decision": "A router selects one or more downstream paths."
+            },
+            "evidence": [
+                {
+                    "context_index": 1,
+                    "evidence_type": "passage",
+                    "title": "Router",
+                    "section": "Choose path",
+                    "text": "A router selects one or more downstream paths.",
+                }
+            ],
+        },
+    ]
+
+    compacted = closure._compact_entity_identity_slots(slots)
+
+    assert len(compacted) == 1
+    slot = compacted[0]
+    assert slot["facet_id"] == "router_decision"
+    assert slot["co_facet_ids"] == ["entity_production_router"]
+    assert "Explicitly name production router." in slot["instruction"]
+    assert set(slot["allowed_evidence_ids"]) == {"ev-identity", "ev-decision"}
