@@ -20,6 +20,10 @@ from .m26_preamble_r1_candidate_release import (
     preamble_r1_authority_mismatch,
 )
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
+from .m26_semantic_r3_candidate_release import (
+    SEMANTIC_R3_RELEASE_ID,
+    semantic_r3_authority_mismatch,
+)
 from .m26_verified_answer_citation_gate import canonical_sha256
 
 CONTRACT_SCHEMA_VERSION = "m26-aq-canonical-semantic-contract/v1"
@@ -3528,6 +3532,14 @@ def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
             raise legacy.PA7ArbitraryQueryError(
                 mismatch,
                 "preamble Repair-1 candidate does not match its canonical release authority",
+            )
+        return
+    if bundle.release_id == SEMANTIC_R3_RELEASE_ID:
+        mismatch = semantic_r3_authority_mismatch(bundle)
+        if mismatch is not None:
+            raise legacy.PA7ArbitraryQueryError(
+                mismatch,
+                "semantic evidence-preservation R3 candidate does not match its canonical release authority",
             )
         return
     if bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
