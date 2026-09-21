@@ -65,7 +65,12 @@ class AdminAccessSettings:
 class AccessJWTAuthenticator:
     def __init__(self, settings: AdminAccessSettings, *, jwk_client: Any | None = None) -> None:
         self.settings = settings
-        self._jwks = jwk_client or PyJWKClient(settings.certs_url, cache_keys=True)
+        self._jwks = jwk_client or PyJWKClient(
+            settings.certs_url,
+            cache_keys=True,
+            lifespan=3600,
+            timeout=5,
+        )
 
     def authenticate(self, assertion: str | None) -> AdminActor:
         if not assertion or not assertion.strip():

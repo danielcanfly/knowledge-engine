@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 
+import knowledge_engine.m26_admin_control_plane as admin_control_plane
 from knowledge_engine.m26_admin_control_plane import (
     ACCESS_ASSERTION_HEADER,
     AccessJWTAuthenticator,
@@ -130,6 +131,29 @@ def test_admin_missing_or_invalid_assertion_fails_closed() -> None:
     assert missing.status_code == 403
     assert missing.json()["error"]["code"] == "ADMIN_ACCESS_ASSERTION_INVALID"
     assert missing.headers["cache-control"] == "no-store"
+
+
+def test_admin_authentication_is_offloaded_from_event_loop(monkeypatch) -> None:
+    calls: list[object] = []
+    original = admin_control_plane.run_in_threadpool
+
+    async def recording_run_in_threadpool(func, *args, **kwargs):
+        calls.append(func)
+        return await original(func, *args, **kwargs)
+
+    monkeypatch.setattr(
+        admin_control_plane,
+        "run_in_threadpool",
+        recording_run_in_threadpool,
+    )
+    response = TestClient(make_app()).get(
+        "/v1/admin/session",
+        headers=admin_headers(),
+    )
+
+    assert response.status_code == 200
+    assert calls
+    assert getattr(calls[0], "__name__", "") == "authenticate"
 
 
 def test_admin_session_has_common_envelope_and_safe_actor() -> None:
@@ -308,6 +332,34 @@ def test_redaction_removes_headers_jwts_bearers_and_nested_secret_keys() -> None
         metadata={"cookie": "private", "safe": "visible"},
     )
     assert event.to_payload()["metadata"] == {"cookie": "[REDACTED]", "safe": "visible"}
+
+
+
+
+def test_access_jwk_client_uses_bounded_fetch_and_long_lived_cache(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class CapturingJWKClient:
+        def __init__(self, uri: str, **kwargs) -> None:
+            captured["uri"] = uri
+            captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "knowledge_engine.m26_admin_auth.PyJWKClient",
+        CapturingJWKClient,
+    )
+    settings = AdminAccessSettings(
+        team_domain="https://team.cloudflareaccess.com",
+        audience="aud-1",
+        owner_emails=frozenset({"owner@example.com"}),
+    )
+
+    AccessJWTAuthenticator(settings)
+
+    assert captured["uri"] == "https://team.cloudflareaccess.com/cdn-cgi/access/certs"
+    assert captured["cache_keys"] is True
+    assert captured["lifespan"] == 3600
+    assert captured["timeout"] == 5
 
 
 class StaticJWKClient:

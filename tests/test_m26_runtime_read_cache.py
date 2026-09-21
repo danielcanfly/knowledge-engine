@@ -34,6 +34,8 @@ def test_fresh_materialized_observer_never_schedules_refresh(monkeypatch, tmp_pa
     observed = read_cache.materialized_runtime_observer("source")()
 
     assert observed["source_revision"] == "git:" + "a" * 40
+    assert observed["_runtime_read_cache"]["freshness"] == "near_live"
+    assert observed["_runtime_read_cache"]["refreshing"] is False
     assert calls == []
 
 
@@ -54,6 +56,8 @@ def test_stale_materialized_observer_serves_cache_and_singleflight_refreshes(
     observed = read_cache.materialized_runtime_observer("active")()
 
     assert observed["release_id"] == "release-a"
+    assert observed["_runtime_read_cache"]["freshness"] == "stale"
+    assert observed["_runtime_read_cache"]["refreshing"] is True
     assert calls == ["active"]
 
 

@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
+from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -189,7 +190,10 @@ class AdminControlPlaneMiddleware:
             )(scope, receive, send)
             return
         try:
-            actor = self.authenticator.authenticate(headers.get(ACCESS_ASSERTION_HEADER))
+            actor = await run_in_threadpool(
+                self.authenticator.authenticate,
+                headers.get(ACCESS_ASSERTION_HEADER),
+            )
             scope["state"]["admin_actor"] = actor
             if method in _MUTATING:
                 if actor.actor_type != "service" and origin != self.console_origin:

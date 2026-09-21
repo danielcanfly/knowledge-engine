@@ -184,15 +184,24 @@ def materialized_runtime_observer(role: str):
     def observe() -> Mapping[str, Any]:
         payload, age_seconds = _read_materialized_read_cache(role)
         if payload is not None and age_seconds is not None:
-            if age_seconds <= _REFRESH_SECONDS[role]:
-                return payload
-            # A matching materialized snapshot remains safe read evidence even
-            # when old. Serve it immediately and refresh in the background so an
-            # idle operator page never turns a healthy production index into a
-            # synthetic outage. Mutation/finalization authority still uses the
-            # live observers, not this materialized read path.
-            schedule_runtime_refresh(role)
-            return payload
+            stale = age_seconds > _REFRESH_SECONDS[role]
+            refresh_scheduled = False
+            if stale:
+                # A matching materialized snapshot remains safe read evidence even
+                # when old. Serve it immediately and refresh in the background so an
+                # idle operator page never turns a healthy production index into a
+                # synthetic outage. Mutation/finalization authority still uses the
+                # live observers, not this materialized read path.
+                refresh_scheduled = schedule_runtime_refresh(role)
+            with _REFRESH_LOCK:
+                refreshing = refresh_scheduled or role in _REFRESHING
+            result = dict(payload)
+            result["_runtime_read_cache"] = {
+                "freshness": "stale" if stale else "near_live",
+                "age_seconds": round(age_seconds, 3),
+                "refreshing": refreshing,
+            }
+            return result
         schedule_runtime_refresh(role)
         raise RuntimeReadRefreshPending(f"M26_{role.upper()}_READ_REFRESH_PENDING")
 

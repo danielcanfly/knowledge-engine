@@ -414,6 +414,9 @@ def _source_health(
         "source_revision": None,
         "source_identity_digest": None,
         "document_count": None,
+        "read_freshness": "unknown",
+        "refreshing": False,
+        "cache_age_seconds": None,
         "diff_vs_active": None,
         "diff_vs_candidate": None,
         "requires_confirmation": False,
@@ -430,11 +433,19 @@ def _source_health(
     if not isinstance(documents, Sequence) or isinstance(documents, (str, bytes)):
         result["issues"] = ["INDEX_SOURCE_EVIDENCE_INVALID"]
         return result, None
+    cache = (
+        source.get("_runtime_read_cache")
+        if isinstance(source.get("_runtime_read_cache"), Mapping)
+        else {}
+    )
     result.update(
         {
             "source_revision": source.get("source_revision"),
             "source_identity_digest": source.get("source_identity_digest"),
             "document_count": len(documents),
+            "read_freshness": str(cache.get("freshness") or "unknown"),
+            "refreshing": cache.get("refreshing") is True,
+            "cache_age_seconds": cache.get("age_seconds"),
         }
     )
     active_digests = active.get("document_digests") if isinstance(active, Mapping) else None

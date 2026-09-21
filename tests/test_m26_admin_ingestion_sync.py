@@ -7,6 +7,7 @@ from knowledge_engine.m26_admin_ingestion_core import ReadObservation
 from knowledge_engine.m26_admin_ingestion_sync import (
     DeterministicSyncIngestionAdapter,
     SyncBlogRequest,
+    _source_health,
     build_index_health,
     build_sync_plan,
     require_sync_adapter,
@@ -164,6 +165,29 @@ def test_source_revision_change_also_invalidates_destructive_confirmation() -> N
     assert stale.value.code == "ADMIN_INGESTION_STALE_PLAN"
     assert adapter.active_document_digests == {"old": _digest("c")}
     assert adapter.jobs == []
+
+
+def test_source_health_exposes_materialized_refresh_state() -> None:
+    source, _ = _source_health(
+        {
+            "source_revision": "git:" + "a" * 40,
+            "source_identity_digest": "b" * 64,
+            "documents": [],
+            "_runtime_read_cache": {
+                "freshness": "stale",
+                "refreshing": True,
+                "age_seconds": 301.5,
+            },
+        },
+        None,
+        {"document_digests": {}},
+        {},
+        None,
+    )
+
+    assert source["read_freshness"] == "stale"
+    assert source["refreshing"] is True
+    assert source["cache_age_seconds"] == 301.5
 
 
 def test_index_health_never_calls_unknown_dual_store_evidence_healthy() -> None:
