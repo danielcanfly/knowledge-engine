@@ -329,7 +329,7 @@ def _generalized_provider_synthesize(
                 parsed = runtime._parse_compact_provider_result(
                     str(raw.get("text", raw.get("provider_text", "")))
                 )
-            except ValueError:
+            except Exception:
                 calls.append(runtime._compact_call_telemetry(raw, parse_ok=False))
                 raise
             calls.append(runtime._compact_call_telemetry(raw, parse_ok=True))

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +19,7 @@ from scripts.m26_pa7_evidence_privacy_hygiene import (
 )
 from scripts.m26_pa7_named_backend_tunnel import _require_hostname_under_zone
 
+import knowledge_engine.m26_aq_semantic_contract as semantic_runtime
 import knowledge_engine.m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_aq_semantic_contract import runtime_contract_identity
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import LocalDenseProjectionChannel
@@ -44,110 +44,27 @@ from knowledge_engine.m26_production_promotion_closure import (
     verify_self_digest,
 )
 from tests.m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
+from tests.test_m26_pa_7_arbitrary_query_runtime import (
+    ExactSpanProvider as CanonicalExactSpanProvider,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 PILOT = ROOT / "pilot" / "m26"
 SCHEMAS = ROOT / "schemas"
 OWNER_SUBJECT_HASH = "93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b"
 FINAL_MANIFEST_SELF_SHA256 = (
-    "8929fbf98db8faae848bc72c4da28bc7d0ad30d56396a2821df1500e1c1a994e"
+    "74ddf5470da172822a86f80336cdcc1dc86af08bab7a7a08a7cc1c23354655e8"
 )
 
 
 @pytest.fixture(autouse=True)
 def _full_production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        runtime_module,
-        "load_production_answer_bundle",
-        lambda store=None: synthetic_full_production_answer_bundle(),
-    )
+    def bundle_loader(store=None):
+        del store
+        return synthetic_full_production_answer_bundle()
 
-
-class ExactSpanProvider:
-    def __init__(self) -> None:
-        self.calls = 0
-        self.cost = Decimal("0")
-
-    def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
-        self.calls += 1
-        self.cost += Decimal("0.00001")
-        task = _task(payload)
-        return {
-            "call_class": call_class,
-            "cost_usd": "0.00001",
-            "latency_ms": 5,
-            "response_id": f"final-web-fixture-{self.calls}",
-            "text": json.dumps(_multi_evidence_answer(task)),
-            "usage": {"input_tokens": 100, "output_tokens": 20},
-        }
-
-
-def _task(payload: dict[str, Any]) -> dict[str, Any]:
-    message = payload["messages"][0]["content"]
-    text = message[0]["text"] if isinstance(message, list) else message
-    return json.loads(text)
-
-
-def _first_sentence(passage: str) -> str:
-    for delimiter in (". ", "\n"):
-        if delimiter in passage:
-            return passage.split(delimiter, 1)[0].strip() + delimiter.strip()
-    return passage[:160].strip()
-
-
-def _multi_evidence_answer(task: dict[str, Any]) -> dict[str, Any]:
-    evidence = task["evidence_bundle"]
-    intent = task["intent_class"]
-    relation = None
-    refs: list[dict[str, str]] = []
-    role = "direct"
-    if intent in {"cross_document_comparison", "complementary_synthesis"}:
-        role = "relationship"
-        relation = "contrasts_with" if intent == "cross_document_comparison" else "complements"
-        refs = [_support_ref(item) for item in _passage_items(evidence)[:2]]
-    elif intent == "graph_relationship":
-        role = "relationship"
-        relation = "depends_on"
-        graph_edge = [item for item in evidence if item["evidence_type"] == "graph_edge"][0]
-        refs = [
-            _support_ref(graph_edge),
-            *[_support_ref(item) for item in _passage_items(evidence)[:2]],
-        ]
-    elif intent == "provenance_source_trace":
-        role = "provenance"
-        refs = [_support_ref(_passage_items(evidence)[0])]
-        refs.append(
-            _support_ref([item for item in evidence if item["evidence_type"] == "provenance"][0])
-        )
-    elif intent == "temporal_conflict":
-        role = "temporal"
-        relation = "precedes"
-        refs = [
-            _support_ref(item)
-            for item in evidence
-            if item["evidence_type"] == "temporal_record"
-        ][:2]
-    else:
-        refs = [_support_ref(_passage_items(evidence)[0])]
-    return {
-        "status": "answer_candidate",
-        "relation": relation,
-        "selected_evidence_ids": [item["evidence_id"] for item in evidence],
-        "claims": [{"claim_id": "claim_1", "claim_role": role, "support_refs": refs}],
-        "abstention_reason": None,
-    }
-
-
-def _passage_items(evidence: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [item for item in evidence if item["evidence_type"] == "passage"]
-
-
-def _support_ref(item: dict[str, Any]) -> dict[str, str]:
-    return {
-        "evidence_id": item["evidence_id"],
-        "locator_id": item["locator_id"],
-        "exact_quote": _first_sentence(item["text"]),
-    }
+    monkeypatch.setattr(runtime_module, "load_production_answer_bundle", bundle_loader)
+    monkeypatch.setattr(semantic_runtime, "load_production_answer_bundle", bundle_loader)
 
 
 def _schema_errors(schema_name: str, value: dict[str, Any]) -> list[str]:
@@ -456,7 +373,7 @@ def test_security_or_unsupported_formal_failures_remain_blocking() -> None:
 def test_final_web_product_readiness_fixture_receipt_satisfies_a26_to_a53(
     tmp_path: Path,
 ) -> None:
-    provider = ExactSpanProvider()
+    provider = CanonicalExactSpanProvider()
     receipt = run_final_web_product_readiness(
         root=ROOT,
         gate=load_json(PILOT / "m26-pa-7-corrected-resolved-production-gate.json"),
@@ -538,133 +455,34 @@ def test_oracle_backend_image_includes_m26_readonly_pilot_artifacts() -> None:
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert "COPY pilot ./pilot" in dockerfile
-    assert "knowledge_engine.api:app" in dockerfile
+    assert "knowledge_engine.m26_console_api:app" in dockerfile
 
 
 def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     workflow = (
-        ROOT / ".github/workflows/m26-pa-7-final-web-product-readiness.yml"
+        ROOT / ".github/workflows/m26-pa7-explicit-backend-redeploy.yml"
     ).read_text(encoding="utf-8")
 
-    assert "deploy_and_runtime_formal" in workflow
     assert "workflow_dispatch:" in workflow
-    assert (
-        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
-        in workflow
-    )
-    assert '"src/knowledge_engine/m26_pa7_arbitrary_query_runtime.py"' in workflow
-    assert '"tests/test_m26_pa_7_arbitrary_query_runtime.py"' in workflow
-    assert '"scripts/m26_pa7_access_browser_session_contract.py"' in workflow
-    assert '"tests/test_m26_pa7_access_browser_session_contract.py"' in workflow
-    assert "scripts/m26_pa7_access_browser_session_contract.py inspect" in workflow
-    assert "access-browser-session-contract.json" in workflow
-    assert "Access browser-session contract summary" in workflow
-    assert "same_site_cookie_attribute" in workflow
-    assert "path_cookie_attribute" in workflow
-    assert "path_cookie_attribute_effective" in workflow
-    assert "path_cookie_attribute_raw_class" in workflow
-    assert "path_specific_overlap_counts" in workflow
-    assert "src/knowledge_engine/m23_cloudflare_qdrant.py" in workflow
-    assert "tests/test_m23_5_cloudflare_qdrant.py" in workflow
+    assert "concurrency:" in workflow
+    assert "group: m26-pa7-oracle-backend-production-" in workflow
+    assert "cancel-in-progress: false" in workflow
+    assert "jobs:" in workflow
+    assert "  verify:" in workflow
+    assert "  redeploy_backend:" in workflow
+    assert "needs: verify" in workflow
+    assert "github.event_name == 'push' && github.ref == 'refs/heads/main'" in workflow
+    assert "actions/checkout@v4" in workflow
+    assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"' in workflow
     assert "scripts/configure_oracle_ssh.sh" in workflow
-    assert "M26_QUERY_BACKEND_TOKEN" in workflow
-    assert "M26_QUERY_BACKEND_URL" in workflow
-    assert "M26_QUERY_BACKEND_TUNNEL_HOSTNAME" in workflow
-    assert "M26_QUERY_BACKEND_TUNNEL_NAME" in workflow
-    assert "scripts/m26_pa7_named_backend_tunnel.py ensure" in workflow
-    assert "scripts/m26_pa7_durable_backend_origin.py oracle-https" in workflow
-    assert "scripts/m26_pa7_durable_backend_origin.py cloudflare-dns-a" in workflow
-    assert "scripts/m26_pa7_durable_backend_origin.py wildcard-dns" in workflow
-    assert "--suffix nip.io" in workflow
-    assert "backend-named-tunnel.json" in workflow
-    assert "backend-cloudflare-dns-a-origin.json" in workflow
-    assert "backend-cloudflare-dns-a-unavailable.json" in workflow
-    assert "backend-wildcard-dns-origin.json" in workflow
-    assert "backend-oracle-https-origin.json" in workflow
-    assert "M26_BACKEND_ORIGIN_CLASS" in workflow
-    assert "cloudflare_dns_a_to_oracle_https_reverse_proxy" in workflow
-    assert "seq 2 180" in workflow
-    assert "--connect-timeout 5 --max-time 15" in workflow
-    assert "backend-https-origin-diagnostic.json" in workflow
-    assert "raw_log_recorded" in workflow
-    assert "legacy-oracle-https-port-handoff.json" in workflow
-    assert "M26_LEGACY_ORACLE_HTTPS_PORT_OWNER_STOPPED" in workflow
-    assert "legacy-oracle-https-port-owner-rollback.log" in workflow
-    assert "oracle-https-port-handoff.json" in workflow
-    assert "knowledge-engine-m26-pa7-oracle-https-port-handoff/v1" in workflow
-    assert "non_docker_owner_classes" in workflow
-    assert "system_caddy" in workflow
-    assert "system_nginx" in workflow
-    assert "system_apache2" in workflow
-    assert "system_httpd" in workflow
-    assert "raw_system_service_name_recorded" in workflow
-    assert "stopped_system_service_count" in workflow
-    assert "system_service_owner_records" in workflow
-    assert "M26_ORACLE_SYSTEM_WEB_PORT_OWNER_STOPPED" in workflow
-    assert "oracle-system-web-port-handoff-rollback.log" in workflow
-    assert "raw_listener_recorded" in workflow
-    assert "raw_pid_recorded" in workflow
-    assert "M26_ORACLE_HTTPS_PORT_HANDOFF_STOPPED" in workflow
-    assert "oracle-https-port-handoff-rollback.log" in workflow
-    assert '["sudo", "-n", "ss", "-H", "-ltnp"]' in workflow
-    assert '["ss", "-H", "-ltnp"]' in workflow
-    assert "system-caddy-origin-binding.json" in workflow
-    assert "knowledge-engine-m26-pa7-system-caddy-origin-binding/v1" in workflow
-    assert "raw_snippet_recorded" in workflow
-    assert "M26_SYSTEM_CADDY_ORIGIN_DEPLOYED" in workflow
-    assert "M26_BACKEND_HTTPS_PROXY_MODE=system_caddy" in workflow
-    assert "journalctl -u caddy" in workflow
-    assert "system-caddy-origin-rollback.log" in workflow
-    assert "m26-pa7-backend-tunnel" in workflow
-    assert "m26-pa7-backend-https-origin" in workflow
-    assert "caddy:2-alpine" in workflow
-    assert "cloudflare/cloudflared:latest" in workflow
-    assert "m26-pa7-oracle-backend-production-${{ github.ref }}" in workflow
-    assert "wrangler@4.111.0 pages secret put" in workflow
-    assert "wrangler@4.111.0 pages deploy" in workflow
-    assert "final_formal_query_specs()[:9]" in workflow
-    assert "live_final_runtime_rows_passed_awaiting_owner_browser_e2e" in workflow
-    assert "live_final_runtime_rows_failed" in workflow
-    assert (
-        "hard_integration_passed_with_historical_formal_bank_"
-        "diagnostics_awaiting_owner_browser_e2e"
-    ) in workflow
-    assert "historical_formal_bank_diagnostic_summary" in workflow
-    assert "historical_formal_row_results_rewritten" in workflow
-    assert "canonical_product_authority" in workflow
-    assert "hard_post_merge_integration_checks" in workflow
-    assert "failed_row" in workflow
-    assert "raw_provider_payload_recorded" in workflow
-    assert "raw_answer_text_recorded" in workflow
-    assert "duplicate_live_guard_status" in workflow
-    assert "public-api-denial" in workflow
-    assert "public-api-denial-sanitized.json" in workflow
-    assert "public-api-denial.headers" not in workflow
-    assert "public-api-denial.body" not in workflow
-    assert "m26_pa7_evidence_privacy_hygiene.py public-denial" in workflow
-    assert "m26_pa7_evidence_privacy_hygiene.py scan" in workflow
-    assert "evidence-privacy-scan.json" in workflow
-    assert "steps.privacy_scan.outcome == 'success'" in workflow
-    assert "durable backend origin" in workflow
-    assert "backend-origin-contract.json" in workflow
-    assert "backend_origin_must_use_https" in workflow
-    assert "backend_origin_hostname_required" in workflow
-    assert "trycloudflare_quick_tunnel_forbidden" in workflow
-    assert 'hostname == "trycloudflare.com"' in workflow
-    assert 'hostname.endswith(".trycloudflare.com")' in workflow
-    assert "raw_backend_origin_recorded" in workflow
-    assert "trycloudflare.com" in workflow
-    assert "backend-quick-tunnel" not in workflow
-    assert "cloudflared tunnel --no-autoupdate --url" not in workflow
-    assert 'export M26_QUERY_BACKEND_ORIGIN="$backend_origin"' in workflow
-    assert 'export NEW_PAGES_DEPLOYMENT_ID="$value"' in workflow
-    assert 'test "$new_pages_deployment_id" != "$PREVIOUS_PAGES_DEPLOYMENT_ID"' in workflow
-    assert "health_attempts" in workflow
-    assert "origin_ca_rsa_root.pem" in workflow
-    assert "origin_ca_ecc_root.pem" in workflow
-    assert "91a8a5567efa6bf941162aa806b3ba476aaddf7867640e53053b35fb225a5dae" in workflow
-    assert "ca56c5b29918faf79046b1c1726c35d7715951a35445b2e63f56ea5a70b7af9c" in workflow
-    assert "--insecure" not in workflow
+    assert "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA'" in workflow
+    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" in workflow
+    assert "backend-owner-smoke.json" in workflow
+    assert '"deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"]' in workflow
+    assert '"health_build_sha"' in workflow
+    assert '"query_runtime_build_sha"' in workflow
+    assert "Fail if backend smoke failed" in workflow
+    assert "if smoke.get('status') != 'pass':" in workflow
 
 
 def test_access_redirect_repair_workflow_enforces_cookie_contract() -> None:

@@ -39,7 +39,7 @@
     "secret_persistence": true
   },
   "formal_test_contract_self_sha256": "098bf0a450bfb118c53aec08e7772249083b3a1ae696447d10413053a3fc5b51",
-  "formal_test_manifest_self_sha256": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9",
+  "formal_test_manifest_self_sha256": "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396",
   "implementation": {
     "base_sha": "34204820c362571ff62ff0824ad0a31fd3457559",
     "expected_head_merge": true,
@@ -91,7 +91,7 @@
     "target_state_digest": "8f12d290c43c316a955bbac8acf0d77cc8840e1015dc446d42130bf4efb5774d"
   },
   "schema_version": "knowledge-engine-m26-pa-7-corrective-resolved-production-gate/v1",
-  "self_sha256": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6",
+  "self_sha256": "0921a5e31971bc754b3dfc0fbc78fb17321cb6f8ee4da485f3f1b3854fe7de9a",
   "slo_thresholds": {
     "answerable_grounded_pass_rate_minimum": 0.8,
     "citation_locator_validity_required": 1.0,

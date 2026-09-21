@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from typing import Any
 
 import pytest
@@ -55,6 +57,63 @@ def _restore(previous_sink: Any, previous_attempt: Any) -> None:
     truth._TLS.attempt = previous_attempt  # noqa: SLF001
 
 
+def test_plain_import_does_not_rebind_shared_process_globals() -> None:
+    code = """
+import knowledge_engine.m26_ask_api as ask
+import knowledge_engine.m26_pa7_arbitrary_query_runtime as legacy
+import knowledge_engine.m26_public_api as public_api
+
+build_provider = ask.build_provider_routing_client
+verify = legacy._verify_multi_evidence_provider_output
+run_web = public_api.run_owner_query_for_web
+model_events = public_api._model_events_from_dto
+
+import knowledge_engine.m26_public_api_execution_truth as truth
+
+assert truth._INSTALLED is False
+assert ask.build_provider_routing_client is build_provider
+assert legacy._verify_multi_evidence_provider_output is verify
+assert public_api.run_owner_query_for_web is run_web
+assert public_api._model_events_from_dto is model_events
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+
+
+def test_install_and_uninstall_restore_shared_process_globals() -> None:
+    before = (
+        truth.ask_api.build_provider_routing_client,
+        truth.legacy._verify_multi_evidence_provider_output,
+        truth.public_api.run_owner_query_for_web,
+        truth.public_api._model_events_from_dto,
+    )
+    try:
+        truth.install()
+        truth.install()
+        assert truth.ask_api.build_provider_routing_client is truth._build_provider_routing_client
+        assert (
+            truth.legacy._verify_multi_evidence_provider_output
+            is truth._verify_multi_evidence_provider_output
+        )
+        assert truth.public_api.run_owner_query_for_web is truth._run_owner_query_for_web
+        assert truth.public_api._model_events_from_dto is truth._model_events_from_dto
+    finally:
+        truth.uninstall()
+
+    after = (
+        truth.ask_api.build_provider_routing_client,
+        truth.legacy._verify_multi_evidence_provider_output,
+        truth.public_api.run_owner_query_for_web,
+        truth.public_api._model_events_from_dto,
+    )
+    assert after == before
+
+
 def test_truth_filter_blocks_coarse_and_posthoc_execution_events() -> None:
     forwarded: list[dict[str, Any]] = []
     sink = truth._truth_filter(forwarded.append)  # noqa: SLF001
@@ -69,7 +128,7 @@ def test_truth_filter_blocks_coarse_and_posthoc_execution_events() -> None:
     sink({"type": "stage.started", "stage": "retrieval"})
 
     assert forwarded == [{"type": "stage.started", "stage": "retrieval"}]
-    assert truth.public_api._model_events_from_dto({}) == []  # noqa: SLF001
+    assert truth._model_events_from_dto({}) == []  # noqa: SLF001
 
 
 def test_closure_model_events_are_emitted_at_actual_cloudflare_call_boundary() -> None:

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from knowledge_engine import m26_aq_semantic_contract as semantic_contract
 from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
 from knowledge_engine.m26_verified_answer_citation_gate import sha256_bytes
 
@@ -206,6 +207,81 @@ def test_compositional_entity_and_question_shape_facets_coexist() -> None:
     }.issubset(ids)
 
 
+def test_canonical_graph_expansion_gate_is_off_for_ordinary_direct_queries() -> None:
+    assert (
+        semantic_contract._canonical_graph_expansion_allowed(
+            "Explain how harness acceptance components support permission-first execution.",
+            "direct_grounded_knowledge",
+        )
+        is False
+    )
+    assert (
+        semantic_contract._canonical_graph_expansion_allowed(
+            "Explain outside old twenty production retrieval neighbour hydration.",
+            "direct_grounded_knowledge",
+        )
+        is True
+    )
+    assert (
+        semantic_contract._canonical_graph_expansion_allowed(
+            "Compare routers and adaptive planning for permission-first controls.",
+            "cross_document_comparison",
+        )
+        is True
+    )
+
+
+def test_request_boundary_topic_does_not_create_process_boundary_requirement() -> None:
+    temporal_question = (
+        "What changed between source records about request boundary "
+        "and steering controls?"
+    )
+    temporal_requirements = runtime._semantic_requirements(
+        temporal_question,
+        "temporal_conflict",
+    )
+    assert "process_boundary" not in {
+        item.requirement_id for item in temporal_requirements
+    }
+
+    lifecycle_question = (
+        "Why is persisted run state important when a client disconnects before "
+        "a long-running workflow has finished?"
+    )
+    lifecycle_requirements = runtime._semantic_requirements(
+        lifecycle_question,
+        "direct_grounded_knowledge",
+    )
+    assert "process_boundary" in {
+        item.requirement_id for item in lifecycle_requirements
+    }
+
+
+def test_explanatory_visible_semantics_accepts_natural_by_showing_construction() -> None:
+    question = (
+        "How do routers and directed acyclic graphs complement each other "
+        "for permission-first execution?"
+    )
+    requirements = runtime._semantic_requirements(
+        question,
+        "complementary_synthesis",
+    )
+    explanatory = next(
+        item for item in requirements if item.requirement_id == "explanatory_answer"
+    )
+    answer = (
+        "They complement routers by showing which execution steps "
+        "must precede others."
+    )
+
+    assert explanatory.visible_patterns
+    assert semantic_contract.evaluate_visible_semantics(
+        answer,
+        [explanatory],
+        question,
+    ) == []
+
+
 def test_supported_required_facets_use_subset_not_existential_gate() -> None:
     requirements = [
         runtime.SemanticRequirement("facet_a", "A", ("a",), ()),
@@ -260,6 +336,15 @@ def test_model_explanation_cannot_close_material_facet() -> None:
         candidate=candidate,
     )
     assert trace["material_claim_ids_by_facet"]["facet_a"] == []
+
+
+def test_router_token_does_not_false_match_route_requirement() -> None:
+    requirements = runtime._semantic_requirements(
+        "What should a router define for permission-first controls?",
+        "direct_grounded_knowledge",
+    )
+    assert "router_decision" not in {item.requirement_id for item in requirements}
+    assert "routing_constraints" not in {item.requirement_id for item in requirements}
 
 
 def test_support_states_are_selected_evidence_only() -> None:

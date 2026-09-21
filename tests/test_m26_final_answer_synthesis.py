@@ -334,8 +334,8 @@ def test_numbered_corpus_statement_miscast_as_model_explanation_still_fails_clos
 
     assert answer["status"] == "owner_only_safe_abstention"
     assert answer["unsupported_accepted_claims"] == 0
-    assert "UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL" in answer["reason_codes"]
-    assert "UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL" in closure["failures"]
+    assert "NO_SUPPORTED_REQUIRED_FACETS" in answer["reason_codes"]
+    assert "NO_SUPPORTED_REQUIRED_FACETS" in closure["failures"]
 
 
 def test_canonical_path_uses_typed_compact_synthesis_payload() -> None:
@@ -685,11 +685,15 @@ def test_fast_answer_contract_fails_closed_on_incomplete_supported_facets() -> N
         endpoint_proof={"required": False, "matched": False},
     )
 
-    assert [call["call_class"] for call in provider.calls] == ["aq_semantic_closure"]
-    assert len(_synthesis_calls(provider)) == 1
+    assert [call["call_class"] for call in provider.calls] == [
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
+    assert len(_synthesis_calls(provider)) == 2
     assert answer["answer_source"] == "safe_abstention"
-    assert answer["repair_attempted"] is False
+    assert answer["repair_attempted"] is True
     assert "ANSWER_REQUIREMENT_COVERAGE_MISSING" in answer["reason_codes"]
+    assert "COMPACT_PROVIDER_PARSE_FAILED" in answer["reason_codes"]
     assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
 
 

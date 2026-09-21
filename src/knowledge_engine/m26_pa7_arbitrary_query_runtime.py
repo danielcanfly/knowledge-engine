@@ -319,7 +319,13 @@ DEFINITION_PREDICATE_TERMS = {
     "task",
     "tells",
     "tool",
+    "turn",
+    "turning",
+    "turns",
+    "use",
+    "used",
     "uses",
+    "using",
 }
 DEFINITION_CATEGORY_TERMS = {
     "behavior",
@@ -387,6 +393,11 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
             return None
         head = body
         context_modifier = ""
+        if (
+            prefix in {"what is ", "what are ", "what was ", "what were "}
+            and head.endswith(" used for")
+        ):
+            head = head.removesuffix(" used for").strip()
         if prefix.startswith("what does") or prefix.startswith("what do"):
             for marker in (" mean in ", " mean within ", " mean for ", " mean under "):
                 if marker in body:

@@ -840,6 +840,68 @@ def test_controlled_lifecycle_requirements_do_not_attach_to_venture_state_questi
     } & ids
 
 
+def test_parse_exception_preserves_base_provider_call_accounting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Provider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def call(self, _payload: object, call_class: str) -> dict[str, object]:
+            self.calls += 1
+            return {
+                "text": "{}",
+                "call_class": call_class,
+                "usage": {},
+                "cost_usd": "0",
+                "latency_ms": 1,
+            }
+
+    requirement = SemanticRequirement(
+        requirement_id="alpha_boundary",
+        instruction="State the alpha boundary.",
+        evidence_terms=("alpha", "boundary"),
+        visible_patterns=(),
+    )
+    evidence = [
+        {
+            "evidence_id": "e1",
+            "evidence_type": "passage",
+            "source_id": "source-1",
+            "source_identity": "source-1",
+            "locator_id": "locator-1",
+            "title": "Alpha boundary",
+            "section_title": "Boundary",
+            "passage_text": "Alpha has a defined boundary.",
+        }
+    ]
+    provider = Provider()
+
+    def fail_parse(_text: str) -> dict[str, object]:
+        raise KeyError("missing compact field")
+
+    monkeypatch.setattr(closure_runtime, "_parse_compact_provider_result", fail_parse)
+
+    answer, closure = closure_runtime._synthesize_and_verify(
+        question="What is the alpha boundary?",
+        trace_id="base-parse-accounting",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        provider_client=provider,
+        requirements=[requirement],
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert provider.calls == 2
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["provider_call_count"] == 2
+    telemetry = answer["multi_evidence_verification"]["provider_attempt_telemetry"]
+    assert len(telemetry) == 2
+    assert all(item["parse_telemetry"]["parse_ok"] is False for item in telemetry)
+    assert "COMPACT_PROVIDER_PARSE_FAILED" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
 def test_compact_provider_contract_accepts_small_json() -> None:
     parsed = _parse_compact_provider_result(
         json.dumps(

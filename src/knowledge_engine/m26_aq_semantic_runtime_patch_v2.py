@@ -2399,7 +2399,7 @@ def _semantic_answer_text_v2(question: str, requirements: Sequence[Any]) -> str:
     if {"state_machine_authority", "adaptive_replan", "authority_boundary"}.issubset(ids):
         return (
             "The state machine defines the policy and approval authority envelope. "
-            "Adaptive replanning revises remaining work when assumptions change, with "
+            "Together, adaptive replanning revises remaining work when assumptions change, with "
             "those revisions staying within the state-machine policy and approval gates "
             "rather than expanding the replanner's authority."
         )

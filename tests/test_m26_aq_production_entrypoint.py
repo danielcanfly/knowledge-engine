@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 
 EXPECTED_ENTRYPOINT = "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
 
 
 def _assert_import_order(code: str) -> None:
     result = subprocess.run(
-        ["python", "-c", code],
+        [sys.executable, "-c", code],
         check=False,
         capture_output=True,
         text=True,

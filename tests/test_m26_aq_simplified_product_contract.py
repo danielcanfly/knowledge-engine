@@ -33,10 +33,14 @@ def _load_generalized_module() -> ModuleType:
 
 
 def _canonical_runtime(module: ModuleType, expected_sha: str = "sha") -> dict[str, object]:
+    runtime_identity = module.runtime_contract_identity()
     return {
         "build_sha": expected_sha,
         "entrypoint": module.CANONICAL_RUNTIME_ENTRYPOINT,
         "semantic_contract_fingerprint": module.semantic_contract_fingerprint(),
+        "runtime_contract_fingerprint": runtime_identity["runtime_contract_fingerprint"],
+        "downstream_contract_fingerprint": module.provider_neutral_downstream_fingerprint(),
+        "downstream_stage_identity": list(module.PROVIDER_NEUTRAL_DOWNSTREAM_STAGES),
     }
 
 

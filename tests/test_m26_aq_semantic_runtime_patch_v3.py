@@ -72,6 +72,57 @@ def _requirement_ids(question: str) -> set[str]:
     }
 
 
+def test_parse_exception_preserves_provider_call_accounting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Provider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def call(self, _payload: object, call_class: str) -> dict[str, object]:
+            self.calls += 1
+            return {
+                "text": "{}",
+                "call_class": call_class,
+                "usage": {},
+                "cost_usd": "0",
+                "latency_ms": 1,
+            }
+
+    provider = Provider()
+    monkeypatch.setattr(
+        runtime,
+        "_compact_provider_payload",
+        lambda **_kwargs: ({"system": ""}, {}, {}),
+    )
+
+    def fail_parse(_text: str) -> dict[str, object]:
+        raise KeyError("missing compact field")
+
+    monkeypatch.setattr(runtime, "_parse_compact_provider_result", fail_parse)
+
+    answer, closure = patch_v3._generalized_provider_synthesize(
+        runtime=runtime,
+        legacy=legacy,
+        question="What is supported?",
+        trace_id="parse-accounting",
+        intent_class="direct_grounded_knowledge",
+        evidence=[],
+        provider_client=provider,
+        requirements=[],
+        endpoint_proof={"required": False, "matched": False},
+    )
+
+    assert provider.calls == 2
+    assert answer["status"] == "owner_only_safe_abstention"
+    assert answer["provider_call_count"] == 2
+    telemetry = answer["multi_evidence_verification"]["provider_attempt_telemetry"]
+    assert len(telemetry) == 2
+    assert all(item["parse_telemetry"]["parse_ok"] is False for item in telemetry)
+    assert "KeyError" in answer["reason_codes"]
+    assert "SEMANTIC_CLOSURE_FAILED" in closure["failures"]
+
+
 def test_false_premise_prompt_does_not_require_prescribed_opening() -> None:
     question = (
         "A true graph fact says Harness Theory Part 1 precedes Harness Theory Part 2. "

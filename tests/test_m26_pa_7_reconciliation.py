@@ -7,6 +7,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from knowledge_engine.m26_aq_semantic_contract import CANONICAL_RUNTIME_ENTRYPOINT
 from knowledge_engine.m26_production_promotion_closure import (
     CORRECTIVE_FORMAL_TEST_CONTRACT_SELF_SHA256,
     CORRECTIVE_OWNER_AUTHORITY_SELF_SHA256,
@@ -45,15 +46,15 @@ FORMAL_MANIFEST_SELF_SHA256 = (
     "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396"
 )
 CORRECTED_GATE_SELF_SHA256 = (
-    "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
+    "0921a5e31971bc754b3dfc0fbc78fb17321cb6f8ee4da485f3f1b3854fe7de9a"
 )
 CORRECTED_TRIGGER_SELF_SHA256 = (
-    "c278f66e434290eb4f8cd834588fb4e4b315a0368ad55b90a148e33e2521162e"
+    "5ee5b70f7a445e2c24cf64c6ba778688fbdfb5ccd7300336e6f5d02cdae75167"
 )
 ACCEPTANCE_SELF_SHA256 = (
-    "5358898627ededadd825af8794b27ee8be40d1bb5fb9ffd47e403c89909910ba"
+    "48cef8a01f03662b34ded3f4e948006eef4b3cf36a77cb1d61d543cef443d409"
 )
-CLOSURE_SELF_SHA256 = "8557ee70c9693634c20e353bfd82a64088346369ef0a7eba39e4f044d82319f3"
+CLOSURE_SELF_SHA256 = "15d21bc3160f275443f6d0f7549dbcab32720cdaf9ecca7cb953b66145fc686f"
 PR_A_HEAD_SHA = "3d965192242406c2af721a2ffe27e394d624e099"
 PR_A_MERGE_SHA = "23413d9336a958fb5915068bc2e5a1ea34f28f57"
 PR_B_HEAD_SHA = "c1e8b4125b8976f7696d26c8822244e353ab59c6"
@@ -211,6 +212,9 @@ def test_corrected_formal_metrics_bound_product_readiness() -> None:
     assert evidence["formal"]["answerable_count"] == 6
     assert evidence["formal"]["answerable_provider_invoked_count"] == 6
     assert evidence["formal"]["runtime_path"] == (
+        "knowledge_engine.m26_pa7_arbitrary_query_runtime.run_owner_arbitrary_query"
+    )
+    assert CANONICAL_RUNTIME_ENTRYPOINT == (
         "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
     )
     assert evidence["formal"]["temporal_conflict_outcome"] == (

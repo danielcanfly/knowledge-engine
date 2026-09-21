@@ -73,7 +73,7 @@
       "additionalProperties": true,
       "properties": {
         "self_sha256": {
-          "const": "c278f66e434290eb4f8cd834588fb4e4b315a0368ad55b90a148e33e2521162e"
+          "const": "5ee5b70f7a445e2c24cf64c6ba778688fbdfb5ccd7300336e6f5d02cdae75167"
         }
       },
       "required": [
@@ -109,7 +109,7 @@
       "additionalProperties": true,
       "properties": {
         "self_sha256": {
-          "const": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
+          "const": "0921a5e31971bc754b3dfc0fbc78fb17321cb6f8ee4da485f3f1b3854fe7de9a"
         }
       },
       "required": [

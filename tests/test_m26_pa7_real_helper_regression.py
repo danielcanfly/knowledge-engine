@@ -10,7 +10,7 @@ from m26_answer_bundle_fixture import synthetic_full_production_answer_bundle
 
 
 class SlowDenseChannel:
-    def __init__(self, delay_seconds: float = 0.2) -> None:
+    def __init__(self, delay_seconds: float = 5.0) -> None:
         self.delay_seconds = delay_seconds
 
     def search(self, **_kwargs: Any) -> dict[str, Any]:
@@ -39,7 +39,10 @@ def test_real_helper_lexical_primary_retrieval_no_crash_and_dense_fail_soft(
     )
     elapsed_ms = int((time.monotonic() - started) * 1000)
 
-    assert elapsed_ms < 500
+    # Protect fail-soft behavior without coupling the assertion to the
+    # growing synthetic lexical corpus or sub-100ms scheduler precision. A
+    # broken dense deadline would wait for the full 5-second backend delay.
+    assert elapsed_ms < 4_000
     assert lexical["retrieval"]["relation_aware_expansion_enabled"] is False
     assert lexical["retrieval"]["relation_aware_expansion_used"] is False
     assert dense["backend_identity"]["degraded"] is True

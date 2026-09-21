@@ -215,8 +215,10 @@ def test_index_health_keeps_authoritative_read_evidence_out_of_admin_http_error(
     assert response.status_code == 200
     payload = response.json()
     assert payload.get("error", {}).get("code") != "ADMIN_HTTP_ERROR"
-    assert payload["data"]["active_production_index"]["release_id"] == RELEASE_ID
-    assert payload["data"]["active_production_index"]["status"] == "healthy"
+    active = payload["data"]["active_production_index"]
+    assert active["release_id"] == RELEASE_ID
+    assert active["status"] == "unknown"
+    assert "INDEX_HEALTH_AUDIT_EVIDENCE_UNAVAILABLE" in active["issues"]
 
 
 def test_mutation_disabled_runtime_still_composes_valid_read_authority(

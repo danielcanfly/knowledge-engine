@@ -8,15 +8,17 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from knowledge_engine import m26_console_api as console_module
+from knowledge_engine import m26_public_api as public_api_module
 from knowledge_engine import m26_translation_gateway_public_api as public_gateway_module
-from knowledge_engine.m26_production_api import app as production_app
 
 
 def _set_non_staging_public_env(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "development")
     monkeypatch.setenv("AUTH_MODE", "disabled")
     monkeypatch.setenv("OBJECT_STORE_BACKEND", "filesystem")
-    monkeypatch.setenv("STAGING_M26_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setenv("KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH", "owner-hash")
+    monkeypatch.setenv("M26_PUBLIC_IP_HMAC_SECRET", "test-only-hmac-secret")
 
 
 def _event_from_sse(block: str) -> dict[str, Any] | None:
@@ -51,33 +53,66 @@ def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse
     _set_non_staging_public_env(monkeypatch)
     monkeypatch.setattr(public_gateway_module, "load_production_answer_bundle", lambda: None)
 
-    def fake_run_owner_translation_gateway_for_web(**_: object) -> dict[str, object]:
+    def fake_run_owner_query_for_web(**_: object) -> dict[str, object]:
         return {
+            "status": "owner_only_cited_answer",
+            "safe_abstention": False,
             "answer_text": "A grounded supported answer.",
-            "citation_count": 1,
-            "source_count": 1,
-            "translation_gateway": {
-                "translation_applied": True,
-                "invariant_check_result": "pass",
-                "provider": "Google",
+            "citations": [
+                {
+                    "citation_id": "claim_1_ref_1",
+                    "claim_id": "claim_1",
+                    "source_identity": "source_public_1",
+                    "section_id": "section_1",
+                    "concept_id": "concept_1",
+                    "release_id": "release_1",
+                    "runtime_owned_locator": True,
+                }
+            ],
+            "sources": [
+                {
+                    "source_identity": "source_public_1",
+                    "source_id": "source_1",
+                    "section_ids": ["section_1"],
+                    "concept_ids": ["concept_1"],
+                    "citation_numbers": [1],
+                }
+            ],
+            "answer_claims": [
+                {
+                    "claim_id": "claim_1",
+                    "claim_role": "direct",
+                    "citation_ids": ["claim_1_ref_1"],
+                    "support_ref_count": 1,
+                }
+            ],
+            "provider_routing": {
+                "closure_provider_initial": "cloudflare",
+                "closure_provider_final": "cloudflare",
+                "fallback_used": False,
+                "fallback_reason": "NONE",
+                "provider_attempts": [],
             },
+            "reason_codes": [],
         }
 
     monkeypatch.setattr(
-        public_gateway_module,
-        "run_owner_translation_gateway_for_web",
-        fake_run_owner_translation_gateway_for_web,
+        public_api_module,
+        "run_owner_query_for_web",
+        fake_run_owner_query_for_web,
     )
 
-    client = TestClient(production_app)
+    client = TestClient(console_module.create_app())
 
     health = client.get("/v1/answers/health")
     assert health.status_code == 200
-    surface = health.json()["surface"]
-    assert surface["canonical_answers_url"].endswith("/v1/answers")
-    assert surface["canonical_health_url"].endswith("/v1/answers/health")
-    assert surface["future_production_answers_url"] == "https://api.danielcanfly.com/v1/answers"
-    assert surface["legacy_api_rag_surface_canonical"] is False
+    health_payload = health.json()
+    assert health_payload["schema_version"] == "danielcanfly-answers-health/v1"
+    assert health_payload["ok"] is True
+    assert health_payload["answers_url"] == "/v1/answers"
+    assert health_payload["backend"]["entrypoint"] == (
+        "knowledge_engine.m26_aq_semantic_contract.run_owner_arbitrary_query"
+    )
 
     with client.stream(
         "POST",
@@ -88,11 +123,10 @@ def test_production_entrypoint_exposes_canonical_answers_surface_and_streams_sse
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert "event: meta" in text
-    assert 'route":"/v1/answers"' in text
-    assert "event: progress" in text
-    assert "event: answer" in text
-    assert "event: done" in text
+    assert "event: request.accepted" in text
+    assert '"type":"request.accepted"' in text
+    assert "event: answer.completed" in text
+    assert '"type":"answer.completed"' in text
     assert "A grounded supported answer." in text
 
     assert client.get("/api/rag/answers/health").status_code == 404

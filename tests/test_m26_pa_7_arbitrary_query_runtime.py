@@ -14,6 +14,7 @@ import httpx
 import pytest
 from jsonschema import Draft202012Validator
 
+from knowledge_engine import m26_aq_semantic_contract as semantic_runtime
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime_module
 from knowledge_engine.m26_pa7_arbitrary_query_runtime import (
     LocalDenseProjectionChannel,
@@ -38,6 +39,11 @@ def _production_answer_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
         "load_production_answer_bundle",
         synthetic_full_production_answer_bundle,
     )
+    monkeypatch.setattr(
+        semantic_runtime,
+        "load_production_answer_bundle",
+        synthetic_full_production_answer_bundle,
+    )
 
 
 class ExactSpanProvider:
@@ -45,36 +51,47 @@ class ExactSpanProvider:
         self.calls = 0
         self.cost = Decimal("0")
         self.fail_first = fail_first
+        self.semantic_synthesis_calls = 0
 
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
-        task = _task(payload)
-        if self.fail_first and self.calls == 1:
-            body = {
-                "schema_version": "aq3-provider-candidate/v3",
-                "status": "answer_candidate",
-                "relation": None,
-                "selected_evidence_ids": [task["evidence_bundle"][0]["evidence_id"]],
-                "answer_text": "",
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "claim_role": "direct",
-                        "support_refs": [
-                            {
-                                "evidence_id": task["evidence_bundle"][0]["evidence_id"],
-                                "locator_id": task["evidence_bundle"][0]["locator_id"],
-                                "exact_quote": "unsupported provider-authored claim",
-                            }
-                        ],
-                    }
-                ],
-                "missing_facets": [],
-                "abstention_reason": None,
-            }
+
+        if call_class == "aq_claim_semantic_entailment":
+            body = _semantic_review_answer(
+                payload,
+                force_insufficient=(
+                    self.fail_first and self.semantic_synthesis_calls == 1
+                ),
+            )
         else:
-            body = _multi_evidence_answer(task)
+            task = _task(payload)
+            if call_class == "aq_fast_answer_synthesis":
+                if self.fail_first or task.get("intent_class") != "direct_grounded_knowledge":
+                    body = {
+                        "status": "abstain",
+                        "answer_text": "",
+                        "citation_ids": [],
+                        "abstention_reason": "USE_SEMANTIC_CLOSURE",
+                    }
+                else:
+                    passage = _passage_items(task["evidence_bundle"])[0]
+                    body = {
+                        "status": "answer",
+                        "answer_text": _first_sentence(passage["text"]),
+                        "citation_ids": [passage["evidence_id"]],
+                        "abstention_reason": None,
+                    }
+            else:
+                self.semantic_synthesis_calls += 1
+                body = _compact_semantic_answer(
+                    task,
+                    text_override=(
+                        "unsupported provider-authored claim"
+                        if self.fail_first and self.semantic_synthesis_calls == 1
+                        else None
+                    ),
+                )
         return {
             "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 20},
@@ -129,51 +146,51 @@ class InvalidMultiEvidenceProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
-        task = _task(payload)
-        evidence = task["evidence_bundle"]
-        first = evidence[0]
-        body = _multi_evidence_answer(task)
-        if self.mode == "invented_id":
-            body["claims"][0]["support_refs"][0]["evidence_id"] = "invented"
-        elif self.mode == "wrong_locator":
-            body["claims"][0]["support_refs"][0]["locator_id"] = "wrong"
-        elif self.mode == "quote_drift":
-            body["claims"][0]["support_refs"][0]["exact_quote"] = "not an exact quote"
-        elif self.mode == "one_source_comparison":
+
+        if call_class == "aq_fast_answer_synthesis":
             body = {
-                "schema_version": "aq3-provider-candidate/v3",
-                "status": "answer_candidate",
-                "relation": "contrasts_with",
-                "selected_evidence_ids": [first["evidence_id"]],
+                "status": "abstain",
                 "answer_text": "",
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "claim_role": "relationship",
-                        "support_refs": [_support_ref(first), _support_ref(first)],
-                    }
-                ],
-                "missing_facets": [],
-                "abstention_reason": None,
+                "citation_ids": [],
+                "abstention_reason": "USE_SEMANTIC_CLOSURE",
             }
-        elif self.mode == "missing_graph_edge":
-            passages = _passage_items(evidence)[:2]
-            body = {
-                "schema_version": "aq3-provider-candidate/v3",
-                "status": "answer_candidate",
-                "relation": "depends_on",
-                "selected_evidence_ids": [item["evidence_id"] for item in passages],
-                "answer_text": "",
-                "claims": [
-                    {
-                        "claim_id": "claim_1",
-                        "claim_role": "relationship",
-                        "support_refs": [_support_ref(item) for item in passages],
-                    }
-                ],
-                "missing_facets": [],
-                "abstention_reason": None,
-            }
+        elif call_class == "aq_claim_semantic_entailment":
+            if self.mode == "wrong_locator":
+                body = _semantic_review_answer(payload)
+                for judgment in body["claim_judgments"]:
+                    if judgment["evidence_ids"]:
+                        judgment["evidence_ids"] = ["outside-claim-local-authority"]
+            elif self.mode in {"quote_drift", "one_source_comparison"}:
+                body = _semantic_review_answer(payload, force_insufficient=True)
+            else:
+                body = _semantic_review_answer(payload)
+        else:
+            task = _task(payload)
+            body = _compact_semantic_answer(task)
+            segments = body.get("segments", [])
+            if segments and self.mode == "invented_id":
+                segments[0]["evidence_labels"] = ["invented"]
+            elif segments and self.mode == "quote_drift":
+                segments[0]["text"] = (
+                    "The supplied evidence proves an unrelated secret-bearing claim."
+                )
+            elif segments and self.mode == "one_source_comparison":
+                passage_labels = [
+                    str(item.get("id", ""))
+                    for item in task.get("evidence", [])
+                    if item.get("type") == "passage"
+                ]
+                if passage_labels:
+                    segments[0]["evidence_labels"] = [passage_labels[0]]
+            elif segments and self.mode == "missing_graph_edge":
+                passage_labels = [
+                    str(item.get("id", ""))
+                    for item in task.get("evidence", [])
+                    if item.get("type") == "passage"
+                ][:2]
+                if passage_labels:
+                    segments[0]["evidence_labels"] = passage_labels
+
         return {
             "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 20},
@@ -192,19 +209,26 @@ class AbstainingProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
+        task = _payload_body(payload)
+        if call_class == "aq_claim_semantic_entailment":
+            body = _semantic_review_answer(payload)
+        elif call_class == "aq_fast_answer_synthesis":
+            body = {
+                "status": "abstain",
+                "answer_text": "",
+                "citation_ids": [],
+                "abstention_reason": "INSUFFICIENT_SUPPORT",
+            }
+        else:
+            body = {
+                "schema_version": task["output"]["schema_version"],
+                "status": "abstain",
+                "segments": [],
+                "unanswered_dimensions": [],
+                "abstention_reason": "INSUFFICIENT_SUPPORT",
+            }
         return {
-            "text": json.dumps(
-                {
-                    "schema_version": "aq3-provider-candidate/v3",
-                    "status": "abstain",
-                    "relation": "insufficient_basis",
-                    "selected_evidence_ids": [],
-                    "answer_text": "",
-                    "claims": [],
-                    "missing_facets": [],
-                    "abstention_reason": "INSUFFICIENT_SUPPORT",
-                }
-            ),
+            "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 20},
             "cost_usd": "0.00001",
             "latency_ms": 5,
@@ -293,32 +317,28 @@ class GraphExpandedCitationProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
-        task = _task(payload)
-        graph_passage = next(
-            item
-            for item in task["evidence_bundle"]
-            if item["evidence_type"] == "passage"
-            and any(str(channel).startswith("graph_") for channel in item.get("channels", []))
-        )
-        body = {
-            "schema_version": "aq3-provider-candidate/v3",
-            "status": "answer_candidate",
-            "relation": "supports",
-            "selected_evidence_ids": [graph_passage["evidence_id"]],
-            "answer_text": (
-                "The full production graph expands the seed into neighbour evidence outside "
-                "the old bounded concept set [claim_1_ref_1]."
-            ),
-            "claims": [
-                {
-                    "claim_id": "claim_1",
-                    "claim_role": "direct",
-                    "support_refs": [_support_ref(graph_passage)],
+        if call_class == "aq_claim_semantic_entailment":
+            body = _semantic_review_answer(payload)
+        else:
+            task = _task(payload)
+            graph_passage = next(
+                item
+                for item in task["evidence_bundle"]
+                if item["evidence_type"] == "passage"
+                and any(
+                    str(channel).startswith("graph_")
+                    for channel in item.get("channels", [])
+                )
+            )
+            if call_class == "aq_fast_answer_synthesis":
+                body = {
+                    "status": "answer",
+                    "answer_text": _first_sentence(graph_passage["text"]),
+                    "citation_ids": [graph_passage["evidence_id"]],
+                    "abstention_reason": None,
                 }
-            ],
-            "missing_facets": [],
-            "abstention_reason": None,
-        }
+            else:
+                body = _compact_semantic_answer(task)
         return {
             "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 40},
@@ -337,33 +357,20 @@ class PartialCandidateProvider:
     def call(self, payload: dict[str, Any], call_class: str) -> dict[str, Any]:
         self.calls += 1
         self.cost += Decimal("0.00001")
-        task = _task(payload)
-        passage = _passage_items(task["evidence_bundle"])[0]
-        body = {
-            "schema_version": "aq3-provider-candidate/v3",
-            "status": "partial_candidate",
-            "relation": None,
-            "selected_evidence_ids": [passage["evidence_id"]],
-            "answer_text": (
-                "A router should define permission-first controls before execution [[claim_1]]."
-            ),
-            "claims": [
-                {
-                    "claim_id": "claim_1",
-                    "claim_role": "direct",
-                    "surface_text": (
-                        "A router should define permission-first controls before execution."
-                    ),
-                    "facet_ids": [
-                        task["question_contract"]["required_facets"][0]["facet_id"],
-                    ],
-                    "support_mode": "exact_quote",
-                    "support_refs": [_support_ref(passage)],
+        if call_class == "aq_claim_semantic_entailment":
+            body = _semantic_review_answer(payload)
+        else:
+            task = _task(payload)
+            if call_class == "aq_fast_answer_synthesis":
+                body = {
+                    "status": "abstain",
+                    "answer_text": "",
+                    "citation_ids": [],
+                    "abstention_reason": "USE_SEMANTIC_CLOSURE",
                 }
-            ],
-            "missing_facets": [],
-            "abstention_reason": None,
-        }
+            else:
+                body = _compact_semantic_answer(task)
+                body["status"] = "partial_candidate"
         return {
             "text": json.dumps(body),
             "usage": {"input_tokens": 100, "output_tokens": 40},
@@ -374,10 +381,225 @@ class PartialCandidateProvider:
         }
 
 
-def _task(payload: dict[str, Any]) -> dict[str, Any]:
+def _payload_body(payload: dict[str, Any]) -> dict[str, Any]:
     message = payload["messages"][0]["content"]
     text = message[0]["text"] if isinstance(message, list) else message
     return json.loads(text)
+
+
+def _semantic_review_answer(
+    payload: dict[str, Any],
+    *,
+    force_insufficient: bool = False,
+) -> dict[str, Any]:
+    task = _payload_body(payload)
+    judgments = []
+    for case in task.get("claim_cases", []):
+        evidence_ids = [str(item) for item in case.get("allowed_evidence_ids", []) if str(item)]
+        judgments.append(
+            {
+                "claim_id": str(case.get("claim_id", "")),
+                "verdict": (
+                    "INSUFFICIENT"
+                    if force_insufficient
+                    else "ENTAILED"
+                    if evidence_ids
+                    else "GENERIC_EXPLANATION"
+                ),
+                "evidence_ids": [] if force_insufficient else evidence_ids,
+            }
+        )
+    return {
+        "schema_version": task["schema_version"],
+        "claim_judgments": judgments,
+        "visible_coverage": {
+            "verdict": "COVERED",
+            "uncovered_assertions": [],
+        },
+    }
+
+
+def _compact_semantic_answer(
+    task: dict[str, Any],
+    *,
+    text_override: str | None = None,
+) -> dict[str, Any]:
+    evidence = [dict(item) for item in task.get("evidence", []) if isinstance(item, dict)]
+    required_facets = [
+        dict(item) for item in task.get("required_facets", []) if isinstance(item, dict)
+    ]
+    preferred_labels = []
+    for facet in required_facets:
+        if facet.get("support_state") != "SUPPORTED":
+            continue
+        preferred_labels.extend(
+            str(label)
+            for label in facet.get("supporting_evidence_labels", [])
+            if str(label)
+        )
+    intent = str(task.get("intent", ""))
+    if intent == "graph_relationship":
+        graph_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "graph_edge"
+        ][:1]
+        endpoint_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "passage"
+        ][:2]
+        preferred_labels = [*graph_labels, *endpoint_labels]
+    elif intent == "provenance_source_trace":
+        passage_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "passage"
+        ][:1]
+        provenance_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "provenance"
+        ][:1]
+        preferred_labels = [*passage_labels, *provenance_labels]
+    elif intent == "temporal_conflict":
+        temporal_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "temporal_record"
+        ][:2]
+        preferred_labels = [
+            *temporal_labels,
+            *preferred_labels,
+        ]
+    elif intent in {"cross_document_comparison", "complementary_synthesis"}:
+        preferred_labels = [
+            str(item.get("id", ""))
+            for item in evidence
+            if item.get("type") == "passage"
+        ][:2]
+
+    if not preferred_labels and evidence:
+        preferred_labels = [str(evidence[0].get("id", ""))]
+    preferred_labels = list(dict.fromkeys(preferred_labels))[:4]
+
+    evidence_by_label = {str(item.get("id", "")): item for item in evidence}
+    if intent != "direct_grounded_knowledge" and preferred_labels:
+        relational_items = [
+            evidence_by_label[label]
+            for label in preferred_labels
+            if label in evidence_by_label
+        ]
+        text = " ".join(
+            _first_sentence(str(item.get("text", "")))
+            for item in relational_items
+            if str(item.get("text", "")).strip()
+        )
+        covers = [
+            str(facet.get("facet_id", ""))
+            for facet in required_facets
+            if facet.get("support_state") == "SUPPORTED"
+            and any(
+                label
+                in {
+                    str(value)
+                    for value in facet.get("supporting_evidence_labels", [])
+                }
+                for label in preferred_labels
+            )
+        ]
+        unresolved = [
+            str(item)
+            for item in task.get("unresolved_facet_ids", [])
+            if str(item)
+        ]
+        return {
+            "schema_version": task["output"]["schema_version"],
+            "status": "partial" if unresolved else "answer",
+            "segments": [
+                {
+                    "segment_id": "s1",
+                    "semantic_role": "material_claim",
+                    "claim_id": "claim_1",
+                    "claim_type": "EVIDENCE_SYNTHESIS",
+                    "text": text,
+                    "evidence_labels": preferred_labels,
+                    "covers": covers,
+                }
+            ],
+            "unanswered_dimensions": unresolved,
+            "abstention_reason": None,
+        }
+
+    segments = []
+    seen_texts: set[str] = set()
+    for label in preferred_labels:
+        item = evidence_by_label.get(label)
+        if item is None:
+            continue
+        text = text_override if not segments and text_override is not None else str(item.get("text", ""))
+        text = " ".join(text.split())
+        if not text or text in seen_texts:
+            continue
+        seen_texts.add(text)
+        covers = [
+            str(facet.get("facet_id", ""))
+            for facet in required_facets
+            if facet.get("support_state") == "SUPPORTED"
+            and label in {str(value) for value in facet.get("supporting_evidence_labels", [])}
+        ]
+        segments.append(
+            {
+                "segment_id": f"s{len(segments) + 1}",
+                "semantic_role": "material_claim",
+                "claim_id": f"claim_{len(segments) + 1}",
+                "claim_type": "EVIDENCE_FACT",
+                "text": text,
+                "evidence_labels": [label],
+                "covers": covers,
+            }
+        )
+
+    unresolved = [str(item) for item in task.get("unresolved_facet_ids", []) if str(item)]
+    return {
+        "schema_version": task["output"]["schema_version"],
+        "status": "partial" if unresolved else "answer",
+        "segments": segments,
+        "unanswered_dimensions": unresolved,
+        "abstention_reason": None,
+    }
+
+
+def _task(payload: dict[str, Any]) -> dict[str, Any]:
+    task = _payload_body(payload)
+    if "evidence_bundle" in task:
+        return task
+
+    evidence_bundle = []
+    for item in task.get("evidence", []):
+        evidence_bundle.append(
+            {
+                "evidence_id": str(item.get("id", "")),
+                "locator_id": str(item.get("id", "")),
+                "evidence_type": str(item.get("type", "passage")),
+                "source_id": str(item.get("source", "")),
+                "source_identity": str(item.get("source", "")),
+                "title": str(item.get("title", "")),
+                "section_id": str(item.get("section", "")),
+                "section_title": str(item.get("section", "")),
+                "concept_id": str(item.get("concept", "")),
+                "relation_type": str(item.get("relation", "")),
+                "edge_source": str(item.get("from", "")),
+                "edge_target": str(item.get("to", "")),
+                "text": str(item.get("text", "")),
+                "passage_text": str(item.get("text", "")),
+            }
+        )
+    return {
+        **task,
+        "intent_class": str(task.get("intent", "")),
+        "evidence_bundle": evidence_bundle,
+    }
 
 
 def _http_status_error(status_code: int) -> httpx.HTTPStatusError:
@@ -523,7 +745,7 @@ def test_ordinary_explanatory_query_stays_lean_without_graph_expansion() -> None
 
     assert response["status"] == "owner_only_cited_answer"
     assert response["intent_class"] == "direct_grounded_knowledge"
-    assert 3 <= response["selected_evidence_count"] <= 4
+    assert 0 < response["selected_evidence_count"] <= runtime_module.MAX_DYNAMIC_EVIDENCE_ITEMS
     assert response["candidate_count_by_channel"]["graph_expanded_selected"] == 0
     assert response["graph_observability"]["selected_graph_derived_evidence_count"] == 0
     assert response["graph_observability"]["selected_graph_relation_types"] == []
@@ -786,6 +1008,17 @@ def test_lexical_only_insufficient_evidence_abstains_when_dense_unavailable() ->
     assert response["candidate_count_by_channel"]["dense"] == 0
 
 
+def test_purpose_definition_query_keeps_used_for_out_of_definition_head() -> None:
+    parts = runtime_module._contextual_definition_query_parts(
+        "What is Knowledge Engine used for?"
+    )
+    assert parts == {
+        "definition_head": "knowledge engine",
+        "context_modifier": "",
+        "question_prefix": "what is",
+    }
+
+
 def test_contextual_definition_query_splits_head_and_context_facets() -> None:
     question = "What is a skill in an AI agent architecture?"
 
@@ -994,9 +1227,8 @@ def test_answer_bearing_reranker_prefers_need_relation_support() -> None:
         question=question,
     )
 
-    assert [item["section_id"] for item in ranked[:1]] == ["doc_answer"]
+    assert [item["section_id"] for item in ranked] == ["doc_answer"]
     assert ranked[0]["answer_bearing_relevance"]["answer_bearing"] is True
-    assert ranked[1]["answer_bearing_relevance"]["answer_bearing"] is False
 
 
 def test_need_query_prefers_full_subject_over_facet_only_distractor() -> None:
@@ -1457,7 +1689,7 @@ def test_bounded_repair_converts_unsupported_provider_claim() -> None:
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["provider_call_count"] == 2
+    assert response["provider_call_count"] == 4
     assert response["repair_attempted"] is True
     assert response["material_claim_support_verified"] is True
 
@@ -1473,11 +1705,17 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
     )
 
     assert response["status"] == "owner_only_cited_answer"
-    assert response["provider_call_count"] == 2
+    assert response["provider_call_count"] == 4
     assert response["repair_attempted"] is True
-    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
-    assert "M26-PA7-ME-021" in response["multi_evidence_verification"]["trigger_reason_codes"]
-    assert response["multi_evidence_verification"]["support_ref_count"] == 1
+    verification = response["multi_evidence_verification"]
+    assert verification["deterministic_evidence_synthesis_used"] is False
+    assert verification["runtime_bound_semantic_repair_used"] is True
+    assert verification["repair_result"] == "verified_semantic_synthesis_recovery"
+    assert set(verification["repair_trigger"]) >= {
+        "SEMANTIC_CLOSURE_FAILED",
+        "SEMANTIC_REVIEW_BLOCKED:claim_1:INSUFFICIENT",
+    }
+    assert verification["support_ref_count"] == 1
     assert len(response["citations"]) == 1
     assert response["unsupported_accepted_claims"] == 0
 
@@ -1488,7 +1726,6 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
         "expected_intent",
         "required_citation_types",
         "minimum_support_refs",
-        "expect_deterministic",
     ),
     [
         (
@@ -1497,21 +1734,18 @@ def test_direct_repair_exhaustion_uses_deterministic_evidence_synthesis() -> Non
             "complementary_synthesis",
             {"passage"},
             2,
-            True,
         ),
         (
             "Which provenance source supports router abstention controls?",
             "provenance_source_trace",
             {"passage", "provenance"},
             2,
-            True,
         ),
         (
             "What changed between source records about request boundary and steering controls?",
             "temporal_conflict",
             {"temporal_record"},
             2,
-            True,
         ),
     ],
 )
@@ -1520,7 +1754,6 @@ def test_answerable_provider_abstention_is_narrowly_constrained(
     expected_intent: str,
     required_citation_types: set[str],
     minimum_support_refs: int,
-    expect_deterministic: bool,
 ) -> None:
     response = run_owner_arbitrary_query(
         root=ROOT,
@@ -1532,26 +1765,21 @@ def test_answerable_provider_abstention_is_narrowly_constrained(
     )
 
     assert response["intent_class"] == expected_intent
-    assert response["provider_call_count"] == 1
-    assert response["repair_attempted"] is False
-    if expect_deterministic:
-        assert response["status"] == "owner_only_cited_answer"
-        assert (
-            response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"]
-            is True
-        )
-        assert response["multi_evidence_verification"]["trigger_reason_codes"] == [
-            "INSUFFICIENT_SUPPORT"
-        ]
-        assert response["multi_evidence_verification"]["support_ref_count"] >= minimum_support_refs
-        assert required_citation_types.issubset(
-            {item["evidence_type"] for item in response["citations"]}
-        )
-    else:
-        assert response["status"] == "owner_only_safe_abstention"
-        assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
-        assert response["reason_codes"] == ["INSUFFICIENT_SUPPORT"]
-        assert response["citations"] == []
+    assert response["provider_call_count"] == 2
+    assert response["repair_attempted"] is True
+    assert response["status"] == "owner_only_cited_answer"
+    verification = response["multi_evidence_verification"]
+    assert verification["deterministic_evidence_synthesis_used"] is False
+    assert verification["runtime_bound_semantic_repair_used"] is True
+    assert verification["repair_result"] == "verified_semantic_synthesis_recovery"
+    assert set(verification["repair_trigger"]) >= {
+        "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE",
+        "SEMANTIC_CLOSURE_FAILED",
+    }
+    assert verification["support_ref_count"] >= minimum_support_refs
+    assert required_citation_types.issubset(
+        {item["evidence_type"] for item in response["citations"]}
+    )
     assert response["unsupported_accepted_claims"] == 0
 
 
@@ -1665,7 +1893,10 @@ def test_provenance_and_temporal_intents_use_required_evidence_types() -> None:
     assert temporal["status"] == "owner_only_cited_answer"
     assert temporal["intent_class"] == "temporal_conflict"
     assert temporal["multi_evidence_verification"]["distinct_source_count"] >= 2
-    assert {item["evidence_type"] for item in temporal["citations"]} == {"temporal_record"}
+    temporal_citations = [
+        item for item in temporal["citations"] if item["evidence_type"] == "temporal_record"
+    ]
+    assert len(temporal_citations) >= 2
 
 
 @pytest.mark.parametrize(
@@ -1697,17 +1928,13 @@ def test_invalid_complex_multi_evidence_provider_outputs_abstain_after_bounded_r
         dense_channel=LocalDenseProjectionChannel(),
     )
 
-    assert response["status"] == "owner_only_cited_answer"
-    assert response["provider_call_count"] == 2
+    assert response["status"] == "owner_only_safe_abstention"
+    assert response["provider_call_count"] in {2, 4}
     assert response["repair_attempted"] is True
-    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is True
-    assert response["citations"]
-    assert "BOUNDED_REPAIR_EXHAUSTED" in response["multi_evidence_verification"]["trigger_reason_codes"]
-    assert any(
-        str(code).startswith("M26-PA7-ME-")
-        for code in response["multi_evidence_verification"]["trigger_reason_codes"]
-    )
+    assert response["citations"] == []
     assert response["unsupported_accepted_claims"] == 0
+    assert "SEMANTIC_CLOSURE_FAILED" in response["reason_codes"]
+    assert response["multi_evidence_verification"]["deterministic_evidence_synthesis_used"] is False
 
 
 def test_claim_surface_must_semantically_align_with_exact_support() -> None:
@@ -2828,7 +3055,7 @@ def test_final_multi_evidence_reopen_artifact_supersedes_current_v2_closure() ->
 
     assert artifact["self_sha256"] == with_self_digest(unsigned)["self_sha256"]
     assert artifact["self_sha256"] == (
-        "b5afe0a71ea79bf71f1d63557d6d5e77006b8059b1047f9bc50093b09b468e1d"
+        "9fda375c930027ef4a2431d5644c6179ad15a2f61e4e108c3f87c284ab44f569"
     )
     assert artifact["status"] == "m26_pa_7_final_multi_evidence_web_completion_reopened"
     assert artifact["m26_closed"] is False

@@ -1818,7 +1818,11 @@ def _supported_semantic_recovery_candidate(
     )
     if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
-    aligned_evidence = _aligned_recovery_evidence(question, evidence)
+    aligned_evidence = _aligned_recovery_evidence(
+        question,
+        evidence,
+        intent_class=intent_class,
+    )
     if not aligned_evidence:
         return None
     try:
@@ -1836,7 +1840,10 @@ def _supported_semantic_recovery_candidate(
 
 
 def _aligned_recovery_evidence(
-    question: str, evidence: Sequence[Mapping[str, Any]]
+    question: str,
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    intent_class: str = "",
 ) -> list[Mapping[str, Any]]:
     focus = _question_focus_terms(question)
     if not focus:
@@ -1850,9 +1857,41 @@ def _aligned_recovery_evidence(
         terms = set(re.findall(r"[a-z0-9]+", text))
         return (len(focus & terms), int(bool(item.get("passage_text"))))
 
-    ranked = sorted(enumerate(evidence), key=lambda pair: (*score(pair[1]), -pair[0]), reverse=True)
+    ranked = sorted(
+        enumerate(evidence),
+        key=lambda pair: (*score(pair[1]), -pair[0]),
+        reverse=True,
+    )
     supported = [item for _, item in ranked if score(item)[0] > 0]
-    return supported[:6]
+    aligned = supported[:6]
+
+    structured_type = {
+        "provenance_source_trace": "provenance",
+        "temporal_conflict": "temporal_record",
+    }.get(intent_class)
+    if structured_type is None:
+        return aligned
+
+    aligned_concepts = {
+        str(item.get("concept_id", ""))
+        for item in aligned
+        if str(item.get("concept_id", ""))
+    }
+    linked_structured = [
+        item
+        for item in evidence
+        if item.get("evidence_type") == structured_type
+        and str(item.get("concept_id", "")) in aligned_concepts
+    ]
+    aligned_ids = {str(item.get("evidence_id", "")) for item in aligned}
+    return [
+        *aligned,
+        *[
+            item
+            for item in linked_structured
+            if str(item.get("evidence_id", "")) not in aligned_ids
+        ],
+    ]
 
 
 def _recovery_candidate_aligned(
@@ -3589,6 +3628,22 @@ def _try_fast_supported_answer(
     return _response_with_contract(response)
 
 
+def _canonical_graph_expansion_allowed(
+    question: str,
+    intent_class: str,
+) -> bool:
+    if intent_class in legacy.RELATIONAL_INTENTS:
+        return True
+    normalized = str(question).casefold()
+    return bool(
+        re.search(
+            r"\b(?:graph|relation|relations|neighbour|neighbours|neighbor|neighbors|"
+            r"expansion|expand|expanded|hydration|hop|connected|connection)\b",
+            normalized,
+        )
+    )
+
+
 def run_owner_arbitrary_query(
     *,
     root: Path,
@@ -3721,6 +3776,10 @@ def run_owner_arbitrary_query(
     # fixtures can replace the loader without reintroducing a legacy runtime edge.
     bundle = answer_bundle or load_production_answer_bundle()
     _assert_canonical_answer_bundle(bundle)
+    allow_graph_expansion = _canonical_graph_expansion_allowed(
+        normalized_question,
+        intent_class,
+    )
     lexical, dense = legacy._run_lexical_primary_retrieval(
         question=normalized_question,
         bundle=bundle,
@@ -3729,6 +3788,7 @@ def run_owner_arbitrary_query(
         require_remote_dense=require_remote_dense,
         top_k=8,
         event_sink=event_sink,
+        relation_aware_expansion=allow_graph_expansion,
     )
     evidence = legacy._select_evidence(
         bundle=bundle,
@@ -3737,6 +3797,7 @@ def run_owner_arbitrary_query(
         trace_id=trace_id,
         question=normalized_question,
         intent_class=intent_class,
+        allow_graph_expansion=allow_graph_expansion,
     )
     requirements = derive_semantic_requirements(normalized_question, intent_class)
     evidence, endpoint_proof = runtime._strengthen_evidence(

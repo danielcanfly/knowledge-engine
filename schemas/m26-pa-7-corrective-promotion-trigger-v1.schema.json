@@ -71,7 +71,7 @@
       "const": "f5412bb39a776e5169c601d3b2d757e212058f215759a4104f0bb79c79c18e8d"
     },
     "formal_test_manifest_self_sha256": {
-      "const": "62c14a4076238fd9f6c7424f5eccd555248616866caac5f2ea293bf1e6e073b9"
+      "const": "2d0fbd3a837aab9f09996ba75000bf577e14db4dc01e483cc2aba3ad8ac07396"
     },
     "issue_number": {
       "const": 1259
@@ -112,7 +112,7 @@
       "type": "object"
     },
     "resolved_gate_self_sha256": {
-      "const": "667874a2e2873ac7847371b156906c256fab479c494214438b3cf79ca65274c6"
+      "const": "0921a5e31971bc754b3dfc0fbc78fb17321cb6f8ee4da485f3f1b3854fe7de9a"
     },
     "schema_version": {
       "const": "knowledge-engine-m26-pa-7-corrective-promotion-trigger/v1"

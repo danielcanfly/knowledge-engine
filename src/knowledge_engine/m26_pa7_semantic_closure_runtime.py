@@ -559,7 +559,7 @@ def _synthesize_and_verify(
                 parsed = _parse_compact_provider_result(
                     str(raw.get("text", raw.get("provider_text", "")))
                 )
-            except ValueError:
+            except Exception:
                 calls.append(_compact_call_telemetry(raw, parse_ok=False))
                 if stop_reason == "max_tokens":
                     failures.append(COMPACT_PROVIDER_TRUNCATED)
@@ -2509,7 +2509,7 @@ def _semantic_requirements(question: str, intent_class: str) -> list[SemanticReq
             )
 
     if "production router" in q or (
-        "router" in q and any(word in q for word in ("path", "downstream", "route"))
+        "router" in q and re.search(r"\b(?:path|downstream|route)\b", q)
     ):
         add(
             "router_decision",
@@ -3125,6 +3125,11 @@ def _add_generic_answer_dimension_requirements(
             [
                 r"\b(?:because|so|therefore|means|mechanism|reason|helps|prevents|allows|instead|rather than)\b",
                 r"\b(?:while|whereas|by contrast|different).{0,160}\b",
+                (
+                    r"\b(?:shows?|explains?|demonstrates?)\b|"
+                    r"\bby\s+(?:showing|explaining|demonstrating|making|keeping|using|"
+                    r"providing|separating|checking|preserving|preventing|allowing|ensuring)\b"
+                ),
             ],
         )
 
@@ -3199,7 +3204,13 @@ def _add_generic_answer_dimension_requirements(
             [r"\b(?:criteria|criterion|evaluate|decide|choose|if|when|tradeoff)\b"],
         )
 
-    if re.search(r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b", q):
+    boundary_action = re.search(r"\b(?:avoid|stop|until|complete|finish)\b", q)
+    boundary_context = re.search(r"\b(?:before|after|boundary)\b", q) and re.search(
+        r"\b(?:process|workflow|execution|run|running|verification|verify|completion|"
+        r"operation|operating)\b",
+        q,
+    )
+    if boundary_action or boundary_context:
         add(
             "process_boundary",
             "State the supported stop, verification, or operating boundary.",

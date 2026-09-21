@@ -35,16 +35,8 @@ _ORIGINAL_PUBLIC_RUN_OWNER_QUERY_FOR_WEB = getattr(
     "_track1_original_run_owner_query_for_web",
     public_api.run_owner_query_for_web,
 )
-
-ask_api._track1_original_build_provider_routing_client = (  # type: ignore[attr-defined]
-    _ORIGINAL_BUILD_PROVIDER_ROUTING_CLIENT
-)
-legacy._track1_original_verify_multi_evidence_provider_output = (  # type: ignore[attr-defined]
-    _ORIGINAL_VERIFY_MULTI_EVIDENCE_PROVIDER_OUTPUT
-)
-public_api._track1_original_run_owner_query_for_web = (  # type: ignore[attr-defined]
-    _ORIGINAL_PUBLIC_RUN_OWNER_QUERY_FOR_WEB
-)
+_ORIGINAL_MODEL_EVENTS_FROM_DTO = public_api._model_events_from_dto
+_INSTALLED = False
 
 
 def _raw_sink() -> Any:
@@ -233,13 +225,48 @@ def _run_owner_query_for_web(*args: Any, **kwargs: Any) -> dict[str, Any]:
         _TLS.attempt = previous_attempt
 
 
-# Install process-local observability/safety adapters for the isolated public façade only.
-ask_api.build_provider_routing_client = _build_provider_routing_client
-legacy._verify_multi_evidence_provider_output = _verify_multi_evidence_provider_output
-public_api.run_owner_query_for_web = _run_owner_query_for_web
+def _model_events_from_dto(_dto: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Execution-truth emits model events at call boundaries, never from the final DTO."""
 
-# Never reconstruct executed model events from a final DTO. Model events above are emitted
-# at the provider execution boundary with the route selected for that exact call.
-public_api._model_events_from_dto = lambda dto: []
+    return []
 
-app = public_api.app
+
+def install() -> None:
+    """Install process-local staging observability adapters explicitly."""
+
+    global _INSTALLED
+    if _INSTALLED:
+        return
+    ask_api.build_provider_routing_client = _build_provider_routing_client
+    legacy._verify_multi_evidence_provider_output = _verify_multi_evidence_provider_output
+    public_api.run_owner_query_for_web = _run_owner_query_for_web
+    public_api._model_events_from_dto = _model_events_from_dto
+    _INSTALLED = True
+
+
+def uninstall() -> None:
+    """Restore the canonical process globals after an explicit staging install."""
+
+    global _INSTALLED
+    if not _INSTALLED:
+        return
+    ask_api.build_provider_routing_client = _ORIGINAL_BUILD_PROVIDER_ROUTING_CLIENT
+    legacy._verify_multi_evidence_provider_output = _ORIGINAL_VERIFY_MULTI_EVIDENCE_PROVIDER_OUTPUT
+    public_api.run_owner_query_for_web = _ORIGINAL_PUBLIC_RUN_OWNER_QUERY_FOR_WEB
+    public_api._model_events_from_dto = _ORIGINAL_MODEL_EVENTS_FROM_DTO
+    _INSTALLED = False
+
+
+def create_app():
+    """ASGI factory for the isolated public-staging process."""
+
+    install()
+    return public_api.app
+
+
+__all__ = [
+    "ExecutionBoundaryProviderClient",
+    "create_app",
+    "install",
+    "uninstall",
+]

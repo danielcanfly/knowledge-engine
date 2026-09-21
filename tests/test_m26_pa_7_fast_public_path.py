@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from knowledge_engine import m26_aq_semantic_contract as semantic_runtime
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime
 from knowledge_engine.m26_production_promotion_closure import load_json
 from knowledge_engine.m26_verified_answer_citation_gate import canonical_sha256
@@ -21,14 +22,18 @@ def fast_path_bundle() -> tuple[Any, dict[str, Any], dict[str, Any]]:
     bundle = synthetic_full_production_answer_bundle()
     document = bundle.lexical_index["documents"][0]
     record = bundle.provenance["records"][0]
+    skill_passage = (
+        "In an AI agent architecture, a skill is a reusable method an agent follows "
+        "for a class of task or capability."
+    )
     evidence = {
         "evidence_id": "ev_skill",
         "locator_id": document["section_id"],
-        "passage_text": document["body"],
+        "passage_text": skill_passage,
         "evidence_type": "passage",
-        "text": document["body"],
-        "title": document["title"],
-        "section_title": document["section_title"],
+        "text": skill_passage,
+        "title": "AI Agent Skill Definition",
+        "section_title": "Skill",
         "source_id": document["source_id"],
         "source_identity": document["source_id"],
         "concept_id": document["concept_id"],
@@ -110,7 +115,7 @@ def test_fast_public_path_publishes_single_call_answer(
         citation_ids=["ev_skill"],
     )
 
-    monkeypatch.setattr(runtime, "load_production_answer_bundle", lambda: bundle)
+    monkeypatch.setattr(semantic_runtime, "load_production_answer_bundle", lambda: bundle)
     monkeypatch.setattr(
         runtime,
         "_run_lexical_primary_retrieval",
@@ -139,34 +144,32 @@ def test_fast_public_path_publishes_single_call_answer(
         response["provider_routing"]["provider_attempts"][0]["call_class"]
         == "aq_fast_answer_synthesis"
     )
-    assert response["semantic_closure"] == {}
+    assert response["semantic_closure"]["failures"] == []
+    assert response["semantic_closure"]["canonical_fast_candidate"] == {
+        "attempted": True,
+        "accepted": True,
+        "semantic_repair_invoked": False,
+    }
 
 
 @pytest.mark.parametrize(
-    ("provider_factory", "expected_reason"),
+    "provider_factory",
     [
-        (
-            lambda: FastAnswerProvider(answer_text="Fine answer", citation_ids=["missing"]),
-            "PROVIDER_OUTPUT_INVALID",
-        ),
-        (
-            lambda: LeakyProvider(
-                answer_text="The definition head is hidden here.", citation_ids=["ev_skill"]
-            ),
-            "PROVIDER_OUTPUT_INVALID",
+        lambda: FastAnswerProvider(answer_text="Fine answer", citation_ids=["missing"]),
+        lambda: LeakyProvider(
+            answer_text="The definition head is hidden here.", citation_ids=["ev_skill"]
         ),
     ],
 )
-def test_fast_public_path_abstains_without_semantic_retry(
+def test_invalid_fast_public_candidate_uses_bounded_semantic_retry_then_abstains(
     monkeypatch: pytest.MonkeyPatch,
     fast_path_bundle: tuple[Any, dict[str, Any], dict[str, Any]],
     provider_factory: Any,
-    expected_reason: str,
 ) -> None:
     bundle, evidence, retrieval = fast_path_bundle
     provider = provider_factory()
 
-    monkeypatch.setattr(runtime, "load_production_answer_bundle", lambda: bundle)
+    monkeypatch.setattr(semantic_runtime, "load_production_answer_bundle", lambda: bundle)
     monkeypatch.setattr(
         runtime,
         "_run_lexical_primary_retrieval",
@@ -183,10 +186,22 @@ def test_fast_public_path_abstains_without_semantic_retry(
         provider_client=provider,
     )
 
-    assert provider.calls == 1
+    assert provider.calls == 3
+    assert provider.call_classes == [
+        "aq_fast_answer_synthesis",
+        "aq_semantic_closure",
+        "aq_semantic_closure_repair",
+    ]
     assert response["status"] == "owner_only_safe_abstention"
     assert response["terminal_status"] == "safe_abstention"
-    assert response["reason_codes"] == [expected_reason]
-    assert response["provider_call_count"] == 1
+    assert response["reason_codes"] == [
+        "COMPACT_PROVIDER_PARSE_FAILED",
+        "SEMANTIC_CLOSURE_FAILED",
+    ]
+    assert response["provider_call_count"] == 2
     assert response["citations"] == []
-    assert response["semantic_closure"] == {}
+    assert response["semantic_closure"]["canonical_fast_candidate"] == {
+        "attempted": True,
+        "accepted": False,
+        "semantic_repair_invoked": True,
+    }

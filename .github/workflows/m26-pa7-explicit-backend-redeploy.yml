@@ -172,31 +172,6 @@ jobs:
         run: |
           set -euo pipefail
           ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' python3 - <<'PY'
-          import os
-          from pathlib import Path
-
-          deploy_path = Path(os.environ['DEPLOY_PATH'])
-          release_sha = os.environ['RELEASE_SHA']
-          env_path = deploy_path / '.env'
-          if not env_path.exists():
-              raise SystemExit('missing .env')
-          lines = env_path.read_text(encoding='utf-8').splitlines()
-          output = []
-          seen = False
-          for line in lines:
-              if line.startswith('M26_QUERY_BUILD_SHA='):
-                  output.append(f'M26_QUERY_BUILD_SHA={release_sha}')
-                  seen = True
-              else:
-                  output.append(line)
-          if not seen:
-              output.append(f'M26_QUERY_BUILD_SHA={release_sha}')
-          tmp = env_path.with_suffix('.env.next')
-          tmp.write_text('\n'.join(output) + '\n', encoding='utf-8')
-          tmp.replace(env_path)
-          os.chmod(env_path, 0o600)
-          PY"
           ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee "$WORK_DIR/evidence/backend-deploy.log"
 
       - name: Smoke owner-only backend routes locally on Oracle

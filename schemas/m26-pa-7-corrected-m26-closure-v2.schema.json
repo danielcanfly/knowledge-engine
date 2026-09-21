@@ -7,7 +7,7 @@
       "const": "pilot/m26/m26-pa-7-acceptance.json"
     },
     "acceptance_self_sha256": {
-      "const": "5358898627ededadd825af8794b27ee8be40d1bb5fb9ffd47e403c89909910ba"
+      "const": "48cef8a01f03662b34ded3f4e948006eef4b3cf36a77cb1d61d543cef443d409"
     },
     "accepted_status": {
       "const": "m26_pa_7_arbitrary_owner_query_product_readiness_accepted"
