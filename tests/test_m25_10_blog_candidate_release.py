@@ -102,3 +102,13 @@ def test_source_backed_description_falls_back_to_inventory_when_source_has_none(
     raw = b"---\ntitle: Article title\n---\n\nBody.\n"
 
     assert subject._source_backed_description(article, raw) == "Inventory summary"
+
+
+def test_section_search_description_does_not_inherit_source_frontmatter() -> None:
+    article = {
+        "title": "Harness Theory Part 09",
+        "description": "Harness Theory Part 09",
+        "origin_path": "src/content/blog/harness-theory-part-9/en.md",
+    }
+
+    assert subject._section_search_description(article) == "Harness Theory Part 09"

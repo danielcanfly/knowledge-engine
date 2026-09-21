@@ -232,6 +232,16 @@ def _source_backed_description(article: Mapping[str, Any], raw: bytes) -> str:
     return source_description or record_description or title
 
 
+def _section_search_description(article: Mapping[str, Any]) -> str:
+    """Keep section search text scoped to inventory metadata.
+
+    Source-level frontmatter summaries describe the whole article. Repeating
+    them into every section broadens lexical relevance and can displace
+    section-local evidence, so only article roots inherit source summaries.
+    """
+    return str(article.get("description") or article["title"]).strip()
+
+
 def build_pack_artifacts(
     pack: Mapping[str, Any],
     release_id: str,
@@ -388,9 +398,9 @@ def build_pack_artifacts(
             locator["start_line"],
             locator["end_line"],
         )
-        description = _source_backed_description(article, source_bytes[source_id])
+        description = _section_search_description(article)
         searchable = " ".join(
-            (article["title"], node["title"], str(description), body)
+            (article["title"], node["title"], description, body)
         )
         lexical.append(
             {
