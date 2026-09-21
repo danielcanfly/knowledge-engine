@@ -387,6 +387,56 @@ def _latest_observed_at(rows: list[dict[str, Any]]) -> str | None:
     return max(observations) if observations else None
 
 
+def _maintenance_snapshot(request: Request) -> dict[str, Any]:
+    adapter = getattr(request.app.state, "m26_ingestion_adapter", None)
+    ledger = getattr(adapter, "ledger", None)
+    retention = getattr(ledger, "retention_report", None)
+    if not callable(retention):
+        return {
+            "ingestion_history": {
+                "availability": "unavailable",
+                "cleanup_recommended": False,
+                "cleanup_eligible_jobs": 0,
+                "detail": "Durable ingestion retention evidence is unavailable.",
+            }
+        }
+    try:
+        report = retention()
+    except Exception:
+        return {
+            "ingestion_history": {
+                "availability": "unavailable",
+                "cleanup_recommended": False,
+                "cleanup_eligible_jobs": 0,
+                "detail": "Durable ingestion retention evidence could not be read safely.",
+            }
+        }
+
+    counts = report.get("counts") if isinstance(report, Mapping) else None
+    policy = report.get("policy") if isinstance(report, Mapping) else None
+    counts = counts if isinstance(counts, Mapping) else {}
+    policy = policy if isinstance(policy, Mapping) else {}
+    eligible = counts.get("cleanup_eligible_jobs", 0)
+    if isinstance(eligible, bool) or not isinstance(eligible, int) or eligible < 0:
+        eligible = 0
+    keep_recent = policy.get("keep_recent_terminal_jobs", 0)
+    threshold = policy.get("recommend_cleanup_after_eligible_jobs", 0)
+    total_jobs = counts.get("total_jobs", 0)
+    terminal_jobs = counts.get("terminal_jobs", 0)
+    return {
+        "ingestion_history": {
+            "availability": "available",
+            "cleanup_recommended": report.get("cleanup_recommended") is True,
+            "cleanup_eligible_jobs": eligible,
+            "keep_recent_terminal_jobs": keep_recent if isinstance(keep_recent, int) else 0,
+            "recommend_cleanup_after_eligible_jobs": threshold if isinstance(threshold, int) else 0,
+            "total_jobs": total_jobs if isinstance(total_jobs, int) else 0,
+            "terminal_jobs": terminal_jobs if isinstance(terminal_jobs, int) else 0,
+            "detail": "Only excess terminal ingestion history is eligible for manual cleanup.",
+        }
+    }
+
+
 def build_health_payload(
     request: Request, observer: HealthObserver | None = None
 ) -> dict[str, Any]:
@@ -415,6 +465,7 @@ def build_health_payload(
         "data": {
             "overall_status": _aggregate_status(aggregate_rows),
             "dependencies": rows,
+            "maintenance": _maintenance_snapshot(request),
         },
     }
 

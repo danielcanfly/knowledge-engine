@@ -342,6 +342,40 @@ def test_admin_health_is_read_only_and_no_store() -> None:
     assert response.headers["x-request-id"] == response.json()["request_id"]
 
 
+def test_health_reports_manual_ingestion_cleanup_recommendation_without_mutating() -> None:
+    calls = {"retention": 0}
+
+    class Ledger:
+        def retention_report(self):
+            calls["retention"] += 1
+            return {
+                "cleanup_recommended": True,
+                "counts": {
+                    "cleanup_eligible_jobs": 27,
+                    "total_jobs": 81,
+                    "terminal_jobs": 77,
+                },
+                "policy": {
+                    "keep_recent_terminal_jobs": 50,
+                    "recommend_cleanup_after_eligible_jobs": 25,
+                },
+            }
+
+    class Adapter:
+        ledger = Ledger()
+
+    app = make_app()
+    app.state.m26_ingestion_adapter = Adapter()
+    payload = TestClient(app).get("/v1/admin/health", headers=admin_headers()).json()
+
+    maintenance = payload["data"]["maintenance"]["ingestion_history"]
+    assert calls["retention"] == 1
+    assert maintenance["availability"] == "available"
+    assert maintenance["cleanup_recommended"] is True
+    assert maintenance["cleanup_eligible_jobs"] == 27
+    assert maintenance["keep_recent_terminal_jobs"] == 50
+    assert maintenance["recommend_cleanup_after_eligible_jobs"] == 25
+
 
 def test_materialized_production_observer_prevents_sync_bundle_loader_call() -> None:
     app = make_app()

@@ -430,7 +430,31 @@ def test_durable_job_health_survives_reopen_and_orders_ties_deterministically(
     retention = reopened.ledger.retention_report(keep_recent=2)
     assert retention["counts"]["total_jobs"] == 4
     assert retention["counts"]["terminal_jobs_older_than_recent_window"] == 1
+    assert retention["counts"]["cleanup_eligible_jobs"] == 1
     assert retention["policy"]["physical_cleanup_requires_explicit_operator_action"] is True
+
+
+def test_manual_history_cleanup_only_removes_excess_terminal_jobs(tmp_path: Path) -> None:
+    ledger = SQLiteIngestionLedger(tmp_path / "cleanup.sqlite3")
+    _insert_job(ledger, "running", "RUNNING", "2026-09-09T00:06:00Z")
+    _insert_job(ledger, "success-new", "SUCCEEDED", "2026-09-09T00:05:00Z")
+    _insert_job(ledger, "failed-new", "FAILED", "2026-09-09T00:04:00Z")
+    _insert_job(ledger, "success-old", "SUCCEEDED", "2026-09-09T00:03:00Z")
+    _insert_job(ledger, "failed-old", "FAILED", "2026-09-09T00:02:00Z")
+    _insert_job(ledger, "success-oldest", "SUCCEEDED", "2026-09-09T00:01:00Z")
+
+    before = ledger.retention_report(keep_recent=2, recommend_cleanup_after=2)
+    assert before["counts"]["cleanup_eligible_jobs"] == 3
+    assert before["cleanup_recommended"] is True
+
+    result = ledger.cleanup_terminal_history(keep_recent=2)
+
+    assert result["deleted_jobs"] == 3
+    assert result["scope"] == "ingestion_terminal_history_only"
+    remaining = {job["job_id"]: job for job in ledger.list_jobs()}
+    assert set(remaining) == {"running", "success-new", "failed-new"}
+    assert remaining["running"]["status"] == "RUNNING"
+    assert result["after"]["counts"]["cleanup_eligible_jobs"] == 0
 
 
 class _Authenticator:

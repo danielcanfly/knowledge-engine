@@ -42,6 +42,8 @@ from .storage import sha256_bytes
 SCHEMA_VERSION = "knowledge-engine-m26-sqlite-ingestion/v1"
 DEFAULT_INGESTION_STATE_DB = "/var/lib/knowledge-engine/ingestion/ingestion.sqlite3"
 LEASE_SECONDS = 300
+INGESTION_HISTORY_KEEP_RECENT = 50
+INGESTION_HISTORY_CLEANUP_RECOMMEND_AFTER = 25
 
 
 def _hash(value: Any) -> str:
@@ -449,8 +451,56 @@ class SQLiteIngestionLedger:
             ).fetchall()
         return [self._job(row) for row in rows]
 
-    def retention_report(self, *, keep_recent: int = 50) -> dict[str, Any]:
+    def _cleanup_eligible_count(
+        self, db: sqlite3.Connection, *, keep_recent: int
+    ) -> int:
+        row = db.execute(
+            """
+            WITH recent AS (
+                SELECT job_id
+                FROM ingestion_jobs
+                WHERE status IN ('SUCCEEDED','FAILED')
+                ORDER BY updated_at DESC, completed_at DESC, created_at DESC, job_id ASC
+                LIMIT ?
+            ),
+            latest_success AS (
+                SELECT job_id
+                FROM ingestion_jobs
+                WHERE status='SUCCEEDED'
+                ORDER BY updated_at DESC, completed_at DESC, created_at DESC, job_id ASC
+                LIMIT 1
+            ),
+            latest_failure AS (
+                SELECT job_id
+                FROM ingestion_jobs
+                WHERE status='FAILED'
+                ORDER BY updated_at DESC, completed_at DESC, created_at DESC, job_id ASC
+                LIMIT 1
+            ),
+            protected AS (
+                SELECT job_id FROM recent
+                UNION
+                SELECT job_id FROM latest_success
+                UNION
+                SELECT job_id FROM latest_failure
+            )
+            SELECT COUNT(1)
+            FROM ingestion_jobs
+            WHERE status IN ('SUCCEEDED','FAILED')
+              AND job_id NOT IN (SELECT job_id FROM protected)
+            """,
+            (keep_recent,),
+        ).fetchone()
+        return int(row[0])
+
+    def retention_report(
+        self,
+        *,
+        keep_recent: int = INGESTION_HISTORY_KEEP_RECENT,
+        recommend_cleanup_after: int = INGESTION_HISTORY_CLEANUP_RECOMMEND_AFTER,
+    ) -> dict[str, Any]:
         keep_recent = min(max(int(keep_recent), 1), 500)
+        recommend_cleanup_after = min(max(int(recommend_cleanup_after), 1), 500)
         with self._connect() as db:
             total = int(db.execute("SELECT COUNT(1) FROM ingestion_jobs").fetchone()[0])
             terminal = int(
@@ -469,7 +519,7 @@ class SQLiteIngestionLedger:
                     (time.time(),),
                 ).fetchone()[0]
             )
-            old_terminal = max(terminal - keep_recent, 0)
+            cleanup_eligible = self._cleanup_eligible_count(db, keep_recent=keep_recent)
             oldest = db.execute(
                 "SELECT MIN(created_at) FROM ingestion_jobs"
             ).fetchone()[0]
@@ -480,8 +530,10 @@ class SQLiteIngestionLedger:
             "schema_version": "m26-ingestion-job-retention/v1",
             "policy": {
                 "keep_recent_terminal_jobs": keep_recent,
+                "recommend_cleanup_after_eligible_jobs": recommend_cleanup_after,
                 "protect_non_terminal_jobs": True,
                 "protect_latest_success_and_failure": True,
+                "cleanup_scope": "ingestion_terminal_history_only",
                 "physical_cleanup_requires_explicit_operator_action": True,
             },
             "counts": {
@@ -489,10 +541,66 @@ class SQLiteIngestionLedger:
                 "terminal_jobs": terminal,
                 "non_terminal_jobs": running,
                 "stale_running_jobs": stale_running,
-                "terminal_jobs_older_than_recent_window": old_terminal,
+                "terminal_jobs_older_than_recent_window": cleanup_eligible,
+                "cleanup_eligible_jobs": cleanup_eligible,
             },
+            "cleanup_recommended": cleanup_eligible >= recommend_cleanup_after,
             "oldest_created_at": oldest,
             "newest_updated_at": newest,
+        }
+
+    def cleanup_terminal_history(
+        self, *, keep_recent: int = INGESTION_HISTORY_KEEP_RECENT
+    ) -> dict[str, Any]:
+        keep_recent = min(max(int(keep_recent), 1), 500)
+        before = self.retention_report(keep_recent=keep_recent)
+        with self._lock, self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute(
+                """
+                SELECT job_id, operation_id, status
+                FROM ingestion_jobs
+                WHERE status IN ('SUCCEEDED','FAILED')
+                ORDER BY updated_at DESC, completed_at DESC, created_at DESC, job_id ASC
+                """
+            ).fetchall()
+            protected = {str(row["job_id"]) for row in rows[:keep_recent]}
+            for status in ("SUCCEEDED", "FAILED"):
+                latest = next((row for row in rows if row["status"] == status), None)
+                if latest is not None:
+                    protected.add(str(latest["job_id"]))
+            eligible = [row for row in rows if str(row["job_id"]) not in protected]
+
+            db.execute(
+                "CREATE TEMP TABLE IF NOT EXISTS ingestion_cleanup_candidates "
+                "(job_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE)"
+            )
+            db.execute("DELETE FROM ingestion_cleanup_candidates")
+            db.executemany(
+                "INSERT INTO ingestion_cleanup_candidates(job_id, operation_id) VALUES (?,?)",
+                [(str(row["job_id"]), str(row["operation_id"])) for row in eligible],
+            )
+            db.execute(
+                "DELETE FROM ingestion_idempotency "
+                "WHERE operation_id IN (SELECT operation_id FROM ingestion_cleanup_candidates)"
+            )
+            deleted_idempotency = int(db.execute("SELECT changes()").fetchone()[0])
+            db.execute(
+                "DELETE FROM ingestion_jobs "
+                "WHERE job_id IN (SELECT job_id FROM ingestion_cleanup_candidates) "
+                "AND status IN ('SUCCEEDED','FAILED')"
+            )
+            deleted_jobs = int(db.execute("SELECT changes()").fetchone()[0])
+            db.execute("DELETE FROM ingestion_cleanup_candidates")
+
+        after = self.retention_report(keep_recent=keep_recent)
+        return {
+            "schema_version": "m26-ingestion-job-cleanup/v1",
+            "scope": "ingestion_terminal_history_only",
+            "deleted_jobs": deleted_jobs,
+            "deleted_idempotency_records": deleted_idempotency,
+            "before": before,
+            "after": after,
         }
 
     def update_job(
@@ -988,6 +1096,9 @@ class SQLiteIngestionAdapter:
             observed_at=utc_now(),
             resource_identity={"path": str(self.ledger.path)},
         )
+
+    def cleanup_old_history(self) -> dict[str, Any]:
+        return self.ledger.cleanup_terminal_history()
 
     def get_job(self, job_id: str) -> ReadObservation:
         job = self.ledger.get_job(job_id)

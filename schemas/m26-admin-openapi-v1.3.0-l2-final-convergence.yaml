@@ -1588,6 +1588,26 @@ paths:
       x-m26-capability-id: ingestion.job.confirm
       x-m26-public-contract-separate: true
       x-m26-state-changing: true
+  /v1/admin/ingestion/history/cleanup:
+    post:
+      tags:
+      - Ingestion
+      summary: Cleanup Ingestion History
+      operationId: cleanupIngestionHistory
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Cleanupingestionhistory
+      x-m26-capability-id: ingestion.job.confirm
+      x-m26-public-contract-separate: true
+      x-m26-state-changing: true
+      x-m26-manual-only: true
+      x-m26-cleanup-scope: ingestion_terminal_history_only
   /v1/admin/ingestion/jobs/{job_id}/retry:
     post:
       tags:

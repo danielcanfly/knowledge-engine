@@ -329,6 +329,36 @@ def _router() -> APIRouter:
     async def list_ingestion_jobs(request: Request) -> dict[str, Any]:
         return _read_envelope(request, _adapter(request).list_jobs())
 
+    @router.post(
+        "/ingestion/history/cleanup",
+        status_code=200,
+        operation_id="cleanupIngestionHistory",
+    )
+    async def cleanup_ingestion_history(request: Request) -> dict[str, Any]:
+        # Manual retention cleanup reuses the already-qualified ingestion mutation
+        # gate. It never runs automatically and cannot touch source, R2, Qdrant,
+        # active pointers, or non-terminal jobs.
+        _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
+        operation_id, replayed = _begin_operation(request, {})
+        if replayed:
+            return _accepted(request, operation_id, True)
+        adapter = _adapter(request)
+        cleanup = getattr(adapter, "cleanup_old_history", None)
+        if not callable(cleanup):
+            raise AdminAPIError(
+                status_code=503,
+                code="ADMIN_INGESTION_HISTORY_CLEANUP_UNQUALIFIED",
+                message="Manual ingestion history cleanup is not qualified",
+            )
+        result = await run_in_threadpool(cleanup)
+        _audit(
+            request,
+            "ingestion.history.cleanup",
+            operation_id,
+            "ADMIN_INGESTION_HISTORY_CLEANUP_COMPLETED",
+        )
+        return _accepted(request, operation_id, False, result=result)
+
     @router.post("/ingestion/jobs", status_code=202, operation_id="confirmIngestionJob")
     async def confirm_ingestion_job(request: Request, body: ConfirmJobRequest) -> dict[str, Any]:
         _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)

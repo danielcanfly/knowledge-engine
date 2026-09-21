@@ -10,7 +10,7 @@ from .m26_admin_contract import ADMIN_PREFIX, DEFAULT_CONSOLE_ORIGIN, redact, ut
 from .m26_admin_control_plane import request_id_from
 
 CANONICAL_ADMIN_API_VERSION = "1.3.0-l2-final-convergence"
-CANONICAL_ADMIN_OPENAPI_SHA256 = "7ed969ba93c895c33ce84a8383e31c8a93fe0dceaa7c63730dd2738c13156a13"
+CANONICAL_ADMIN_OPENAPI_SHA256 = "2d177fc74a80f1985531c824c5b4ac2d2c7ded0eff33451b7ee075bad315dc16"
 
 _QUALIFICATION_STATUSES = frozenset(
     {

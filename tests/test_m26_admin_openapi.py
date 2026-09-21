@@ -134,6 +134,7 @@ def test_s6_committed_canonical_openapi_preserves_predecessor_and_adds_l3a() -> 
     additions = {
         "/v1/admin/index/health": ("get", "getIndexHealth"),
         "/v1/admin/ingestion/sync": ("post", "syncBlog"),
+        "/v1/admin/ingestion/history/cleanup": ("post", "cleanupIngestionHistory"),
         "/v1/admin/ingestion/jobs/{job_id}/retry": ("post", "retryIngestionJob"),
     }
     assert set(canonical["paths"]) == set(predecessor["paths"]) | set(additions)

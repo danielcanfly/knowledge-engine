@@ -259,3 +259,44 @@ def test_index_health_offloads_blocking_adapter_read(monkeypatch) -> None:
 
     assert calls == [adapter.current_index]
     assert response["availability"]["status"] == "unavailable"
+
+
+def test_manual_history_cleanup_is_explicit_and_offloaded(monkeypatch) -> None:
+    cleanup_calls: list[str] = []
+
+    class Adapter:
+        def cleanup_old_history(self):
+            cleanup_calls.append("cleanup")
+            return {
+                "schema_version": "m26-ingestion-job-cleanup/v1",
+                "scope": "ingestion_terminal_history_only",
+                "deleted_jobs": 27,
+                "deleted_idempotency_records": 27,
+            }
+
+    adapter = Adapter()
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(m26_ingestion_adapter=adapter)),
+        state=SimpleNamespace(admin_request_id="admreq_cleanup"),
+        method="POST",
+        url=SimpleNamespace(path="/v1/admin/ingestion/history/cleanup"),
+        headers={"idempotency-key": "cleanup-key"},
+    )
+    monkeypatch.setattr(ingestion_module, "_require_mutation_capability", lambda *_: None)
+    monkeypatch.setattr(
+        ingestion_module,
+        "_begin_operation",
+        lambda *_: ("admop_cleanup", False),
+    )
+    monkeypatch.setattr(ingestion_module, "_audit", lambda *_: None)
+
+    async def fake_run_in_threadpool(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(ingestion_module, "run_in_threadpool", fake_run_in_threadpool)
+    response = asyncio.run(_route_endpoint("cleanupIngestionHistory")(request))
+
+    assert cleanup_calls == ["cleanup"]
+    assert response["status"] == "accepted"
+    assert response["operation_id"] == "admop_cleanup"
+    assert response["result"]["deleted_jobs"] == 27
