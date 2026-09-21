@@ -927,9 +927,13 @@ class SQLiteIngestionAdapter:
         )
 
     def list_jobs(self) -> ReadObservation:
+        recovered = self.ledger.recover_expired(now=time.time())
+        data: dict[str, Any] = {"jobs": self.ledger.list_jobs()}
+        if recovered:
+            data["expired_jobs_recovered"] = recovered
         return ReadObservation(
             availability="available",
-            data={"jobs": self.ledger.list_jobs()},
+            data=data,
             source="sqlite_ingestion_ledger",
             freshness="live",
             observed_at=utc_now(),
@@ -950,6 +954,7 @@ class SQLiteIngestionAdapter:
         )
 
     def current_index(self) -> ReadObservation:
+        self.ledger.recover_expired(now=time.time())
         finalization_authorized = self.finalization_executor is not None and (
             self.finalization_mode == "isolated_finalization"
             or (
@@ -1327,25 +1332,6 @@ class SQLiteIngestionAdapter:
             raise _error(
                 "ADMIN_INGESTION_STALE_PLAN", "The reviewed plan digest is stale or missing", 409
             )
-        fresh_source, fresh_active = self._observe()
-        if _hash(fresh_source) != _hash(source) or _hash(fresh_active) != _hash(active):
-            self.ledger.complete_terminal(
-                lease,
-                job_id=job_id,
-                success=False,
-                error={
-                    "code": "ADMIN_INGESTION_STALE_PLAN",
-                    "detail": "Source or active manifest changed before candidate writes",
-                },
-                expected_version=claimed["version"],
-                expected_lease_owner=owner,
-            )
-            raise _error(
-                "ADMIN_INGESTION_STALE_PLAN",
-                "Source or active manifest changed before candidate writes",
-                409,
-            )
-
         if not plan["plan"]["actions"]:
             result: dict[str, Any] = {
                 "status": "noop",
@@ -1361,7 +1347,7 @@ class SQLiteIngestionAdapter:
                         503,
                     )
                 try:
-                    result.update(dict(verify_noop(fresh_source)))
+                    result.update(dict(verify_noop(source)))
                     result["plan_id"] = plan["plan_id"]
                     result["plan_digest"] = plan["plan_digest"]
                 except Exception as exc:
@@ -1391,6 +1377,25 @@ class SQLiteIngestionAdapter:
                             expected_lease_owner=owner,
                         )
                     raise
+            else:
+                fresh_source, fresh_active = self._observe()
+                if _hash(fresh_source) != _hash(source) or _hash(fresh_active) != _hash(active):
+                    self.ledger.complete_terminal(
+                        lease,
+                        job_id=job_id,
+                        success=False,
+                        error={
+                            "code": "ADMIN_INGESTION_STALE_PLAN",
+                            "detail": "Source or active manifest changed before no-op completion",
+                        },
+                        expected_version=claimed["version"],
+                        expected_lease_owner=owner,
+                    )
+                    raise _error(
+                        "ADMIN_INGESTION_STALE_PLAN",
+                        "Source or active manifest changed before no-op completion",
+                        409,
+                    )
             return self.ledger.complete_terminal(
                 lease,
                 job_id=job_id,
@@ -1398,6 +1403,25 @@ class SQLiteIngestionAdapter:
                 result=result,
                 expected_version=claimed["version"],
                 expected_lease_owner=owner,
+            )
+
+        fresh_source, fresh_active = self._observe()
+        if _hash(fresh_source) != _hash(source) or _hash(fresh_active) != _hash(active):
+            self.ledger.complete_terminal(
+                lease,
+                job_id=job_id,
+                success=False,
+                error={
+                    "code": "ADMIN_INGESTION_STALE_PLAN",
+                    "detail": "Source or active manifest changed before candidate writes",
+                },
+                expected_version=claimed["version"],
+                expected_lease_owner=owner,
+            )
+            raise _error(
+                "ADMIN_INGESTION_STALE_PLAN",
+                "Source or active manifest changed before candidate writes",
+                409,
             )
 
         def progress(phase: str, value: int) -> dict[str, Any]:

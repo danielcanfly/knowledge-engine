@@ -275,7 +275,11 @@ class ProductionIngestionFinalizer:
         self.authority_check = authority_check
         self.authority_scope = authority_scope
 
-    def self_check(self) -> dict[str, Any]:
+    def self_check(
+        self,
+        *,
+        source_observation: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         runtime_authority = dict(self.authority_check())
         required_authority_keys = {
             "schema_version",
@@ -295,7 +299,11 @@ class ProductionIngestionFinalizer:
             or not str(runtime_authority.get("qdrant_url") or "").startswith("https://")
         ):
             raise IntegrityError("F8-AUTH-007 runtime authority identity is unavailable")
-        source = dict(self.source_observer())
+        source = (
+            dict(source_observation)
+            if source_observation is not None
+            else dict(self.source_observer())
+        )
         revision = str(source.get("source_revision") or "")
         identity = str(source.get("source_identity_digest") or "")
         documents = source.get("documents")
@@ -334,7 +342,11 @@ class ProductionIngestionFinalizer:
     def verify_noop(self, source_observation: Mapping[str, Any]) -> dict[str, Any]:
         """Prove an exact active read path before declaring a production no-op."""
 
-        authority = self.self_check()
+        observed_source = dict(self.source_observer())
+        if _hash(observed_source) != _hash(source_observation):
+            raise IntegrityError("F8-NOOP-002 source changed before active readback proof")
+
+        authority = self.self_check(source_observation=observed_source)
         active = resolve_active_production_release(self.store)
         if (
             source_observation.get("source_revision")
@@ -342,10 +354,6 @@ class ProductionIngestionFinalizer:
             or source_observation.get("source_identity_digest") != active.admission_sha256
         ):
             raise IntegrityError("F8-NOOP-001 source is not the exact active release")
-        observed_source = dict(self.source_observer())
-        if _hash(observed_source) != _hash(source_observation):
-            raise IntegrityError("F8-NOOP-002 source changed before active readback proof")
-        qdrant = self.qdrant_observer.qualify_production(active)
         bundle = load_production_answer_bundle(store=self.store)
         if bundle.release_id != active.release_id:
             raise IntegrityError("F8-NOOP-003 answer bundle is not the active release")
@@ -361,7 +369,7 @@ class ProductionIngestionFinalizer:
             "release_id": active.release_id,
             "production_pointer_sha256": active.pointer_sha256,
             "production_manifest_sha256": active.production_manifest_sha256,
-            "qdrant_qualification_sha256": _hash(qdrant),
+            "qdrant_qualification_sha256": authority["predecessor_qdrant_sha256"],
             "ask_equivalent": ask_result,
             "authority": authority,
             "production_activation_claimed": False,

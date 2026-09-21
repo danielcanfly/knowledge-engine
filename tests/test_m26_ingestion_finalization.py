@@ -604,6 +604,64 @@ class _FailOnceDense:
         return self.delegate.search(question=question, bundle=bundle, top_k=top_k)
 
 
+def test_production_noop_reuses_single_exact_source_readback(tmp_path: Path) -> None:
+    original_store, predecessor, candidate_receipt, isolated = _fixture(tmp_path)
+    prepared = isolated.prepare(
+        candidate_receipt=candidate_receipt,
+        source_observation=_source(),
+        expected_predecessor_pointer_sha256=sha256_bytes(predecessor),
+    )
+    isolated.execute(prepared)
+    store = _StoreProtocolProxy(original_store)
+    source_calls = 0
+    qdrant_calls = 0
+
+    def source_observer() -> dict[str, Any]:
+        nonlocal source_calls
+        source_calls += 1
+        return _source()
+
+    class CountingQdrantObserver(_ProductionQdrantObserver):
+        def qualify_production(self, active: Any) -> ProductionQdrantQualification:
+            nonlocal qdrant_calls
+            qdrant_calls += 1
+            return super().qualify_production(active)
+
+    authority = {
+        "schema_version": "knowledge-engine-m26-production-runtime-authority/v1",
+        "object_store_backend": "r2",
+        "r2_endpoint_url": "https://account.r2.cloudflarestorage.com",
+        "r2_bucket": "production",
+        "r2_region": "auto",
+        "source": {
+            "mode": "local_git",
+            "root": "/tmp/blog",
+            "repository": "danielcanfly/daniel-blog",
+        },
+        "qdrant_url": "https://qdrant.example",
+        "cloudflare_account_id": "account",
+        "engine_commit_sha": ENGINE,
+        "durable_state_path": str(tmp_path / "ingestion.sqlite3"),
+    }
+    finalizer = ProductionIngestionFinalizer(
+        store=store,  # type: ignore[arg-type]
+        source_observer=source_observer,
+        qdrant_observer=CountingQdrantObserver(),
+        dense_channel=_DenseChannel(),
+        ask_probe_question="What proves the successor is active?",
+        owner_authorization="production-owner",
+        promoted_at_factory=lambda: PROMOTED_AT,
+        authority_check=lambda: authority,
+    )
+
+    result = finalizer.verify_noop(_source())
+
+    assert result["status"] == "noop"
+    assert result["activation_status"] == "already_active_noop"
+    assert source_calls == 1
+    assert qdrant_calls == 1
+
+
 def test_production_post_cas_failure_retries_exact_target_without_second_pointer_write(
     tmp_path: Path,
 ) -> None:

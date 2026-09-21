@@ -623,10 +623,17 @@ def test_production_noop_requires_active_readback_proof_and_never_claims_activat
     source = {"source_revision": "r1", "documents": [{"document_id": "a", "digest": "a"}]}
     active = {"manifest_key": "m1", "manifest_sha256": "msha1", "document_digests": {"a": "a"}}
     verifier = _ProductionNoopVerifier()
+    source_calls = 0
+
+    def source_observer() -> dict[str, object]:
+        nonlocal source_calls
+        source_calls += 1
+        return source
+
     ledger = SQLiteIngestionLedger(tmp_path / "production-noop.sqlite3")
     adapter = SQLiteIngestionAdapter(
         ledger,
-        source_observer=lambda: source,
+        source_observer=source_observer,
         active_manifest_observer=lambda: active,
         candidate_executor=lambda *_args: pytest.fail("true no-op must not build candidate"),
         finalization_executor=verifier,
@@ -641,6 +648,7 @@ def test_production_noop_requires_active_readback_proof_and_never_claims_activat
     assert result["result"]["activation_status"] == "already_active_noop"
     assert result["result"]["production_activation_claimed"] is False
     assert verifier.calls == 1
+    assert source_calls == 1
     assert result["active_successor_release_id"] is None
     assert result["finalization_state"] == "ACTIVE_NOOP"
 
