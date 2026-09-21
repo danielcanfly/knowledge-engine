@@ -404,7 +404,8 @@ def test_http_one_click_binds_durable_controller_and_candidate_primitives(tmp_pa
     response = client.post("/v1/admin/ingestion/sync", headers=headers, json={})
 
     assert response.status_code == 202
-    job_id = response.json()["result"]["job_id"]
+    operation_id = response.json()["operation_id"]
+    job_id = "syncjob_" + operation_id.removeprefix("admop_")
     reconnected = client.get(
         "/v1/admin/ingestion/jobs/" + job_id,
         headers={**headers, "idempotency-key": "bp5r1-http-get-job1"},

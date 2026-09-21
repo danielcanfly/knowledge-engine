@@ -707,15 +707,18 @@ class DeterministicSyncIngestionAdapter:
             resource_identity={"source_revision": self.source_revision},
         )
 
-    def sync_blog(self, operation_id: str, request: SyncBlogRequest) -> dict[str, Any]:
-        # Rebuild from the currently observed source/index state on every call. A
-        # destructive confirmation is therefore pinned to exactly the plan the
-        # operator saw, rather than authorizing whatever plan happens to exist later.
-        plan = build_sync_plan(
+    def preview_sync_plan(self) -> dict[str, Any]:
+        return build_sync_plan(
             source_revision=self.source_revision,
             documents=self.documents,
             active_document_digests=self.active_document_digests,
         )
+
+    def sync_blog(self, operation_id: str, request: SyncBlogRequest) -> dict[str, Any]:
+        # Rebuild from the currently observed source/index state on every call. A
+        # destructive confirmation is therefore pinned to exactly the plan the
+        # operator saw, rather than authorizing whatever plan happens to exist later.
+        plan = self.preview_sync_plan()
         requires_confirmation = bool(plan["plan"]["requires_confirmation"])
         if requires_confirmation and not request.confirmation:
             raise AdminAPIError(

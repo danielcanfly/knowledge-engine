@@ -56,6 +56,21 @@ class FailOnceSyncAdapter:
         self.attempts = 0
         self.operation_ids: list[str] = []
 
+    def preview_sync_plan(self) -> dict[str, object]:
+        return {
+            "plan_id": "test-plan",
+            "plan_digest": "a" * 64,
+            "plan": {
+                "requires_confirmation": False,
+                "manifest_diff": {
+                    "added": [],
+                    "changed": [],
+                    "removed": [],
+                    "unchanged": [],
+                },
+            },
+        }
+
     def sync_blog(self, operation_id: str, _request: object) -> dict[str, object]:
         self.attempts += 1
         self.operation_ids.append(operation_id)
@@ -138,8 +153,8 @@ def test_sync_route_retries_failed_attempt_and_only_then_replays() -> None:
     client = TestClient(app)
 
     first = client.post("/v1/admin/ingestion/sync", headers=_headers(), json={})
-    assert first.status_code == 503
-    assert first.json()["error"]["code"] == "TEST_TRANSIENT_SYNC_FAILURE"
+    assert first.status_code == 202
+    assert first.json()["replayed"] is False
     record = next(iter(store.stateful_records.values()))
     assert record.state == "FAILED"
     assert record.attempt == 1

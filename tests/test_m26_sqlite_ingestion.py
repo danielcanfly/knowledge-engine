@@ -701,7 +701,8 @@ def test_route_and_p09_reads_share_sqlite_authority_and_retry_route(tmp_path: Pa
     }
     response = client.post("/v1/admin/ingestion/sync", headers=headers, json={})
     assert response.status_code == 202
-    job_id = response.json()["result"]["job_id"]
+    operation_id = response.json()["operation_id"]
+    job_id = "syncjob_" + operation_id.removeprefix("admop_")
     observed = client.get(
         "/v1/admin/ingestion/jobs/" + job_id,
         headers={**headers, "idempotency-key": "read-key-000001"},

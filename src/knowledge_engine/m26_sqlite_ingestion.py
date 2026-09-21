@@ -1165,6 +1165,45 @@ class SQLiteIngestionAdapter:
                 )
             raise
 
+    def preview_sync_plan(self) -> dict[str, Any]:
+        source_observer = getattr(self, "read_source_observer", self.source_observer)
+        active_observer = getattr(
+            self,
+            "read_active_manifest_observer",
+            self.active_manifest_observer,
+        )
+        if not callable(source_observer) or not callable(active_observer):
+            raise _error(
+                "ADMIN_INGESTION_OBSERVER_UNQUALIFIED",
+                "Published source and active-index read evidence are required",
+                503,
+            )
+        source = dict(source_observer())
+        active = dict(active_observer())
+        documents = source.get("documents")
+        active_digests = active.get("document_digests")
+        if not isinstance(documents, list) or not isinstance(active_digests, Mapping):
+            raise _error(
+                "ADMIN_INGESTION_OBSERVER_INVALID",
+                "Published source or active-index read evidence is incomplete",
+                503,
+            )
+        source_cache = source.get("_runtime_read_cache")
+        if isinstance(source_cache, Mapping) and (
+            source_cache.get("freshness") == "stale"
+            or source_cache.get("refreshing") is True
+        ):
+            raise _error(
+                "ADMIN_INGESTION_SOURCE_REFRESH_PENDING",
+                "Published source evidence is refreshing; retry when the source snapshot is current",
+                409,
+            )
+        return build_sync_plan(
+            source_revision=str(source["source_revision"]),
+            documents=documents,
+            active_document_digests=active_digests,
+        )
+
     def sync_blog(
         self,
         operation_id: str,

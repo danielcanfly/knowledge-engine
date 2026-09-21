@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, BackgroundTasks, FastAPI, Request
 from starlette.concurrency import run_in_threadpool
 
 from .m26_admin_contract import AdminAPIError
@@ -38,6 +39,8 @@ CAP_INGESTION_DRY_RUN = "ingestion.dry_run.start"
 CAP_INGESTION_JOBS_READ = "ingestion.jobs.read"
 CAP_INGESTION_JOB_CONFIRM = "ingestion.job.confirm"
 CAP_INGESTION_JOB_READ = "ingestion.job.read"
+
+logger = logging.getLogger(__name__)
 
 
 def _read_envelope(request: Request, observation: ReadObservation) -> dict[str, Any]:
@@ -138,6 +141,76 @@ def _accepted(
     return envelope
 
 
+def _validate_sync_preview(plan: dict[str, Any], body: SyncBlogRequest) -> None:
+    payload = plan.get("plan") if isinstance(plan.get("plan"), dict) else {}
+    requires_confirmation = payload.get("requires_confirmation") is True
+    if not requires_confirmation:
+        return
+    details = {
+        "plan_id": plan.get("plan_id"),
+        "plan_digest": plan.get("plan_digest"),
+        "manifest_diff": payload.get("manifest_diff"),
+    }
+    if not body.confirmation:
+        raise AdminAPIError(
+            status_code=409,
+            code="ADMIN_INGESTION_DESTRUCTIVE_CONFIRMATION_REQUIRED",
+            message="Removed or unpublished documents require explicit confirmation",
+            details=details,
+        )
+    if not body.expected_plan_digest:
+        raise AdminAPIError(
+            status_code=409,
+            code="ADMIN_INGESTION_PLAN_DIGEST_REQUIRED",
+            message="Destructive confirmation must reference the exact reviewed sync plan",
+            details=details,
+        )
+    if body.expected_plan_digest != plan.get("plan_digest"):
+        raise AdminAPIError(
+            status_code=409,
+            code="ADMIN_INGESTION_STALE_PLAN",
+            message="The blog or active index changed after confirmation was requested",
+            details={
+                "expected_plan_digest": body.expected_plan_digest,
+                "current_plan_id": plan.get("plan_id"),
+                "current_plan_digest": plan.get("plan_digest"),
+                "manifest_diff": payload.get("manifest_diff"),
+            },
+        )
+
+
+def _fail_sync_lease(adapter: Any, coordinator: Any, lease: Any) -> None:
+    if callable(getattr(adapter, "sync_blog_with_lease", None)):
+        fail_lease = getattr(getattr(adapter, "ledger", None), "fail_lease", None)
+        if callable(fail_lease):
+            fail_lease(lease, detail="Ingestion execution failed")
+    else:
+        coordinator.fail_stateful(lease)
+
+
+def _run_sync_background(
+    adapter: Any,
+    sync: Any,
+    coordinator: Any,
+    lease: Any,
+    body: SyncBlogRequest,
+) -> None:
+    try:
+        sync_with_lease = getattr(adapter, "sync_blog_with_lease", None)
+        if callable(sync_with_lease):
+            sync_with_lease(lease.operation_id, body, lease)
+        else:
+            sync(lease.operation_id, body)
+            coordinator.succeed_stateful(lease)
+    except Exception as exc:
+        _fail_sync_lease(adapter, coordinator, lease)
+        logger.error(
+            "Background ingestion sync failed operation_id=%s error_type=%s",
+            lease.operation_id,
+            type(exc).__name__,
+        )
+
+
 def _audit(request: Request, action: str, operation_id: str, reason: str) -> None:
     append_audit_event(
         request,
@@ -206,13 +279,24 @@ def _router() -> APIRouter:
         return _accepted(request, operation_id, False)
 
     @router.post("/ingestion/sync", status_code=202, operation_id="syncBlog")
-    async def sync_blog(request: Request, body: SyncBlogRequest) -> dict[str, Any]:
+    async def sync_blog(
+        request: Request,
+        body: SyncBlogRequest,
+        background_tasks: BackgroundTasks,
+    ) -> dict[str, Any]:
         # Reuse the already-qualified job-confirm mutation capability. The new
         # product action is orchestration over the same governed mutation seam,
         # not a new authority surface.
         _require_mutation_capability(request, CAP_INGESTION_JOB_CONFIRM)
         adapter = _adapter(request)
         sync = require_sync_adapter(adapter)
+        preview = getattr(adapter, "preview_sync_plan", None)
+        if not callable(preview):
+            raise AdminAPIError(
+                status_code=503,
+                code="ADMIN_INGESTION_SYNC_PREVIEW_UNQUALIFIED",
+                message="The governed sync preview seam is not qualified",
+            )
         payload = body.model_dump()
         coordinator = request.app.state.admin_idempotency
         lease = _begin_stateful_operation(request, payload)
@@ -225,29 +309,21 @@ def _router() -> APIRouter:
                 lease.operation_id,
                 "ADMIN_INGESTION_SYNC_ACCEPTED",
             )
-            sync_with_lease = getattr(adapter, "sync_blog_with_lease", None)
-            result = (
-                sync_with_lease(lease.operation_id, body, lease)
-                if callable(sync_with_lease)
-                else sync(lease.operation_id, body)
-            )
+            plan = await run_in_threadpool(preview)
+            _validate_sync_preview(plan, body)
         except Exception:
-            durable = _adapter(request)
-            if callable(getattr(durable, "sync_blog_with_lease", None)):
-                fail_lease = getattr(getattr(durable, "ledger", None), "fail_lease", None)
-                if callable(fail_lease):
-                    fail_lease(lease, detail="Ingestion execution failed")
-            else:
-                coordinator.fail_stateful(lease)
+            _fail_sync_lease(adapter, coordinator, lease)
             raise
-        if not callable(getattr(_adapter(request), "sync_blog_with_lease", None)):
-            coordinator.succeed_stateful(lease)
-        return _accepted(
-            request,
-            lease.operation_id,
-            False,
-            result=result if isinstance(result, dict) else None,
+
+        background_tasks.add_task(
+            _run_sync_background,
+            adapter,
+            sync,
+            coordinator,
+            lease,
+            body,
         )
+        return _accepted(request, lease.operation_id, False)
 
     @router.get("/ingestion/jobs", operation_id="listIngestionJobs")
     async def list_ingestion_jobs(request: Request) -> dict[str, Any]:

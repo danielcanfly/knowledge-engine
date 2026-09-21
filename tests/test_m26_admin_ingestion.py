@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from fastapi import BackgroundTasks
 
 from knowledge_engine import m26_admin_ingestion as ingestion_module
 from knowledge_engine.m26_admin_contract import AdminAPIError
@@ -15,6 +16,7 @@ from knowledge_engine.m26_admin_ingestion import (
     _require_mutation_capability,
     build_dry_run_plan,
 )
+from knowledge_engine.m26_admin_ingestion_sync import SyncBlogRequest
 
 
 def _digest(char: str) -> str:
@@ -152,6 +154,81 @@ def _read_request(adapter):
         app=SimpleNamespace(state=SimpleNamespace(m26_ingestion_adapter=adapter)),
         state=SimpleNamespace(admin_request_id="admreq_test"),
     )
+
+
+def test_sync_route_accepts_before_heavy_execution(monkeypatch) -> None:
+    heavy_calls: list[str] = []
+    coordinator_calls: list[str] = []
+
+    class Adapter:
+        def preview_sync_plan(self):
+            return {
+                "plan_id": "plan-async",
+                "plan_digest": "a" * 64,
+                "plan": {
+                    "requires_confirmation": False,
+                    "manifest_diff": {
+                        "added": ["new"],
+                        "changed": [],
+                        "removed": [],
+                        "unchanged": [],
+                    },
+                },
+            }
+
+        def sync_blog(self, operation_id: str, _body: object):
+            heavy_calls.append(operation_id)
+            return {"status": "succeeded"}
+
+    adapter = Adapter()
+    coordinator = SimpleNamespace(
+        succeed_stateful=lambda lease: coordinator_calls.append(lease.operation_id),
+        fail_stateful=lambda lease: None,
+    )
+    lease = SimpleNamespace(
+        replayed=False,
+        operation_id="admop_async",
+        scope="owner|POST|/v1/admin/ingestion/sync",
+        key_fingerprint="f" * 64,
+        request_hash="r" * 64,
+        attempt=1,
+    )
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                m26_ingestion_adapter=adapter,
+                admin_idempotency=coordinator,
+            )
+        ),
+        state=SimpleNamespace(admin_request_id="admreq_async"),
+        method="POST",
+        url=SimpleNamespace(path="/v1/admin/ingestion/sync"),
+        headers={"idempotency-key": "async-key"},
+    )
+
+    monkeypatch.setattr(ingestion_module, "_require_mutation_capability", lambda *_: None)
+    monkeypatch.setattr(ingestion_module, "_begin_stateful_operation", lambda *_: lease)
+    monkeypatch.setattr(ingestion_module, "_audit", lambda *_: None)
+
+    async def immediate_threadpool(fn, *args, **kwargs):
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(ingestion_module, "run_in_threadpool", immediate_threadpool)
+
+    background = BackgroundTasks()
+    response = asyncio.run(
+        _route_endpoint("syncBlog")(request, SyncBlogRequest(), background)
+    )
+
+    assert response["status"] == "accepted"
+    assert response["operation_id"] == "admop_async"
+    assert heavy_calls == []
+    assert len(background.tasks) == 1
+
+    asyncio.run(background())
+
+    assert heavy_calls == ["admop_async"]
+    assert coordinator_calls == ["admop_async"]
 
 
 def test_index_current_offloads_blocking_adapter_read(monkeypatch) -> None:

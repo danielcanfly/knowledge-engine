@@ -40,10 +40,15 @@ _SAFE_RUNTIME_IDENTITY_ENV = (
 class DependencyDefinition:
     key: str
     label: str
+    affects_overall: bool = True
 
 
 DEPENDENCIES = (
-    DependencyDefinition("frontend", "Frontend commit identity"),
+    DependencyDefinition(
+        "frontend",
+        "Frontend commit identity",
+        affects_overall=False,
+    ),
     DependencyDefinition("backend", "Backend durable / runtime identity"),
     DependencyDefinition("canonical_api", "Canonical API"),
     DependencyDefinition("production", "Production bundle / pointer"),
@@ -158,9 +163,6 @@ def _normalize_observation(definition: DependencyDefinition, raw: Any) -> dict[s
     if error_code == "429" or (error_code and "rate_limit" in error_code.lower()):
         status = "warning"
         reason_code = "SYSTEM_HEALTH_RATE_LIMITED"
-    elif freshness == "stale" and status == "healthy":
-        status = "warning"
-        reason_code = "SYSTEM_HEALTH_STALE_EVIDENCE"
     elif expected is not None and observed is not None and expected != observed:
         status = "warning"
         reason_code = "SYSTEM_HEALTH_IDENTITY_MISMATCH"
@@ -352,12 +354,15 @@ def _aggregate_availability(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _aggregate_status(rows: list[dict[str, Any]]) -> str:
     statuses = [row["status"] for row in rows]
-    if statuses and all(status == "healthy" for status in statuses):
+    health_statuses = [status for status in statuses if status != "read_only"]
+    if any(status in {"error", "failed", "warning", "degraded"} for status in health_statuses):
+        return "degraded"
+    if any(status in {"unknown", "unavailable"} for status in health_statuses):
+        return "degraded"
+    if health_statuses and all(status == "healthy" for status in health_statuses):
         return "healthy"
-    if any(status in {"error", "failed"} for status in statuses):
-        return "degraded"
-    if any(status in {"healthy", "warning", "degraded", "read_only"} for status in statuses):
-        return "degraded"
+    if statuses and all(status == "read_only" for status in statuses):
+        return "read_only"
     return "unknown"
 
 
@@ -365,16 +370,11 @@ def _aggregate_freshness(rows: list[dict[str, Any]]) -> str:
     if any(row["availability"]["status"] != "available" for row in rows):
         return "unknown"
     values = {row["freshness"] for row in rows}
-    if values == {"live"}:
-        return "live"
-    if "stale" in values:
-        return "stale"
-    if "delayed" in values:
-        return "delayed"
-    if "near_live" in values:
-        return "near_live"
-    if values == {"snapshot"}:
-        return "snapshot"
+    if "unknown" in values:
+        return "unknown"
+    for freshness in ("stale", "delayed", "snapshot", "near_live", "live"):
+        if freshness in values:
+            return freshness
     return "unknown"
 
 
@@ -396,19 +396,24 @@ def build_health_payload(
     rows = [
         _normalize_observation(definition, raw.get(definition.key)) for definition in DEPENDENCIES
     ]
+    aggregate_rows = [
+        row
+        for definition, row in zip(DEPENDENCIES, rows, strict=True)
+        if definition.affects_overall
+    ]
     latest = _latest_observed_at(rows)
     return {
         "request_id": request_id_from(request),
-        "availability": _aggregate_availability(rows),
+        "availability": _aggregate_availability(aggregate_rows),
         "provenance": {
             "source": "m26_admin_system_health",
             "resource_identity": {"dependency_keys": [item.key for item in DEPENDENCIES]},
             "source_observed_at": latest,
         },
         "observed_at": latest,
-        "freshness": _aggregate_freshness(rows),
+        "freshness": _aggregate_freshness(aggregate_rows),
         "data": {
-            "overall_status": _aggregate_status(rows),
+            "overall_status": _aggregate_status(aggregate_rows),
             "dependencies": rows,
         },
     }

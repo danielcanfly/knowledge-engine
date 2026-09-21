@@ -139,6 +139,44 @@ def test_all_required_dependencies_must_be_observed_before_overall_healthy() -> 
     assert all(item["status"] == "healthy" for item in payload["data"]["dependencies"])
 
 
+def test_client_side_frontend_identity_does_not_degrade_server_health() -> None:
+    observations = healthy_external_observations()
+    observations.pop("frontend")
+    payload = (
+        TestClient(make_app(StaticHealthObserver(observations)))
+        .get("/v1/admin/health", headers=admin_headers())
+        .json()
+    )
+
+    assert dependency(payload, "frontend")["status"] == "unavailable"
+    assert payload["availability"]["status"] == "available"
+    assert payload["data"]["overall_status"] == "healthy"
+    assert payload["freshness"] == "snapshot"
+
+
+def test_read_only_provider_evidence_is_neutral_to_overall_health() -> None:
+    observations = healthy_external_observations()
+    observations.pop("frontend")
+    observations["provider"] = {
+        "status": "read_only",
+        "source": "provider_configuration_presence",
+        "observed_at": "2026-09-05T01:00:00Z",
+        "freshness": "live",
+        "detail": "Provider configuration is present; no live provider request ran.",
+        "observed": "configured",
+    }
+    payload = (
+        TestClient(make_app(StaticHealthObserver(observations)))
+        .get("/v1/admin/health", headers=admin_headers())
+        .json()
+    )
+
+    assert dependency(payload, "provider")["status"] == "read_only"
+    assert payload["availability"]["status"] == "available"
+    assert payload["data"]["overall_status"] == "healthy"
+    assert payload["freshness"] == "snapshot"
+
+
 def test_provider_429_is_warning_not_outage() -> None:
     observations = healthy_external_observations()
     observations["provider"] = {
@@ -185,6 +223,7 @@ def test_identity_mismatch_downgrades_green_to_warning() -> None:
     assert frontend["availability"]["reason_code"] == "SYSTEM_HEALTH_IDENTITY_MISMATCH"
     assert frontend["expected"] == "frontend:expected"
     assert frontend["observed"] == "frontend:other"
+    assert payload["data"]["overall_status"] == "healthy"
 
 
 def test_healthy_claim_without_observation_time_fails_closed() -> None:
@@ -226,6 +265,27 @@ def test_naive_timestamp_is_not_authoritative_health_evidence() -> None:
     assert metadata["status"] == "unknown"
     assert metadata["observed_at"] is None
     assert metadata["availability"]["reason_code"] == "SYSTEM_HEALTH_OBSERVATION_TIME_REQUIRED"
+
+
+def test_stale_bounded_evidence_does_not_reclassify_healthy_dependency() -> None:
+    observations = healthy_external_observations()
+    observations.pop("frontend")
+    observations["r2"]["freshness"] = "stale"
+    observations["provider"]["status"] = "read_only"
+
+    payload = (
+        TestClient(make_app(StaticHealthObserver(observations)))
+        .get("/v1/admin/health", headers=admin_headers())
+        .json()
+    )
+
+    assert dependency(payload, "frontend")["status"] == "unavailable"
+    assert dependency(payload, "r2")["status"] == "healthy"
+    assert dependency(payload, "r2")["freshness"] == "stale"
+    assert dependency(payload, "provider")["status"] == "read_only"
+    assert payload["availability"]["status"] == "available"
+    assert payload["data"]["overall_status"] == "healthy"
+    assert payload["freshness"] == "stale"
 
 
 def test_healthy_claim_with_unknown_freshness_fails_closed() -> None:
