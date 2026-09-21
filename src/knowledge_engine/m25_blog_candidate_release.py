@@ -31,6 +31,7 @@ from .m23_cloudflare_qdrant import (
     preflight_qdrant_collection,
     upsert_qdrant_points,
 )
+from .m25_blog_pilot import parse_frontmatter
 from .publisher import publish_release
 from .source import build_source_release
 from .storage import create_object_store, sha256_bytes
@@ -214,6 +215,23 @@ def validate_pack(pack_root: Path) -> dict[str, Any]:
     }
 
 
+def _source_backed_description(article: Mapping[str, Any], raw: bytes) -> str:
+    """Resolve article overview text from the admitted source snapshot.
+
+    Repaired packs may carry lossy inventory metadata. The source snapshot is
+    the canonical evidence authority, so a frontmatter description wins when
+    present. This restores article-root evidence without changing source bytes.
+    """
+    title = str(article.get("title", "")).strip()
+    record_description = str(article.get("description") or "").strip()
+    metadata, _text, _body_start_line = parse_frontmatter(
+        raw,
+        path=str(article.get("origin_path") or article.get("slug") or "source.md"),
+    )
+    source_description = str(metadata.get("description") or "").strip()
+    return source_description or record_description or title
+
+
 def build_pack_artifacts(
     pack: Mapping[str, Any],
     release_id: str,
@@ -240,7 +258,7 @@ def build_pack_artifacts(
         raw = source_bytes[article_id]
         article_node = article_nodes[article_id]
         path = f"_documents/daniel-blog-en-156/sources/{article['slug']}.md"
-        description = article.get("description") or article["title"]
+        description = _source_backed_description(article, raw)
         source_index.append(
             {
                 "source_id": article_id,
@@ -370,7 +388,7 @@ def build_pack_artifacts(
             locator["start_line"],
             locator["end_line"],
         )
-        description = article.get("description") or article["title"]
+        description = _source_backed_description(article, source_bytes[source_id])
         searchable = " ".join(
             (article["title"], node["title"], str(description), body)
         )

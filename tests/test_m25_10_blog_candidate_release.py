@@ -72,3 +72,33 @@ def test_semantic_population_contract_is_article_plus_section() -> None:
         + subject.COUNTS["articles"]
         + subject.COUNTS["sections"]
     )
+
+
+def test_source_backed_description_restores_frontmatter_authority() -> None:
+    article = {
+        "title": "Harness Theory Part 09",
+        "description": "Harness Theory Part 09",
+        "origin_path": "src/content/blog/harness-theory-part-9/en.md",
+    }
+    raw = (
+        b"---\n"
+        b"title: Harness Theory Part 09\n"
+        b"description: An agent harness confines autonomous action to authorised boundaries.\n"
+        b"---\n\n"
+        b"Body.\n"
+    )
+
+    assert subject._source_backed_description(article, raw) == (
+        "An agent harness confines autonomous action to authorised boundaries."
+    )
+
+
+def test_source_backed_description_falls_back_to_inventory_when_source_has_none() -> None:
+    article = {
+        "title": "Article title",
+        "description": "Inventory summary",
+        "origin_path": "src/content/blog/example.md",
+    }
+    raw = b"---\ntitle: Article title\n---\n\nBody.\n"
+
+    assert subject._source_backed_description(article, raw) == "Inventory summary"
