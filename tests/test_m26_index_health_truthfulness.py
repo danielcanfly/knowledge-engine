@@ -420,8 +420,17 @@ def test_durable_job_health_survives_reopen_and_orders_ties_deterministically(
     assert [job["job_id"] for job in health["jobs"]["running"]] == ["running"]
     assert health["jobs"]["last_successful"]["job_id"] == "success"
     assert health["jobs"]["last_failed"]["job_id"] == "failed-a"
+    assert [job["job_id"] for job in health["jobs"]["recent_terminal"]] == [
+        "success",
+        "failed-a",
+        "failed-b",
+    ]
     assert health["jobs"]["retryable_failed_count"] == 2
     assert [job["job_id"] for job in reopened.ledger.list_jobs()][-2:] == ["failed-a", "failed-b"]
+    retention = reopened.ledger.retention_report(keep_recent=2)
+    assert retention["counts"]["total_jobs"] == 4
+    assert retention["counts"]["terminal_jobs_older_than_recent_window"] == 1
+    assert retention["policy"]["physical_cleanup_requires_explicit_operator_action"] is True
 
 
 class _Authenticator:

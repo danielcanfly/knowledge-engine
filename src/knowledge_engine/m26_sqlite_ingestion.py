@@ -449,6 +449,52 @@ class SQLiteIngestionLedger:
             ).fetchall()
         return [self._job(row) for row in rows]
 
+    def retention_report(self, *, keep_recent: int = 50) -> dict[str, Any]:
+        keep_recent = min(max(int(keep_recent), 1), 500)
+        with self._connect() as db:
+            total = int(db.execute("SELECT COUNT(1) FROM ingestion_jobs").fetchone()[0])
+            terminal = int(
+                db.execute(
+                    "SELECT COUNT(1) FROM ingestion_jobs WHERE status IN ('SUCCEEDED','FAILED')"
+                ).fetchone()[0]
+            )
+            running = int(
+                db.execute(
+                    "SELECT COUNT(1) FROM ingestion_jobs WHERE status IN ('PENDING','RUNNING')"
+                ).fetchone()[0]
+            )
+            stale_running = int(
+                db.execute(
+                    "SELECT COUNT(1) FROM ingestion_jobs WHERE status='RUNNING' AND lease_expires_at IS NOT NULL AND lease_expires_at<=?",
+                    (time.time(),),
+                ).fetchone()[0]
+            )
+            old_terminal = max(terminal - keep_recent, 0)
+            oldest = db.execute(
+                "SELECT MIN(created_at) FROM ingestion_jobs"
+            ).fetchone()[0]
+            newest = db.execute(
+                "SELECT MAX(updated_at) FROM ingestion_jobs"
+            ).fetchone()[0]
+        return {
+            "schema_version": "m26-ingestion-job-retention/v1",
+            "policy": {
+                "keep_recent_terminal_jobs": keep_recent,
+                "protect_non_terminal_jobs": True,
+                "protect_latest_success_and_failure": True,
+                "physical_cleanup_requires_explicit_operator_action": True,
+            },
+            "counts": {
+                "total_jobs": total,
+                "terminal_jobs": terminal,
+                "non_terminal_jobs": running,
+                "stale_running_jobs": stale_running,
+                "terminal_jobs_older_than_recent_window": old_terminal,
+            },
+            "oldest_created_at": oldest,
+            "newest_updated_at": newest,
+        }
+
     def update_job(
         self, job_id: str, *, expected_version: int, patch: Mapping[str, Any]
     ) -> dict[str, Any]:
@@ -928,7 +974,10 @@ class SQLiteIngestionAdapter:
 
     def list_jobs(self) -> ReadObservation:
         recovered = self.ledger.recover_expired(now=time.time())
-        data: dict[str, Any] = {"jobs": self.ledger.list_jobs()}
+        data: dict[str, Any] = {
+            "jobs": self.ledger.list_jobs(),
+            "retention": self.ledger.retention_report(),
+        }
         if recovered:
             data["expired_jobs_recovered"] = recovered
         return ReadObservation(
@@ -1695,7 +1744,10 @@ class SQLiteIngestionReadAuthority:
     def list_jobs(self) -> ReadObservation:
         return ReadObservation(
             availability="available",
-            data={"jobs": self.ledger.list_jobs()},
+            data={
+                "jobs": self.ledger.list_jobs(),
+                "retention": self.ledger.retention_report(),
+            },
             source="sqlite_ingestion_ledger",
             freshness="live",
             observed_at=utc_now(),

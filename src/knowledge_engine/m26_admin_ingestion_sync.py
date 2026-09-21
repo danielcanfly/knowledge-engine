@@ -561,6 +561,11 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
         (_job_summary(job) for job in jobs if str(job.get("status", "")).upper() == "FAILED"),
         None,
     )
+    recent_terminal = [
+        _job_summary(job)
+        for job in jobs
+        if str(job.get("status", "")).upper() in {"SUCCEEDED", "FAILED"}
+    ][:5]
     retryable_failed_count = sum(
         1 for job in jobs if str(job.get("status", "")).upper() == "FAILED"
     )
@@ -622,6 +627,7 @@ def build_index_health(observation: ReadObservation) -> ReadObservation:
             "running": running,
             "last_successful": last_successful,
             "last_failed": last_failed,
+            "recent_terminal": recent_terminal,
             "retryable_failed_count": retryable_failed_count,
         },
         "promotion_readiness": {
