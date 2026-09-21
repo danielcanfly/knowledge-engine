@@ -694,6 +694,31 @@ def _facet_local_support_quote(
     item: Mapping[str, Any],
     requirement: SemanticRequirement,
 ) -> str:
+    if requirement.exact_phrase:
+        passage_text = str(item.get("passage_text", ""))
+        matching_segments = [
+            segment
+            for segment in legacy._exact_quote_segments(passage_text)
+            if _identity_phrase_matches(requirement.exact_phrase, segment)
+        ]
+        if matching_segments:
+            selected = sorted(
+                matching_segments,
+                key=lambda segment: (
+                    legacy._thin_heading(segment),
+                    legacy._article_title_like(segment),
+                    legacy._segment_noise_penalty(segment),
+                    -len(legacy._meaningful_terms(segment)),
+                    -len(segment),
+                ),
+            )[0]
+            if len(selected) > MAX_PROVIDER_SNIPPET_CHARS:
+                return legacy._bounded_quote_around_terms(
+                    selected,
+                    legacy._meaningful_terms(requirement.exact_phrase),
+                    max_chars=MAX_PROVIDER_SNIPPET_CHARS,
+                )
+            return selected
     if (
         legacy._direct_facet_required_phrases(requirement.requirement_id)
         or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
@@ -2800,9 +2825,25 @@ def _selected_evidence_set_supports_requirement(
 
 
 def _selected_evidence_text(item: Mapping[str, Any]) -> str:
+    if item.get("evidence_type") == "graph_edge":
+        return " ".join(
+            str(item.get(key, ""))
+            for key in (
+                "edge_source_label",
+                "edge_target_label",
+                "relation_type",
+                "passage_text",
+            )
+        )
+    passage_text = str(item.get("passage_text", "")).strip()
+    if passage_text:
+        return " ".join(
+            str(item.get(key, ""))
+            for key in ("title", "section_title", "passage_text")
+        )
     return " ".join(
         str(item.get(key, ""))
-        for key in ("title", "section_title", "passage_text", "body", "excerpt")
+        for key in ("title", "section_title", "body", "excerpt")
     )
 
 

@@ -386,3 +386,59 @@ def test_facet_local_top_k_quote_is_reused_by_claim_binding() -> None:
     )
 
     assert top_k_claim["support_refs"][0]["exact_quote"] == top_k_quote
+
+
+def test_exact_phrase_support_ignores_hidden_body_when_passage_is_bound() -> None:
+    requirement = closure.SemanticRequirement(
+        requirement_id="entity_production_router",
+        instruction="Name and address production router explicitly.",
+        evidence_terms=("production router",),
+        visible_patterns=(r"production\\ router",),
+        exact_phrase="production router",
+    )
+    misleading = {
+        "evidence_id": "ev-hidden-body",
+        "evidence_type": "passage",
+        "title": "Router notes",
+        "section_title": "What to log",
+        "passage_text": "Log router input, selected route, policy version, and risk checks.",
+        "body": "Earlier in this section: A production router needs an escape path.",
+        "excerpt": "A production router needs an escape path.",
+    }
+    exact = {
+        **misleading,
+        "evidence_id": "ev-exact-passage",
+        "section_title": "A production router needs an escape path",
+        "passage_text": (
+            "A production router needs an escape path for unknown or "
+            "unsupported inputs."
+        ),
+    }
+
+    assert not closure._selected_evidence_supports_requirement(requirement, misleading)
+    assert closure._selected_evidence_supports_requirement(requirement, exact)
+
+
+def test_exact_phrase_facet_local_quote_contains_required_identity() -> None:
+    requirement = closure.SemanticRequirement(
+        requirement_id="entity_production_router",
+        instruction="Name and address production router explicitly.",
+        evidence_terms=("production router",),
+        visible_patterns=(r"production\\ router",),
+        exact_phrase="production router",
+    )
+    item = {
+        "evidence_id": "ev-router-passage",
+        "evidence_type": "passage",
+        "title": "The Atlas of Agent Design Patterns Part 2",
+        "section_title": "What to log",
+        "passage_text": (
+            "What to log: router input, selected route, policy version, and risk checks. "
+            "A production router needs an escape path for unknown or unsupported inputs."
+        ),
+    }
+
+    quote = closure._facet_local_support_quote(item, requirement)
+
+    assert "production router" in quote.casefold()
+    assert "escape path" in quote.casefold()
