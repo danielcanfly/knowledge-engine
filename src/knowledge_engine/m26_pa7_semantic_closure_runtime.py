@@ -5477,13 +5477,18 @@ def _strengthen_evidence(
         )
     if intent_class == "graph_relationship":
         entities = legacy._named_question_entities(question)
-        if len(entities) >= 2:
+        exact_required = len(entities) >= 2
+        if exact_required:
             endpoint_proof["required"] = True
         edge = next(
             (
                 item
                 for item in selected
                 if item.get("evidence_type") == "graph_edge"
+                and (
+                    not exact_required
+                    or legacy._graph_edge_evidence_matches_named_question(item, question)
+                )
             ),
             None,
         )
@@ -5500,6 +5505,10 @@ def _strengthen_evidence(
                     ),
                     "relation_type": str(edge.get("relation_type", "")),
                 }
+            )
+        elif exact_required:
+            endpoint_proof["endpoint_mismatch_detected"] = any(
+                item.get("evidence_type") == "graph_edge" for item in selected
             )
     return selected, endpoint_proof
 

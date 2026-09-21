@@ -20,6 +20,10 @@ from .m26_preamble_r1_candidate_release import (
     preamble_r1_authority_mismatch,
 )
 from .m26_production_answer_bundle import ProductionAnswerBundle, load_production_answer_bundle
+from .m26_semantic_arch_repair_candidate_release import (
+    SEMANTIC_ARCH_REPAIR_KIND,
+    semantic_arch_repair_candidate_mismatch,
+)
 from .m26_semantic_r3_candidate_release import (
     SEMANTIC_R3_RELEASE_ID,
     semantic_r3_authority_mismatch,
@@ -469,6 +473,83 @@ def _entity_requirement_equivalence_key(value: str) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def _cross_source_truth_requirements(question: str) -> list[SemanticRequirement]:
+    facet_ids = {
+        str(item.get("facet_id", ""))
+        for item in legacy._direct_question_facets(question)
+        if isinstance(item, Mapping)
+    }
+    required = {
+        "source_truth_routing",
+        "cross_source_composition",
+        "top_k_boundary",
+    }
+    if not required.issubset(facet_ids):
+        return []
+    return [
+        SemanticRequirement(
+            requirement_id="source_truth_routing",
+            instruction=(
+                "Explain that the source of truth determines the retrieval pattern, "
+                "such as document RAG versus SQL/API or another system lookup."
+            ),
+            evidence_terms=(
+                "source of truth",
+                "retrieval pattern",
+                "pattern router",
+                "document rag",
+                "sql",
+                "api tool",
+                "database",
+                "documents",
+            ),
+            visible_patterns=(
+                r"(?:source of truth|retrieval pattern|pattern router).{0,180}(?:rag|document|sql|database|api|system)",
+                r"(?:rag|document|sql|database|api|system).{0,180}(?:source of truth|retrieval pattern|pattern router)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="cross_source_composition",
+            instruction=(
+                "Explain that a question spanning system/database facts and document "
+                "evidence requires composing results from more than one retrieval pattern."
+            ),
+            evidence_terms=(
+                "crosses retrieval patterns",
+                "query sql",
+                "policy documents",
+                "combine",
+                "database",
+                "document",
+                "both",
+            ),
+            visible_patterns=(
+                r"(?:cross|combine|both|sql|database).{0,200}(?:document|rag|policy|evidence)",
+                r"(?:document|rag|policy|evidence).{0,200}(?:cross|combine|both|sql|database)",
+            ),
+        ),
+        SemanticRequirement(
+            requirement_id="top_k_boundary",
+            instruction=(
+                "Explain that increasing top_k only expands candidates within a retrieval "
+                "pass and does not replace source routing or a bounded multi-step workflow."
+            ),
+            evidence_terms=(
+                "top_k",
+                "top k",
+                "one retrieval pass",
+                "not raising",
+                "bounded multi-step workflow",
+                "retrieval pattern",
+            ),
+            visible_patterns=(
+                r"top[_ ]?k.{0,220}(?:one retrieval pass|not enough|not raising|bounded multi-step|retrieval pattern|source of truth)",
+                r"(?:one retrieval pass|bounded multi-step|retrieval pattern|source of truth).{0,220}top[_ ]?k",
+            ),
+        ),
+    ]
+
+
 def derive_semantic_requirements(
     question: str,
     intent_class: str,
@@ -532,6 +613,14 @@ def derive_semantic_requirements(
             question=question,
             intent_class=intent_class,
         )
+        for requirement in _cross_source_truth_requirements(question):
+            add_question_shape(
+                requirement.requirement_id,
+                requirement.instruction,
+                requirement.evidence_terms,
+                requirement.visible_patterns,
+                exact_phrase=requirement.exact_phrase,
+            )
     requirements: list[SemanticRequirement] = []
     seen: set[str] = set()
     seen_entity_keys: set[tuple[str, ...]] = set()
@@ -3526,6 +3615,18 @@ def _contract_event_sink(
 
 
 def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
+    identities = bundle.manifest.get("identities")
+    if (
+        isinstance(identities, Mapping)
+        and identities.get("repair_kind") == SEMANTIC_ARCH_REPAIR_KIND
+    ):
+        mismatch = semantic_arch_repair_candidate_mismatch(bundle)
+        if mismatch is not None:
+            raise legacy.PA7ArbitraryQueryError(
+                mismatch,
+                "semantic architecture-repair candidate does not match qualification authority",
+            )
+        return
     if bundle.release_id == PREAMBLE_R1_RELEASE_ID:
         mismatch = preamble_r1_authority_mismatch(bundle)
         if mismatch is not None:

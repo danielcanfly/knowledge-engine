@@ -31,7 +31,7 @@ from .m23_cloudflare_qdrant import (
     preflight_qdrant_collection,
     upsert_qdrant_points,
 )
-from .m25_blog_pilot import parse_frontmatter
+from .m25_blog_pilot import _infer_series_order, parse_frontmatter, stable_id
 from .publisher import publish_release
 from .source import build_source_release
 from .storage import create_object_store, sha256_bytes
@@ -242,12 +242,106 @@ def _section_search_description(article: Mapping[str, Any]) -> str:
     return str(article.get("description") or article["title"]).strip()
 
 
+def _resolved_series_order(article: Mapping[str, Any]) -> int | None:
+    value = article.get("series_order")
+    if value not in (None, ""):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+    slug = str(article.get("slug", ""))
+    inferred = _infer_series_order(slug)
+    if inferred is not None:
+        return inferred
+    title = str(article.get("title", ""))
+    match = re.search(r"\bpart\s*0*(\d+)\b", title, flags=re.I)
+    return int(match.group(1)) if match else None
+
+
+def normalize_pack_series_precedes(pack: Mapping[str, Any]) -> dict[str, Any]:
+    """Rebuild unambiguous intra-series ordering edges from source identity."""
+    article_by_id = pack["article_by_id"]
+    nodes = [dict(item) for item in pack["nodes"]]
+    edges = [dict(item) for item in pack["edges"]]
+    article_node_ids = {
+        str(node.get("source_article_id", "")): str(node.get("node_id", ""))
+        for node in nodes
+        if node.get("node_type") == "Article"
+        and str(node.get("source_article_id", ""))
+        and str(node.get("node_id", ""))
+    }
+    series_members: dict[str, list[tuple[int, str, str]]] = {}
+    series_counts: Counter[str] = Counter()
+    for article_id, raw_article in article_by_id.items():
+        if not isinstance(raw_article, Mapping):
+            continue
+        series_id = str(raw_article.get("series_id", "")).strip()
+        node_id = article_node_ids.get(str(article_id), "")
+        if not series_id or not node_id:
+            continue
+        series_counts[series_id] += 1
+        order = _resolved_series_order(raw_article)
+        if order is not None:
+            series_members.setdefault(series_id, []).append((order, str(article_id), node_id))
+
+    resolved_series: dict[str, list[tuple[int, str, str]]] = {}
+    for series_id, members in series_members.items():
+        orders = [item[0] for item in members]
+        if (
+            series_counts[series_id] >= 2
+            and len(members) == series_counts[series_id]
+            and len(set(orders)) == len(orders)
+        ):
+            resolved_series[series_id] = sorted(members, key=lambda item: (item[0], item[1]))
+
+    if not resolved_series:
+        return {**dict(pack), "nodes": nodes, "edges": edges}
+
+    node_to_series = {
+        node_id: series_id
+        for series_id, members in resolved_series.items()
+        for _order, _article_id, node_id in members
+    }
+    retained_edges: list[dict[str, Any]] = []
+    for edge in edges:
+        if str(edge.get("type", "")) != "precedes":
+            retained_edges.append(edge)
+            continue
+        source_series = node_to_series.get(str(edge.get("source", "")))
+        target_series = node_to_series.get(str(edge.get("target", "")))
+        if source_series and source_series == target_series:
+            continue
+        retained_edges.append(edge)
+
+    rebuilt_edges = list(retained_edges)
+    for series_id, members in sorted(resolved_series.items()):
+        for current, following in zip(members, members[1:], strict=False):
+            source_id = current[2]
+            target_id = following[2]
+            rebuilt_edges.append(
+                {
+                    "edge_id": stable_id("edge", source_id, "precedes", target_id),
+                    "source": source_id,
+                    "target": target_id,
+                    "type": "precedes",
+                    "status": "candidate_structural",
+                    "series_id": series_id,
+                    "ordering_source": "series_order_or_natural_numeric_fallback",
+                }
+            )
+    rebuilt_edges.sort(key=lambda item: str(item.get("edge_id", "")))
+    return {**dict(pack), "nodes": nodes, "edges": rebuilt_edges}
+
+
 def build_pack_artifacts(
     pack: Mapping[str, Any],
     release_id: str,
     *,
     expected_semantic_documents: int | None = None,
+    normalize_series_precedes: bool = False,
 ) -> dict[str, Any]:
+    if normalize_series_precedes:
+        pack = normalize_pack_series_precedes(pack)
     article_by_id = pack["article_by_id"]
     source_bytes = pack["source_bytes"]
     nodes = pack["nodes"]

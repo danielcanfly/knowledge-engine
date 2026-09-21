@@ -271,6 +271,18 @@ DIRECT_FACET_EXACT_PHRASES = {
     )
 }
 DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
+    "source_truth_routing": (
+        ("pattern router", "retrieval pattern"),
+        ("document rag", "sql", "api tool", "source of truth", "vector search"),
+    ),
+    "cross_source_composition": (
+        ("crosses retrieval patterns", "query sql", "sql"),
+        ("policy documents", "document"),
+    ),
+    "top_k_boundary": (
+        ("top_k",),
+        ("one retrieval pass", "not raising", "bounded multi-step workflow"),
+    ),
     "comfyui_checkpoints": (("checkpoint", "checkpoints"),),
     "comfyui_loras": (("lora", "loras"),),
     "comfyui_vae": (("vae",),),
@@ -2462,7 +2474,6 @@ def _validate_fast_provider_candidate(
     selected_evidence: Sequence[Mapping[str, Any]],
     provider_output: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    del question
     parsed = _object(provider_output.get("parsed", {}), "fast provider parsed")
     status = str(parsed.get("status", "")).strip().casefold()
     if status == "abstain":
@@ -2495,6 +2506,17 @@ def _validate_fast_provider_candidate(
     selected_by_id = {str(item["evidence_id"]): item for item in selected_evidence}
     if any(citation_id not in selected_by_id for citation_id in citation_ids):
         return None
+    if _question_requires_exact_named_graph_edge(question):
+        cited_graph_edges = [
+            selected_by_id[citation_id]
+            for citation_id in citation_ids
+            if selected_by_id[citation_id].get("evidence_type") == "graph_edge"
+        ]
+        if not any(
+            _graph_edge_evidence_matches_named_question(item, question)
+            for item in cited_graph_edges
+        ):
+            return None
     support_refs = []
     for citation_id in citation_ids:
         support_ref = _deterministic_support_ref(selected_by_id[citation_id])
@@ -4118,6 +4140,34 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
         add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    cross_source_truth_query = bool(
+        (
+            "top_k" in question_casefold
+            or "top k" in question_casefold
+            or "source of truth" in question_casefold
+        )
+        and any(
+            term in question_casefold
+            for term in ("document", "documents", "rag", "evidence")
+        )
+        and any(
+            term in question_casefold
+            for term in ("database", "sql", "system", "systems", "api", "facts")
+        )
+    )
+    if cross_source_truth_query:
+        add(
+            "source_truth_routing",
+            ["pattern router", "retrieval pattern", "document rag", "sql", "source of truth"],
+        )
+        add(
+            "cross_source_composition",
+            ["crosses retrieval patterns", "query sql", "policy documents", "combine"],
+        )
+        add(
+            "top_k_boundary",
+            ["top_k", "one retrieval pass", "bounded multi-step workflow"],
+        )
     if "trade-off" in question_casefold or "tradeoff" in question_casefold:
         add(
             "tradeoff_relation",
@@ -4160,10 +4210,13 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
                 "decisions",
             ],
         )
-    if re.search(
-        r"\bwhat\s+(?:kind|type)\s+of\b.*\b(?:need|require)\b",
-        question_casefold,
-    ) or re.search(r"\b(?:need(s|ed)?|require[sd]?)\b", question_casefold):
+    if not cross_source_truth_query and (
+        re.search(
+            r"\bwhat\s+(?:kind|type)\s+of\b.*\b(?:need|require)\b",
+            question_casefold,
+        )
+        or re.search(r"\b(?:need(s|ed)?|require[sd]?)\b", question_casefold)
+    ):
         add(
             "need_relation",
             [
@@ -4403,6 +4456,93 @@ def _named_question_entities(question: str) -> list[str]:
         for match in re.finditer(pattern, question, flags=re.I):
             add(match.group(0))
     return entities
+
+
+def _normalized_graph_entity_identity(value: str) -> str:
+    normalized = _normalized_relevance_text(str(value))
+    normalized = re.sub(
+        r"\bpart\s+0*(\d+)\b",
+        lambda match: f"part {int(match.group(1))}",
+        normalized,
+        flags=re.I,
+    )
+    return " ".join(normalized.split())
+
+
+def _graph_identity_contains(value: str, entity: str) -> bool:
+    haystack = _normalized_graph_entity_identity(value)
+    needle = _normalized_graph_entity_identity(entity)
+    return bool(needle and f" {needle} " in f" {haystack} ")
+
+
+def _graph_edge_evidence_matches_named_question(
+    item: Mapping[str, Any],
+    question: str,
+) -> bool:
+    if item.get("evidence_type") != "graph_edge":
+        return False
+    entities = _named_question_entities(question)
+    if len(entities) < 2:
+        return True
+    relation_type = str(item.get("relation_type", ""))
+    if "precedes" in question.casefold() and relation_type != "precedes":
+        return False
+    source_label = str(
+        item.get("edge_source_label")
+        or item.get("source_label")
+        or item.get("passage_text")
+        or ""
+    )
+    target_label = str(
+        item.get("edge_target_label")
+        or item.get("target_label")
+        or item.get("passage_text")
+        or ""
+    )
+    return _graph_identity_contains(source_label, entities[0]) and _graph_identity_contains(
+        target_label, entities[1]
+    )
+
+
+def _named_question_graph_edge(
+    bundle: ProductionAnswerBundle,
+    question: str,
+) -> Mapping[str, Any] | None:
+    entities = _named_question_entities(question)
+    if len(entities) < 2:
+        return None
+    required_relation = "precedes" if "precedes" in question.casefold() else ""
+    matches: list[Mapping[str, Any]] = []
+    for edge in bundle.graph_v2.get("edges", []):
+        if not isinstance(edge, Mapping) or not _edge_has_endpoint_documents(edge, bundle):
+            continue
+        if required_relation and str(edge.get("relation_type", "")) != required_relation:
+            continue
+        source_label = _graph_endpoint_display_label(bundle, str(edge.get("source", "")))
+        target_label = _graph_endpoint_display_label(bundle, str(edge.get("target", "")))
+        if _graph_identity_contains(source_label, entities[0]) and _graph_identity_contains(
+            target_label, entities[1]
+        ):
+            matches.append(edge)
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda edge: (
+            float(edge.get("confidence", 0.0) or 0.0),
+            str(edge.get("edge_id", "")),
+        ),
+    )
+
+
+def _question_requires_exact_named_graph_edge(question: str) -> bool:
+    return len(_named_question_entities(question)) >= 2 and bool(
+        re.search(
+            r"\b(?:graph|edge|relation|relationship|precedes|preceding|comes before)\b",
+            question,
+            flags=re.I,
+        )
+    )
 
 
 def _facet_id_for_term(term: str) -> str:
@@ -8089,6 +8229,11 @@ def _first_authoritative_edge(
     *,
     question: str,
 ) -> Mapping[str, Any] | None:
+    exact_named = _named_question_graph_edge(bundle, question)
+    if exact_named is not None:
+        return exact_named
+    if _question_requires_exact_named_graph_edge(question):
+        return None
     query_terms = _meaningful_terms(question)
     order_query = bool(query_terms & ORDER_QUERY_TERMS)
     candidates: list[Mapping[str, Any]] = []

@@ -379,11 +379,15 @@ def _best_precedes_endpoint_proof(
         return endpoint
     if not _relation_paraphrase_mentions_precedes(question):
         return endpoint
+    from . import m26_pa7_arbitrary_query_runtime as legacy
+
     entities = _strict_part_entities(question)
     for item in evidence:
         if item.get("evidence_type") != "graph_edge":
             continue
         if str(item.get("relation_type", "")) != "precedes":
+            continue
+        if not legacy._graph_edge_evidence_matches_named_question(item, question):
             continue
         edge_source = str(item.get("edge_source") or item.get("source") or "")
         edge_target = str(item.get("edge_target") or item.get("target") or "")
