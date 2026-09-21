@@ -4432,13 +4432,14 @@ def _named_question_entities(question: str) -> list[str]:
         root = " ".join(shared_part.group(1).split())
         root = re.sub(
             r"^(?:If the relation graph records|The production graph says|"
-            r"Does the precedes edge between|Can the precedes edge between|Does)\s+",
+            r"Does the precedes edge between|Can the precedes edge between|"
+            r"What does|What did|What is|What are|How does|How did|Does)(?:\s+|$)",
             "",
             root,
             flags=re.I,
         ).strip()
         for part in re.findall(r"\bPart\s+(\d+)\b", question, flags=re.I):
-            add(f"{root} Part {part}")
+            add(f"{root} Part {part}" if root else f"Part {part}")
 
     patterns = (
         r"Harness Theory Part \d+",
@@ -6575,18 +6576,40 @@ def _select_evidence(
         question_contract=question_contract,
     )
     deduped = _dedupe_evidence(augmented)
+    return _truncate_selected_evidence(deduped, budget=budget)
+
+
+def _truncate_selected_evidence(
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    budget: int,
+) -> list[dict[str, Any]]:
+    deduped = [dict(item) for item in evidence]
     if len(deduped) <= budget:
         return deduped
-    protected = [
+    explicit_facet = [
         item
         for item in deduped
         if isinstance(item.get("retrieval_metadata"), Mapping)
+        and str(item["retrieval_metadata"].get("required_facet_id", ""))
+    ]
+    explicit_ids = {str(item.get("evidence_id", "")) for item in explicit_facet}
+    source_coverage = [
+        item
+        for item in deduped
+        if str(item.get("evidence_id", "")) not in explicit_ids
+        and isinstance(item.get("retrieval_metadata"), Mapping)
         and isinstance(item["retrieval_metadata"].get("source_coverage"), Mapping)
     ]
+    protected = [*explicit_facet, *source_coverage]
     protected_ids = {str(item.get("evidence_id", "")) for item in protected}
     return (
         protected[:budget]
-        + [item for item in deduped if str(item.get("evidence_id", "")) not in protected_ids]
+        + [
+            dict(item)
+            for item in deduped
+            if str(item.get("evidence_id", "")) not in protected_ids
+        ]
     )[:budget]
 
 
@@ -7836,7 +7859,20 @@ def _ensure_required_facet_coverage_passages(
     def _cached_text(document: Mapping[str, Any]) -> str:
         section_id = str(document.get("section_id", ""))
         if section_id not in text_cache:
-            text_cache[section_id] = _document_text(document)
+            if str(document.get("passage_text", "")).strip():
+                text_cache[section_id] = " ".join(
+                    str(document.get(key, ""))
+                    for key in (
+                        "title",
+                        "section_title",
+                        "passage_text",
+                        "source_identity",
+                        "source_id",
+                        "concept_id",
+                    )
+                )
+            else:
+                text_cache[section_id] = _document_text(document)
         return text_cache[section_id]
 
     def _cached_terms(document: Mapping[str, Any]) -> set[str]:
@@ -7870,22 +7906,14 @@ def _ensure_required_facet_coverage_passages(
         for item in (lexical_results or [])
         if isinstance(item, Mapping) and str(item.get("section_id", ""))
     }
-    lexical_document_set = {
-        str(document.get("section_id", ""))
-        for document in documents
-        if str(document.get("section_id", "")) in lexical_section_ids
-    }
-    bounded_documents = [
-        document
-        for document in documents
-        if str(document.get("section_id", "")) in lexical_document_set
-    ] or documents
-    coverage_priority_cache: dict[str, tuple[float, ...]] = {}
+    coverage_priority_cache: dict[tuple[str, str], tuple[float, ...]] = {}
 
     def _coverage_priority(document: Mapping[str, Any], facet: Mapping[str, Any]) -> tuple[float, ...]:
         section_id = str(document.get("section_id", ""))
-        if section_id in coverage_priority_cache:
-            return coverage_priority_cache[section_id]
+        facet_id = str(facet.get("facet_id", ""))
+        cache_key = (section_id, facet_id)
+        if cache_key in coverage_priority_cache:
+            return coverage_priority_cache[cache_key]
         text = _cached_text(document)
         relevance = _subject_relevance(document)
         coverage = _source_coverage_metadata(question=question, document=document) or {}
@@ -7894,8 +7922,34 @@ def _ensure_required_facet_coverage_passages(
         answer_bearing = float(bool(relevance.get("answer_bearing")))
         lexical_seed = float(str(document.get("section_id", "")) in lexical_section_ids)
         priority = (lexical_seed, answer_bearing, facet_score, coverage_score, _passage_text_quality(str(document.get("body") or document.get("excerpt") or "")))
-        coverage_priority_cache[section_id] = priority
+        coverage_priority_cache[cache_key] = priority
         return priority
+
+    def _facet_has_strong_contract(facet: Mapping[str, Any]) -> bool:
+        facet_id = str(facet.get("facet_id", ""))
+        return bool(
+            _direct_facet_required_phrases(facet_id)
+            or _direct_facet_required_quote_groups(facet_id)
+        )
+
+    def _facet_subject_gate(
+        document: Mapping[str, Any],
+        facet: Mapping[str, Any],
+    ) -> bool:
+        if _facet_has_strong_contract(facet):
+            return True
+        relevance = _subject_relevance(document)
+        if (
+            _subject_anchor_score(
+                focus=focus,
+                subject_coverage=relevance.get("subject_coverage", 0.0),
+                subject_phrase_hits=relevance.get("subject_phrase_hits", []),
+            )
+            < 1.0
+        ):
+            return False
+        return not answer_bearing_required or bool(relevance.get("answer_bearing"))
+
     for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
@@ -7907,16 +7961,7 @@ def _ensure_required_facet_coverage_passages(
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
                 and _direct_facet_text_matches(facet, _cached_text(item))
-                and _subject_anchor_score(
-                    focus=focus,
-                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
-                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
-                )
-                >= 1.0
-                and (
-                    not answer_bearing_required
-                    or _subject_relevance(item).get("answer_bearing")
-                )
+                and _facet_subject_gate(item, facet)
             ),
             None,
         )
@@ -7924,8 +7969,8 @@ def _ensure_required_facet_coverage_passages(
             prepend.append(dict(existing))
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
-        bounded_documents = sorted(
-            bounded_documents,
+        candidate_documents = sorted(
+            documents,
             key=lambda document: (
                 -_coverage_priority(document, facet)[0],
                 -_coverage_priority(document, facet)[1],
@@ -7946,19 +7991,10 @@ def _ensure_required_facet_coverage_passages(
         document = next(
             (
                 item
-                for item in documents
+                for item in candidate_documents
                 if str(item.get("section_id", "")) not in selected_sections
                 and _direct_facet_text_matches(facet, _cached_text(item))
-                and _subject_anchor_score(
-                    focus=focus,
-                    subject_coverage=_subject_relevance(item).get("subject_coverage", 0.0),
-                    subject_phrase_hits=_subject_relevance(item).get("subject_phrase_hits", []),
-                )
-                >= 1.0
-                and (
-                    not answer_bearing_required
-                    or _subject_relevance(item).get("answer_bearing")
-                )
+                and _facet_subject_gate(item, facet)
             ),
             None,
         )
@@ -9204,7 +9240,15 @@ def _meaningful_terms(text: str) -> set[str]:
 def _document_text(document: Mapping[str, Any]) -> str:
     return " ".join(
         str(document.get(key, ""))
-        for key in ("title", "section_title", "description", "body", "excerpt", "concept_id")
+        for key in (
+            "title",
+            "section_title",
+            "description",
+            "passage_text",
+            "body",
+            "excerpt",
+            "concept_id",
+        )
     )
 
 

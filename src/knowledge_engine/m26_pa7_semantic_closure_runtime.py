@@ -690,6 +690,26 @@ def _material_requirements_for_query(
     ]
 
 
+def _facet_local_support_quote(
+    item: Mapping[str, Any],
+    requirement: SemanticRequirement,
+) -> str:
+    if (
+        legacy._direct_facet_required_phrases(requirement.requirement_id)
+        or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
+    ):
+        ref = legacy._deterministic_support_ref_for_facet(
+            item,
+            {
+                "facet_id": requirement.requirement_id,
+                "terms": list(requirement.evidence_terms),
+            },
+        )
+        if isinstance(ref, Mapping) and str(ref.get("exact_quote", "")).strip():
+            return str(ref["exact_quote"]).strip()
+    return _provider_snippet(item, "", [requirement])
+
+
 def _facet_local_provider_slots(
     *,
     requirements: Sequence[SemanticRequirement],
@@ -723,6 +743,7 @@ def _facet_local_provider_slots(
                 "supported facet has no runtime-owned local evidence slot",
             )
         local_evidence = []
+        support_quote_by_evidence_id: dict[str, str] = {}
         for label, evidence_id in zip(allowed_labels, allowed_ids, strict=False):
             item = label_map.get(label)
             if item is None:
@@ -730,14 +751,15 @@ def _facet_local_provider_slots(
                     FACET_LOCAL_SLOT_MALFORMED,
                     "facet-local slot references an unavailable runtime evidence item",
                 )
+            quote = _facet_local_support_quote(item, requirement)
+            support_quote_by_evidence_id[evidence_id] = quote
             local_evidence.append(
                 {
                     "context_index": len(local_evidence) + 1,
                     "evidence_type": str(item.get("evidence_type", "passage")),
                     "title": str(item.get("title", ""))[:120],
                     "section": str(item.get("section_title", ""))[:120],
-                    "text": snippet_map.get(evidence_id)
-                    or _provider_snippet(item, "", requirements),
+                    "text": quote,
                 }
             )
         slots.append(
@@ -748,6 +770,7 @@ def _facet_local_provider_slots(
                 "requirement": requirement,
                 "allowed_evidence_ids": allowed_ids,
                 "allowed_evidence_labels": allowed_labels,
+                "support_quote_by_evidence_id": support_quote_by_evidence_id,
                 "evidence": local_evidence,
             }
         )
@@ -1196,10 +1219,17 @@ def _runtime_bound_facet_local_candidate(
                 for label, evidence_id in allowed_pairs
                 if str(label_map[label].get("evidence_type", "")) == "graph_edge"
             ]
+        support_quote_by_evidence_id = slot.get("support_quote_by_evidence_id", {})
+        if not isinstance(support_quote_by_evidence_id, Mapping):
+            support_quote_by_evidence_id = {}
         for label, evidence_id in allowed_pairs:
             item = label_map[label]
-            quote = snippet_map.get(evidence_id) or legacy._first_exact_evidence_quote(
-                str(item.get("passage_text", "")), max_chars=360
+            quote = (
+                str(support_quote_by_evidence_id.get(evidence_id, "")).strip()
+                or snippet_map.get(evidence_id)
+                or legacy._first_exact_evidence_quote(
+                    str(item.get("passage_text", "")), max_chars=360
+                )
             )
             refs.append(
                 {
@@ -1583,7 +1613,15 @@ def _synthesize_facet_local_and_verify(
         except (LiveGateError, httpx.HTTPError) as exc:
             failures.append(type(exc).__name__)
             break
-    final_failures = sorted({*failures, "SEMANTIC_CLOSURE_FAILED"})
+    final_failure_set = {*failures, "SEMANTIC_CLOSURE_FAILED"}
+    if "ANSWER_REQUIREMENT_COVERAGE_MISSING" in failures:
+        final_failure_set.add("UNRESOLVED_REQUIRED_FACETS_NOT_PARTIAL")
+    if requirements and all(
+        item.requirement_id in STRUCTURAL_REQUIREMENT_IDS
+        for item in requirements
+    ):
+        final_failure_set.add("NO_SUPPORTED_REQUIRED_FACETS")
+    final_failures = sorted(final_failure_set)
     if PROVIDER_FALSE_ABSTENTION in failures:
         final_failures = sorted(
             {*final_failures, "PROVIDER_ABSTAINED_WITH_AVAILABLE_EVIDENCE"}
@@ -1730,7 +1768,14 @@ def _synthesize_and_verify(
     }
     review_rejected_facet_ids: set[str] = set()
 
-    strict_no_support = bool(requirements and not supported_requirements)
+    strict_no_support = bool(
+        requirements
+        and not supported_requirements
+        and any(
+            item.requirement_id not in STRUCTURAL_REQUIREMENT_IDS
+            for item in requirements
+        )
+    )
     if not evidence or strict_no_support:
         final_failures = [
             "NO_R1_SELECTED_EVIDENCE"
@@ -2153,7 +2198,13 @@ def _synthesize_and_verify(
             }
             return deterministic, closure
 
-    final_failures = sorted({*failures, "SEMANTIC_CLOSURE_FAILED"})
+    final_failure_set = {*failures, "SEMANTIC_CLOSURE_FAILED"}
+    if requirements and all(
+        item.requirement_id in STRUCTURAL_REQUIREMENT_IDS
+        for item in requirements
+    ):
+        final_failure_set.add("NO_SUPPORTED_REQUIRED_FACETS")
+    final_failures = sorted(final_failure_set)
     abstention = legacy._verified_abstention(
         reason_codes=final_failures,
         calls=calls,
@@ -2416,6 +2467,29 @@ def _facet_support_classification(
                 "best_support_score": round(best_score, 4),
             }
         )
+
+    composite_structural_ids = {"explanatory_answer"}
+    material_supporting_ids = list(
+        dict.fromkeys(
+            str(evidence_id)
+            for item in classification
+            if str(item.get("facet_id", "")) not in composite_structural_ids
+            and item.get("support_state") == "SUPPORTED"
+            for evidence_id in item.get("supporting_evidence_ids", [])
+            if str(evidence_id)
+        )
+    )
+    if material_supporting_ids:
+        for item in classification:
+            if str(item.get("facet_id", "")) not in composite_structural_ids:
+                continue
+            item["support_state"] = "SUPPORTED"
+            item["supporting_evidence_ids"] = list(material_supporting_ids)
+            item["best_support_score"] = max(
+                float(item.get("best_support_score", 0.0) or 0.0),
+                1.0,
+            )
+            item["support_mode"] = "composite_structural_binding"
     return classification
 
 
@@ -2621,6 +2695,17 @@ def _selected_evidence_supports_requirement(
     folded = text.casefold()
     if requirement.exact_phrase:
         return requirement.exact_phrase.casefold() in folded
+    if (
+        legacy._direct_facet_required_phrases(requirement.requirement_id)
+        or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
+    ):
+        return legacy._direct_facet_text_matches(
+            {
+                "facet_id": requirement.requirement_id,
+                "terms": list(requirement.evidence_terms),
+            },
+            text,
+        )
     structural_cues = {
         "explanatory_answer": r"\b(?:because|therefore|reason|mechanism|means|allows|prevents|rather than)\b",
         "comparison_or_distinction": r"\b(?:while|whereas|different|distinguish|contrast|rather than|instead)\b",
@@ -2656,6 +2741,14 @@ def _selected_evidence_set_supports_requirement(
     combined = "\n".join(_selected_evidence_text(item) for item in evidence)
     if requirement.exact_phrase:
         return requirement.exact_phrase.casefold() in combined.casefold()
+    if (
+        legacy._direct_facet_required_phrases(requirement.requirement_id)
+        or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
+    ):
+        return any(
+            _selected_evidence_supports_requirement(requirement, item)
+            for item in evidence
+        )
     requirement_id = requirement.requirement_id
     if requirement_id == "comparison_or_distinction":
         material_terms = _requirement_material_terms(requirement)

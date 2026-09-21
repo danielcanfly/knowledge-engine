@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from knowledge_engine import m25_blog_candidate_release as release
 from knowledge_engine import m26_aq_semantic_contract as semantic_contract
 from knowledge_engine import m26_pa7_arbitrary_query_runtime as runtime
+from knowledge_engine import m26_pa7_semantic_closure_runtime as closure
 
 
 def _article_document(title: str, concept_id: str, source_id: str) -> dict[str, object]:
@@ -228,3 +229,160 @@ def test_cross_source_truth_facets_bridge_into_semantic_requirements() -> None:
         "cross_source_composition",
         "top_k_boundary",
     }.issubset(requirement_ids)
+
+
+def test_single_part_question_strips_interrogative_prefix() -> None:
+    assert runtime._named_question_entities("What does Part 2 establish?") == ["Part 2"]
+
+
+def _cross_source_evidence(text: str, evidence_id: str = "ev-cross-source") -> dict[str, object]:
+    return {
+        "evidence_id": evidence_id,
+        "locator_id": f"loc-{evidence_id}",
+        "evidence_type": "passage",
+        "source_id": "source-cross-source",
+        "source_identity": "source-cross-source",
+        "section_id": "section-cross-source",
+        "concept_id": "concept-cross-source",
+        "title": "Query Router and Agentic RAG",
+        "section_title": "Routing has two layers: mode router and pattern router",
+        "passage_text": text,
+        "channels": ["required_facet_coverage"],
+        "retrieval_metadata": {},
+    }
+
+
+def test_strong_top_k_requirement_rejects_generic_overlap() -> None:
+    question = (
+        "Why isn't simply increasing top_k enough when a question needs both "
+        "database facts and document evidence?"
+    )
+    requirement = next(
+        item
+        for item in semantic_contract.derive_semantic_requirements(
+            question,
+            "direct_grounded_knowledge",
+        )
+        if item.requirement_id == "top_k_boundary"
+    )
+    generic = _cross_source_evidence(
+        "A workflow can carry evidence and retrieval references between checkpoints.",
+        "ev-generic",
+    )
+    exact = _cross_source_evidence(
+        "One retrieval pass cannot carry the task. "
+        "The fix is not raising `top_k`; the fix is a bounded multi-step workflow.",
+        "ev-exact",
+    )
+
+    assert not closure._selected_evidence_supports_requirement(requirement, generic)
+    assert closure._selected_evidence_supports_requirement(requirement, exact)
+
+
+def test_explanatory_facet_inherits_material_support_only() -> None:
+    question = (
+        "Why isn't simply increasing top_k enough when a question needs both "
+        "database facts and document evidence?"
+    )
+    requirements = semantic_contract.derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+    )
+    evidence = [
+        _cross_source_evidence(
+            "The pattern router chooses document RAG or SQL/API tools according to "
+            "the source of truth. Once a query crosses retrieval patterns, first query "
+            "SQL, then search policy documents. One retrieval pass cannot carry the task. "
+            "The fix is not raising `top_k`; the fix is a bounded multi-step workflow."
+        )
+    ]
+
+    classification = closure._facet_support_classification(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    by_id = {str(item["facet_id"]): item for item in classification}
+    material_ids = {
+        str(evidence_id)
+        for facet_id in (
+            "source_truth_routing",
+            "cross_source_composition",
+            "top_k_boundary",
+        )
+        for evidence_id in by_id[facet_id]["supporting_evidence_ids"]
+    }
+
+    assert material_ids == {"ev-cross-source"}
+    assert by_id["explanatory_answer"]["support_state"] == "SUPPORTED"
+    assert by_id["explanatory_answer"]["support_mode"] == "composite_structural_binding"
+    assert by_id["explanatory_answer"]["supporting_evidence_ids"] == [
+        "ev-cross-source"
+    ]
+
+
+def test_facet_local_top_k_quote_is_reused_by_claim_binding() -> None:
+    question = (
+        "Why isn't simply increasing top_k enough when a question needs both "
+        "database facts and document evidence?"
+    )
+    requirements = semantic_contract.derive_semantic_requirements(
+        question,
+        "direct_grounded_knowledge",
+    )
+    evidence = [
+        _cross_source_evidence(
+            "The pattern router chooses document RAG or SQL/API tools according to "
+            "the source of truth. Once a query crosses retrieval patterns, first query "
+            "SQL, then search policy documents, then assemble a risk explanation. "
+            "One retrieval pass cannot carry the task. "
+            "The fix is not raising `top_k`; the fix is a bounded multi-step workflow."
+        )
+    ]
+    classification = closure._facet_support_classification(
+        requirements=requirements,
+        evidence=evidence,
+    )
+    _payload, _ledger, label_map, snippet_map, slots = (
+        closure._facet_local_provider_payload(
+            question=question,
+            intent_class="direct_grounded_knowledge",
+            evidence=evidence,
+            requirements=requirements,
+            support_classification=classification,
+            repair=False,
+            previous_failures=[],
+        )
+    )
+    top_k_slot = next(slot for slot in slots if slot["facet_id"] == "top_k_boundary")
+    top_k_quote = top_k_slot["evidence"][0]["text"]
+
+    assert "not raising `top_k`" in top_k_quote
+    assert "bounded multi-step workflow" in top_k_quote
+
+    drafts = {
+        "claims": [
+            {
+                "slot_id": slot["slot_id"],
+                "text": f"Supported prose for {slot['facet_id']}.",
+                "claim_type": "EVIDENCE_SYNTHESIS",
+            }
+            for slot in slots
+        ],
+        "model_explanations": [],
+    }
+    candidate = closure._runtime_bound_facet_local_candidate(
+        drafts=drafts,
+        slots=slots,
+        label_map=label_map,
+        snippet_map=snippet_map,
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        unresolved_required_ids=[],
+    )
+    top_k_claim = next(
+        claim
+        for claim in candidate["claims"]
+        if "top_k_boundary" in claim["facet_ids"]
+    )
+
+    assert top_k_claim["support_refs"][0]["exact_quote"] == top_k_quote

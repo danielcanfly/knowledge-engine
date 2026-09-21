@@ -91,12 +91,17 @@ def install() -> None:
         ):
             if name.casefold() in q.casefold():
                 add(name)
+        multiple_part_entities = len(
+            re.findall(r"\bPart\s+\d+\b", q, flags=re.I)
+        ) >= 2
         for raw in legacy._m26_aq_original_named_question_entities(q):
             cleaned = _clean_entity_text(raw)
             lowered = cleaned.casefold()
             if not cleaned or len(cleaned) > 80:
                 continue
-            if lowered in {"part 1", "part 2"}:
+            if multiple_part_entities and re.fullmatch(
+                r"part\s+\d+", lowered, flags=re.I
+            ):
                 continue
             if any(existing.casefold() in lowered for existing in entities):
                 continue
@@ -192,6 +197,10 @@ def _clean_entity_text(value: str) -> str:
         "If the relation graph records ",
         "Does the precedes edge between ",
         "Can the precedes edge between ",
+        "What does ",
+        "What do ",
+        "What is ",
+        "What are ",
         "Does ",
     ):
         if text.casefold().startswith(prefix.casefold()):
