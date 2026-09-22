@@ -765,3 +765,67 @@ def test_part_number_entity_matching_is_zero_padded_and_boundary_safe() -> None:
             "passage_text": "Harness Theory Part 12 describes the pattern catalogue.",
         },
     )
+
+
+def test_structural_multi_dimension_slot_compacts_into_material_slot() -> None:
+    material_requirement = closure.SemanticRequirement(
+        requirement_id="trust_anchor",
+        instruction="State the trust boundary.",
+        evidence_terms=("source of trust", "underlying material"),
+        visible_patterns=(r"source of trust",),
+    )
+    structural_requirement = closure.SemanticRequirement(
+        requirement_id="multi_dimension_structure",
+        instruction="Cover the requested architecture parts.",
+        evidence_terms=("architecture", "parts"),
+        visible_patterns=(r"architecture",),
+    )
+    slots = [
+        {
+            "slot_id": "slot_1",
+            "facet_id": "trust_anchor",
+            "instruction": material_requirement.instruction,
+            "requirement": material_requirement,
+            "allowed_evidence_ids": ["ev-trust"],
+            "allowed_evidence_labels": ["e1"],
+            "support_quote_by_evidence_id": {"ev-trust": "The graph is not the source of trust."},
+            "evidence": [],
+        },
+        {
+            "slot_id": "slot_2",
+            "facet_id": "multi_dimension_structure",
+            "instruction": structural_requirement.instruction,
+            "requirement": structural_requirement,
+            "allowed_evidence_ids": ["ev-trust", "ev-parts"],
+            "allowed_evidence_labels": ["e1", "e2"],
+            "support_quote_by_evidence_id": {"ev-parts": "The architecture has several parts."},
+            "evidence": [],
+        },
+    ]
+
+    compacted = closure._compact_structural_slots(slots)
+
+    assert len(compacted) == 1
+    assert compacted[0]["facet_id"] == "trust_anchor"
+    assert compacted[0]["co_facet_ids"] == ["multi_dimension_structure"]
+    assert set(compacted[0]["allowed_evidence_ids"]) == {"ev-trust", "ev-parts"}
+
+
+def test_source_of_trust_contract_recovers_traceability_terms() -> None:
+    question = (
+        "In the LLM Wiki architecture, what are Obsidian, Graphology, "
+        "and Sigma.js each responsible for, and which one is actually the source of trust?"
+    )
+    contract = runtime._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+    source_terms = next(
+        item["terms"]
+        for item in contract["required_facets"]
+        if item["facet_id"] == "source_of_trust"
+    )
+
+    assert "not the source of trust" in source_terms
+    assert "underlying material" in source_terms
+    assert "claim-to-source" in source_terms

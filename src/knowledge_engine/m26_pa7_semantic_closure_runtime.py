@@ -924,6 +924,84 @@ def _compact_entity_identity_slots(
     return kept
 
 
+
+
+def _compact_structural_slots(
+    slots: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    compacted = [dict(slot) for slot in slots]
+    structural_slots = [
+        slot
+        for slot in compacted
+        if str(slot.get("facet_id", "")) == "multi_dimension_structure"
+    ]
+    if not structural_slots:
+        return compacted
+    material_slots = [
+        slot
+        for slot in compacted
+        if str(slot.get("facet_id", "")) not in STRUCTURAL_REQUIREMENT_IDS
+        and not str(slot.get("facet_id", "")).startswith("entity_")
+    ]
+    if not material_slots:
+        return compacted
+    removed_ids: set[str] = set()
+    for structural_slot in structural_slots:
+        structural_ids = {
+            str(item)
+            for item in structural_slot.get("allowed_evidence_ids", [])
+            if str(item)
+        }
+        target = max(
+            material_slots,
+            key=lambda slot: (
+                len(
+                    structural_ids
+                    & {
+                        str(item)
+                        for item in slot.get("allowed_evidence_ids", [])
+                        if str(item)
+                    }
+                ),
+                len(slot.get("allowed_evidence_ids", [])),
+                str(slot.get("slot_id", "")),
+            ),
+        )
+        structural_facet_id = str(structural_slot.get("facet_id", ""))
+        co_facet_ids = [
+            str(item) for item in target.get("co_facet_ids", []) if str(item)
+        ]
+        if structural_facet_id not in co_facet_ids:
+            co_facet_ids.append(structural_facet_id)
+        target["co_facet_ids"] = co_facet_ids
+        merged_pairs: list[tuple[str, str]] = []
+        seen_pairs: set[tuple[str, str]] = set()
+        for source in (target, structural_slot):
+            for label, evidence_id in zip(
+                source.get("allowed_evidence_labels", []),
+                source.get("allowed_evidence_ids", []),
+                strict=False,
+            ):
+                pair = (str(label), str(evidence_id))
+                if not all(pair) or pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                merged_pairs.append(pair)
+        target["allowed_evidence_labels"] = [label for label, _ in merged_pairs]
+        target["allowed_evidence_ids"] = [evidence_id for _, evidence_id in merged_pairs]
+        target_quotes = dict(target.get("support_quote_by_evidence_id", {}))
+        for evidence_id, quote in dict(
+            structural_slot.get("support_quote_by_evidence_id", {})
+        ).items():
+            target_quotes.setdefault(str(evidence_id), str(quote))
+        target["support_quote_by_evidence_id"] = target_quotes
+        removed_ids.add(str(structural_slot.get("slot_id", "")))
+    kept = [slot for slot in compacted if str(slot.get("slot_id", "")) not in removed_ids]
+    for index, slot in enumerate(kept, start=1):
+        slot["slot_id"] = f"slot_{index}"
+    return kept
+
+
 def _facet_local_provider_payload(
     *,
     question: str,
@@ -972,12 +1050,14 @@ def _facet_local_provider_payload(
         support_classification=support_classification,
         facet_ledger=facet_ledger,
     )
-    slots = _compact_entity_identity_slots(
-        _facet_local_provider_slots(
-            requirements=requirements,
-            facet_ledger=facet_ledger,
-            label_map=label_map,
-            snippet_map=snippet_map,
+    slots = _compact_structural_slots(
+        _compact_entity_identity_slots(
+            _facet_local_provider_slots(
+                requirements=requirements,
+                facet_ledger=facet_ledger,
+                label_map=label_map,
+                snippet_map=snippet_map,
+            )
         )
     )
     claim_slot_by_claim_id = {
@@ -5140,13 +5220,23 @@ def _semantic_requirements(
         add(
             "trust_anchor",
             (
-                "Assign trust to canonical source/provenance/artifact authority, not to "
-                "a UI/library."
+                "State the trust boundary: Obsidian, Graphology, Sigma.js, and the graph "
+                "view are interfaces or libraries, not the source of trust; important "
+                "claims remain traceable to the underlying source material."
             ),
-            ["canonical", "provenance", "artifact", "source of trust", "authority"],
             [
-                r"\b(?:canonical|provenance|artifact).{0,120}(?:trust|authority|source)",
-                r"\b(?:source of trust|trust anchor).{0,120}(?:canonical|provenance|artifact)",
+                "source of trust",
+                "not the source of trust",
+                "underlying material",
+                "source document",
+                "source id",
+                "claim-to-source",
+                "citation",
+                "traceable",
+            ],
+            [
+                r"\bnot the source of trust\b",
+                r"\b(?:underlying material|source document|source id|claim-to-source|citation|traceable)\b",
             ],
         )
 

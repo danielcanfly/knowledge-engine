@@ -4303,7 +4303,19 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
             ],
         )
     if "source of trust" in question_casefold:
-        add("source_of_trust", ["source", "trust", "anchor", "authority"])
+        add(
+            "source_of_trust",
+            [
+                "source of trust",
+                "not the source of trust",
+                "underlying material",
+                "source document",
+                "source id",
+                "claim-to-source",
+                "citation",
+                "traceable",
+            ],
+        )
     if re.search(r"\bdoes\b.*\bprove\b|\bcan we safely infer\b|\bwhat can(?:'t|not) we infer\b", question_casefold):
         add("non_entailment_boundary", ["infer", "prove", "depend"])
         if any(
