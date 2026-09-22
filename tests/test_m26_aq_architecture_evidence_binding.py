@@ -666,3 +666,48 @@ def test_fast_candidate_validator_rejects_internal_id_leak_before_publish() -> N
         },
     )
     assert publication is None
+
+
+def test_complementary_synthesis_contract_uses_named_entities() -> None:
+    question = "How can a query router and a DAG work together in a production /ask flow?"
+    contract = runtime._question_contract(
+        question=question,
+        intent_class="complementary_synthesis",
+    )
+    facets = {item["facet_id"]: item for item in contract["required_facets"]}
+
+    assert "entity_query_router" in facets
+    assert facets["entity_query_router"]["terms"] == ["query router"]
+    assert "router_role" in facets
+    assert "entity_dag" in facets
+    assert facets["entity_dag"]["terms"] == ["DAG"]
+    assert "dag_role" in facets
+    assert "composition_relationship" in facets
+
+
+def test_entity_facet_requires_exact_phrase_not_token_overlap() -> None:
+    facet = {"facet_id": "entity_query_router", "terms": ["query router"]}
+
+    assert runtime._direct_facet_text_matches(
+        facet, "The query router chooses a downstream path."
+    )
+    assert not runtime._direct_facet_text_matches(
+        facet, "The query planner hands work to a router later."
+    )
+
+
+def test_existing_required_facet_metadata_is_preserved_by_truncate() -> None:
+    existing = {
+        "evidence_id": "ev-existing",
+        "retrieval_metadata": {
+            "required_facet_id": "entity_dag",
+            "covered_facet_terms": ["dag"],
+            "required_facet_reused_existing": True,
+        },
+    }
+    ordinary = [{"evidence_id": f"ev-{idx}", "retrieval_metadata": {}} for idx in range(10)]
+
+    truncated = runtime._truncate_selected_evidence([*ordinary, existing], budget=3)
+
+    assert truncated[0]["evidence_id"] == "ev-existing"
+    assert truncated[0]["retrieval_metadata"]["required_facet_id"] == "entity_dag"

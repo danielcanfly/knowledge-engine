@@ -4080,15 +4080,64 @@ def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
             {"facet_id": "comparison_relation", "terms": ["compare", "contrast"], "required": True},
         ]
     elif intent_class == "complementary_synthesis":
-        facets = [
-            {"facet_id": "component_a", "terms": terms[:6], "required": True},
-            {"facet_id": "component_b", "terms": terms[:6], "required": True},
+        facets = []
+        seen_facet_ids: set[str] = set()
+
+        def add_synthesis_facet(facet_id: str, facet_terms: Sequence[str]) -> None:
+            if facet_id in seen_facet_ids:
+                return
+            normalized_terms = [
+                str(term).strip()
+                for term in facet_terms
+                if str(term).strip()
+            ]
+            if not normalized_terms:
+                return
+            facets.append(
+                {"facet_id": facet_id, "terms": normalized_terms, "required": True}
+            )
+            seen_facet_ids.add(facet_id)
+
+        named_entities = _named_question_entities(question)
+        for entity in named_entities[:6]:
+            add_synthesis_facet(f"entity_{_facet_id_for_term(entity)}", [entity])
+            entity_casefold = entity.casefold()
+            if "router" in entity_casefold:
+                add_synthesis_facet(
+                    "router_role",
+                    [entity, "route", "path", "mode", "capability"],
+                )
+            if entity_casefold == "dag" or " dag" in entity_casefold:
+                add_synthesis_facet(
+                    "dag_role",
+                    [entity, "dependency", "parallel", "task", "step"],
+                )
+        if len(named_entities) >= 2:
+            add_synthesis_facet(
+                "composition_relationship",
+                [
+                    named_entities[0],
+                    named_entities[1],
+                    "together",
+                    "within",
+                    "chosen path",
+                    "workflow",
+                    "flow",
+                    "compose",
+                ],
+            )
+        if not facets:
+            facets = [
+                {"facet_id": "component_a", "terms": terms[:6], "required": True},
+                {"facet_id": "component_b", "terms": terms[:6], "required": True},
+            ]
+        facets.append(
             {
                 "facet_id": "synthesis_relation",
-                "terms": ["together", "complement"],
+                "terms": ["together", "complement", "compose", "workflow"],
                 "required": True,
-            },
-        ]
+            }
+        )
     elif intent_class == "graph_relationship":
         facets = [
             {
@@ -7680,7 +7729,7 @@ def _augment_evidence_for_intent(
             focus=focus,
             query_terms=query_terms,
         )
-    if intent_class == "direct_grounded_knowledge":
+    if intent_class in {"direct_grounded_knowledge", "complementary_synthesis"}:
         evidence = _ensure_required_facet_coverage_passages(
             bundle=bundle,
             evidence=evidence,
@@ -7945,7 +7994,8 @@ def _ensure_required_facet_coverage_passages(
     def _facet_has_strong_contract(facet: Mapping[str, Any]) -> bool:
         facet_id = str(facet.get("facet_id", ""))
         return bool(
-            _direct_facet_required_phrases(facet_id)
+            facet_id.startswith("entity_")
+            or _direct_facet_required_phrases(facet_id)
             or _direct_facet_required_quote_groups(facet_id)
         )
 
@@ -7967,6 +8017,17 @@ def _ensure_required_facet_coverage_passages(
             return False
         return not answer_bearing_required or bool(relevance.get("answer_bearing"))
 
+    def _existing_facet_match_text(
+        item: Mapping[str, Any],
+        facet: Mapping[str, Any],
+    ) -> str:
+        if str(facet.get("facet_id", "")).startswith("entity_"):
+            return " ".join(
+                str(item.get(key, ""))
+                for key in ("section_title", "passage_text", "body", "excerpt")
+            )
+        return _cached_text(item)
+
     for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
         if not facet_terms:
@@ -7977,13 +8038,39 @@ def _ensure_required_facet_coverage_passages(
                 for item in selected
                 if item.get("evidence_type") == "passage"
                 and str(item.get("section_id", "")) not in prepend_sections
-                and _direct_facet_text_matches(facet, _cached_text(item))
+                and _direct_facet_text_matches(
+                    facet, _existing_facet_match_text(item, facet)
+                )
                 and _facet_subject_gate(item, facet)
             ),
             None,
         )
         if existing is not None:
-            prepend.append(dict(existing))
+            existing_item = dict(existing)
+            existing_metadata = (
+                dict(existing_item.get("retrieval_metadata", {}))
+                if isinstance(existing_item.get("retrieval_metadata"), Mapping)
+                else {}
+            )
+            existing_metadata.update(
+                {
+                    "required_facet_id": str(facet.get("facet_id", "")),
+                    "required_facet_terms": sorted(facet_terms),
+                    "covered_facet_terms": sorted(
+                        _direct_facet_covered_markers(
+                            facet, _existing_facet_match_text(existing_item, facet)
+                        )
+                    ),
+                    "required_facet_reused_existing": True,
+                }
+            )
+            existing_item["retrieval_metadata"] = existing_metadata
+            existing_channels = {
+                str(channel) for channel in existing_item.get("channels", [])
+            }
+            existing_channels.update({"required_facet_coverage", "query_coverage"})
+            existing_item["channels"] = sorted(existing_channels)
+            prepend.append(existing_item)
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
         candidate_documents = []
@@ -8090,8 +8177,26 @@ def _direct_facet_phrase_score(facet_id: str, text: str) -> int:
     )
 
 
+def _entity_facet_exact_terms(facet: Mapping[str, Any]) -> tuple[str, ...]:
+    facet_id = str(facet.get("facet_id", ""))
+    if not facet_id.startswith("entity_"):
+        return ()
+    raw_terms = facet.get("terms", [])
+    if not isinstance(raw_terms, Sequence) or isinstance(raw_terms, (str, bytes)):
+        raw_terms = []
+    return tuple(
+        str(term).strip().casefold()
+        for term in raw_terms
+        if str(term).strip()
+    )
+
+
 def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
     facet_id = str(facet.get("facet_id", ""))
+    entity_terms = _entity_facet_exact_terms(facet)
+    if entity_terms:
+        text_casefold = str(text).casefold()
+        return int(any(term in text_casefold for term in entity_terms))
     phrase_score = _direct_facet_phrase_score(facet_id, text)
     if _direct_facet_required_phrases(facet_id):
         return phrase_score
@@ -8119,6 +8224,10 @@ def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
 
 
 def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:
+    entity_terms = _entity_facet_exact_terms(facet)
+    if entity_terms:
+        text_casefold = str(text).casefold()
+        return any(term in text_casefold for term in entity_terms)
     groups = _direct_facet_required_quote_groups(str(facet.get("facet_id", "")))
     if groups:
         text_casefold = str(text).casefold()
@@ -8131,10 +8240,14 @@ def _direct_facet_covered_markers(
     text: str,
 ) -> set[str]:
     facet_id = str(facet.get("facet_id", ""))
+    text_casefold = str(text).casefold()
+    entity_terms = {term for term in _entity_facet_exact_terms(facet) if term in text_casefold}
+    if entity_terms:
+        return entity_terms
     phrases = {
         phrase
         for phrase in _direct_facet_required_phrases(facet_id)
-        if phrase in str(text).casefold()
+        if phrase in text_casefold
     }
     if phrases:
         return phrases
