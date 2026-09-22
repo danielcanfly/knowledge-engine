@@ -161,6 +161,39 @@ def test_summary_reports_required_metrics_and_latency_percentiles(tmp_path) -> N
     assert summary["latency_series"]
 
 
+def test_24h_summary_series_uses_hourly_buckets(tmp_path) -> None:
+    repo = QaRepository(FileObjectStore(tmp_path))
+    for idx, (timestamp, latency) in enumerate(
+        [
+            ("2026-09-22T01:15:00Z", 100),
+            ("2026-09-22T01:45:00Z", 300),
+            ("2026-09-22T02:10:00Z", 500),
+        ]
+    ):
+        repo.record_answer(
+            question=f"hourly {idx}",
+            response=good_response(f"req_hourly_{idx}"),
+            latency_ms=latency,
+            timestamp=timestamp,
+        )
+
+    summary = repo.summary(
+        range_name="24h",
+        to_ts="2026-09-22T03:00:00Z",
+    )
+
+    assert [point["date"] for point in summary["quality_series"]] == [
+        "2026-09-22T01:00:00Z",
+        "2026-09-22T02:00:00Z",
+    ]
+    assert [point["date"] for point in summary["latency_series"]] == [
+        "2026-09-22T01:00:00Z",
+        "2026-09-22T02:00:00Z",
+    ]
+    assert summary["latency_series"][0]["median_ms"] == 200
+    assert summary["latency_series"][0]["p95_ms"] == 290
+
+
 def _static_evaluator(
     result: str = "pass", score: int = 100, hard_fail_codes: tuple[str, ...] = ()
 ):
@@ -205,6 +238,48 @@ def test_sqlite_capture_and_semantic_lifecycle(tmp_path) -> None:
         )["score"]
         == 100
     )
+
+
+def test_sqlite_24h_summary_series_uses_hourly_buckets(tmp_path) -> None:
+    repo = SqliteQaRepository(
+        FileObjectStore(tmp_path / "objects"), db_path=tmp_path / "qa.sqlite"
+    )
+    events = []
+    for idx, (timestamp, latency) in enumerate(
+        [
+            ("2026-09-22T01:15:00Z", 100),
+            ("2026-09-22T01:45:00Z", 300),
+            ("2026-09-22T02:10:00Z", 500),
+        ]
+    ):
+        event = repo.record_answer(
+            question=f"sqlite hourly {idx}",
+            response=good_response(f"sqlite-hourly-{idx}"),
+            latency_ms=latency,
+            timestamp=timestamp,
+        )
+        events.append(event)
+        repo.evaluate_event(
+            event["event_id"],
+            evaluator=_static_evaluator(),
+            answer_payload=good_response(f"sqlite-hourly-{idx}"),
+        )
+
+    summary = repo.summary(
+        range_name="24h",
+        to_ts="2026-09-22T03:00:00Z",
+    )
+
+    assert [point["date"] for point in summary["quality_series"]] == [
+        "2026-09-22T01:00:00Z",
+        "2026-09-22T02:00:00Z",
+    ]
+    assert [point["date"] for point in summary["latency_series"]] == [
+        "2026-09-22T01:00:00Z",
+        "2026-09-22T02:00:00Z",
+    ]
+    assert summary["latency_series"][0]["median_ms"] == 200
+    assert summary["latency_series"][0]["p95_ms"] == 290
 
 
 def test_sqlite_evaluator_failure_is_not_evaluated(tmp_path) -> None:

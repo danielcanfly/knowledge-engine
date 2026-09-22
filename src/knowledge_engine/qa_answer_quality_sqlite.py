@@ -35,6 +35,7 @@ from .qa_answer_quality import (
     _percentile,
     _release_identity,
     _resolve_range,
+    _series_bucket,
 )
 from .qa_answer_quality_evaluator import (
     ANSWER_QUALITY_CRITERION_MAX,
@@ -790,8 +791,8 @@ class SqliteQaRepository:
             ),
             "median_latency_ms": _median(latencies),
             "p95_latency_ms": _percentile(latencies, 0.95),
-            "quality_series": _quality_series(canonical),
-            "latency_series": _latency_series(items),
+            "quality_series": _quality_series(canonical, hourly=range_name == "24h"),
+            "latency_series": _latency_series(items, hourly=range_name == "24h"),
             "rubric_version": ANSWER_QUALITY_RUBRIC_VERSION,
             "threshold": ANSWER_QUALITY_PASS_THRESHOLD,
         }
@@ -1365,10 +1366,16 @@ def _median(values: list[int]) -> int:
     )
 
 
-def _quality_series(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _quality_series(
+    items: list[Mapping[str, Any]], *, hourly: bool = False
+) -> list[dict[str, Any]]:
     buckets: dict[str, list[Mapping[str, Any]]] = {}
     for item in items:
-        buckets.setdefault(str(item.get("timestamp", ""))[:10], []).append(item)
+        try:
+            key = _series_bucket(item.get("timestamp"), hourly=hourly)
+        except (TypeError, ValueError):
+            continue
+        buckets.setdefault(key, []).append(item)
     return [
         {
             "date": key,

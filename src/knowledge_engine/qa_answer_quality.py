@@ -353,8 +353,8 @@ class QaRepository:
             "failed": len(failed),
             "median_latency_ms": int(median(latencies)) if latencies else 0,
             "p95_latency_ms": _percentile(latencies, 0.95),
-            "quality_series": _quality_series(items),
-            "latency_series": _latency_series(items),
+            "quality_series": _quality_series(items, hourly=range_name == "24h"),
+            "latency_series": _latency_series(items, hourly=range_name == "24h"),
             "rubric_version": ANSWER_QUALITY_RUBRIC_VERSION,
             "threshold": ANSWER_QUALITY_PASS_THRESHOLD,
         }
@@ -961,10 +961,26 @@ def _iso_now() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _quality_series(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _series_bucket(timestamp: Any, *, hourly: bool) -> str:
+    parsed = _parse_ts(str(timestamp))
+    if hourly:
+        return (
+            parsed.replace(minute=0, second=0, microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    return parsed.date().isoformat()
+
+
+def _quality_series(
+    items: list[Mapping[str, Any]], *, hourly: bool = False
+) -> list[dict[str, Any]]:
     buckets: dict[str, list[Mapping[str, Any]]] = {}
     for item in items:
-        key = str(item.get("timestamp", ""))[:10]
+        try:
+            key = _series_bucket(item.get("timestamp"), hourly=hourly)
+        except (TypeError, ValueError):
+            continue
         buckets.setdefault(key, []).append(item)
     series = []
     for key in sorted(buckets):
@@ -982,10 +998,15 @@ def _quality_series(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return series
 
 
-def _latency_series(items: list[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _latency_series(
+    items: list[Mapping[str, Any]], *, hourly: bool = False
+) -> list[dict[str, Any]]:
     buckets: dict[str, list[int]] = {}
     for item in items:
-        key = str(item.get("timestamp", ""))[:10]
+        try:
+            key = _series_bucket(item.get("timestamp"), hourly=hourly)
+        except (TypeError, ValueError):
+            continue
         buckets.setdefault(key, []).append(max(0, int(item.get("latency_ms", 0))))
     return [
         {

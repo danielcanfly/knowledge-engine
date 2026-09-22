@@ -120,6 +120,27 @@ def test_burst_boundary_returns_locked_public_code(
     assert problem.retry_after_seconds == 48
 
 
+def test_restart_clears_stale_active_leases_but_preserves_quota(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(m26_public_api, "PER_IP_DAILY_LIMIT", 100)
+    monkeypatch.setattr(m26_public_api, "BURST_PER_MINUTE_LIMIT", 100)
+    monkeypatch.setattr(m26_public_api, "GLOBAL_DAILY_LIMIT", 100)
+    path = tmp_path / "quota.sqlite3"
+    now = datetime(2026, 8, 16, 3, 10, 12, tzinfo=UTC)
+
+    first_process = PublicQuotaLedger(path)
+    assert first_process.admit(ip_key="ip-a", now=now) is None
+    assert first_process.count("global_daily", "global", "2026-08-16") == 1
+
+    restarted_process = PublicQuotaLedger(path)
+    assert restarted_process.count("global_daily", "global", "2026-08-16") == 1
+    assert restarted_process.admit(ip_key="ip-a", now=now) is None
+    restarted_process.release(ip_key="ip-a")
+    assert restarted_process.count("global_daily", "global", "2026-08-16") == 2
+
+
 def test_default_public_burst_allows_fast_launch_sequential_probe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

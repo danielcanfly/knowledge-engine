@@ -148,6 +148,11 @@ class PublicQuotaLedger:
                 )
                 """
             )
+            # Active concurrency leases describe work owned by the current
+            # process. A container/process restart cannot preserve that work,
+            # so durable active counters from the previous process are stale.
+            # Daily/burst quota counters intentionally remain untouched.
+            db.execute("UPDATE active_counts SET count = 0 WHERE count != 0")
 
     def admit(
         self,
