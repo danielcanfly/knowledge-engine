@@ -7986,8 +7986,36 @@ def _ensure_required_facet_coverage_passages(
             prepend.append(dict(existing))
             prepend_sections.add(str(existing.get("section_id", "")))
             continue
+        candidate_documents = []
+        strong_contract = _facet_has_strong_contract(facet)
+        selected_source_ids = {
+            str(item.get("source_id", ""))
+            for item in selected
+            if str(item.get("source_id", ""))
+        }
+        selected_concept_ids = {
+            str(item.get("concept_id", ""))
+            for item in selected
+            if str(item.get("concept_id", ""))
+        }
+        for document in documents:
+            section_id = str(document.get("section_id", ""))
+            if section_id in selected_sections:
+                continue
+            text = _cached_text(document)
+            if not _direct_facet_text_matches(facet, text):
+                continue
+            if not _facet_subject_gate(document, facet):
+                continue
+            lexical_seed = section_id in lexical_section_ids
+            source_seed = str(document.get("source_id", "")) in selected_source_ids
+            concept_seed = str(document.get("concept_id", "")) in selected_concept_ids
+            term_seed = _text_term_overlap_score(facet_terms, text) > 0
+            if not (strong_contract or lexical_seed or source_seed or concept_seed or term_seed):
+                continue
+            candidate_documents.append(document)
         candidate_documents = sorted(
-            documents,
+            candidate_documents,
             key=lambda document: (
                 -_coverage_priority(document, facet)[0],
                 -_coverage_priority(document, facet)[1],
@@ -8005,16 +8033,7 @@ def _ensure_required_facet_coverage_passages(
                 str(document.get("section_id", "")),
             ),
         )
-        document = next(
-            (
-                item
-                for item in candidate_documents
-                if str(item.get("section_id", "")) not in selected_sections
-                and _direct_facet_text_matches(facet, _cached_text(item))
-                and _facet_subject_gate(item, facet)
-            ),
-            None,
-        )
+        document = candidate_documents[0] if candidate_documents else None
         if document is None:
             continue
         item = _evidence_item(
