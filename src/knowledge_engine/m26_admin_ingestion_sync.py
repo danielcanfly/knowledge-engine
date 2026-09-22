@@ -217,6 +217,7 @@ def _job_summary(job: Mapping[str, Any] | None) -> dict[str, Any] | None:
             "attempt",
             "plan_id",
             "plan_digest",
+            "manifest_diff",
             "source_revision",
             "source_identity_digest",
             "candidate_release_id",

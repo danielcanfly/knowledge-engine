@@ -15,6 +15,7 @@ from .m26_active_production_release import (
 from .m26_admin_contract import canonical_json_bytes
 from .m26_production_answer_bundle import (
     ProductionAnswerBundle,
+    invalidate_production_answer_bundle_cache,
     load_production_answer_bundle,
 )
 from .m26_production_promotion import (
@@ -520,6 +521,7 @@ class ProductionIngestionFinalizer:
             revalidate_qdrant=candidate_qdrant,
             revalidate_predecessor_qdrant=predecessor_qdrant,
         )
+        invalidate_production_answer_bundle_cache()
         active = resolve_active_production_release(self.store)
         bundle = load_production_answer_bundle(store=self.store)
         self._validate_active_authority(plan, active, bundle)

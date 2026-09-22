@@ -107,6 +107,12 @@ def load_production_answer_bundle(
     return _load_production_answer_bundle_from_store(store)
 
 
+def invalidate_production_answer_bundle_cache() -> None:
+    """Drop process-local active-release state after production pointer promotion."""
+
+    _load_production_answer_bundle_from_env.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def _load_production_answer_bundle_from_env() -> ProductionAnswerBundle:
     settings = Settings.from_env()

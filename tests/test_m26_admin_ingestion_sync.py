@@ -7,6 +7,7 @@ from knowledge_engine.m26_admin_ingestion_core import ReadObservation
 from knowledge_engine.m26_admin_ingestion_sync import (
     DeterministicSyncIngestionAdapter,
     SyncBlogRequest,
+    _job_summary,
     _source_health,
     build_index_health,
     build_sync_plan,
@@ -16,6 +17,27 @@ from knowledge_engine.m26_admin_ingestion_sync import (
 
 def _digest(char: str) -> str:
     return char * 64
+
+
+def test_job_summary_preserves_manifest_diff_for_recent_results() -> None:
+    diff = {
+        "added": ["new"],
+        "changed": ["updated-a", "updated-b"],
+        "removed": [],
+        "unchanged": ["same"],
+    }
+
+    summary = _job_summary(
+        {
+            "job_id": "job-1",
+            "operation_id": "op-1",
+            "status": "SUCCEEDED",
+            "manifest_diff": diff,
+        }
+    )
+
+    assert summary is not None
+    assert summary["manifest_diff"] == diff
 
 
 def test_sync_plan_is_deterministic_and_classifies_full_manifest_diff() -> None:

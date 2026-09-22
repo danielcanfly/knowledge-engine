@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import knowledge_engine.m26_ingestion_finalization as finalization_module
 from knowledge_engine.errors import IntegrityError
 from knowledge_engine.m26_active_production_release import (
     PRODUCTION_POINTER_KEY,
@@ -664,7 +665,19 @@ def test_production_noop_reuses_single_exact_source_readback(tmp_path: Path) -> 
 
 def test_production_post_cas_failure_retries_exact_target_without_second_pointer_write(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    invalidations = 0
+
+    def invalidate_bundle_cache() -> None:
+        nonlocal invalidations
+        invalidations += 1
+
+    monkeypatch.setattr(
+        finalization_module,
+        "invalidate_production_answer_bundle_cache",
+        invalidate_bundle_cache,
+    )
     original_store, predecessor, candidate_receipt, _isolated = _fixture(tmp_path)
     store = _StoreProtocolProxy(original_store)
     authority = {
@@ -702,9 +715,11 @@ def test_production_post_cas_failure_retries_exact_target_without_second_pointer
     with pytest.raises(RuntimeError, match="post-CAS successor probe failed"):
         finalizer.execute(prepared)
     assert store.pointer_puts == 1
+    assert invalidations == 1
     assert resolve_active_production_release(original_store).release_id == "release-b-successor"
 
     retry = finalizer.execute(prepared)
     assert retry["status"] == "active_successor"
     assert retry["activation"]["status"] == "already_promoted"
     assert store.pointer_puts == 1
+    assert invalidations == 2
