@@ -925,11 +925,15 @@ def _resolve_range(
         if not from_ts:
             raise ValueError("custom range requires from")
         return _parse_ts(from_ts), end
+    if range_name == "all":
+        return datetime(1970, 1, 1, tzinfo=UTC), end
     delta = {
         "24h": timedelta(hours=24),
         "7d": timedelta(days=7),
+        "14d": timedelta(days=14),
         "30d": timedelta(days=30),
         "90d": timedelta(days=90),
+        "180d": timedelta(days=180),
     }.get(range_name)
     if delta is None:
         raise ValueError(f"unsupported range: {range_name}")

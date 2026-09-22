@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from knowledge_engine.qa_answer_quality import QaRepository, evaluate_answer_quality
+from knowledge_engine.qa_answer_quality import QaRepository, _resolve_range, evaluate_answer_quality
 from knowledge_engine.qa_answer_quality_evaluator import (
     ANSWER_QUALITY_CRITERION_MAX,
     AnswerQualityEvaluation,
@@ -12,6 +12,22 @@ from knowledge_engine.qa_answer_quality_evaluator import (
 )
 from knowledge_engine.qa_answer_quality_sqlite import SqliteQaRepository
 from knowledge_engine.storage import FileObjectStore
+
+
+def test_reporting_range_contract_supports_owner_windows() -> None:
+    end = "2026-09-22T00:00:00Z"
+    expected_days = {"7d": 7, "14d": 14, "30d": 30, "90d": 90, "180d": 180}
+    for range_name, days in expected_days.items():
+        start, resolved_end = _resolve_range(range_name, None, end)
+        assert resolved_end.isoformat() == "2026-09-22T00:00:00+00:00"
+        assert (resolved_end - start).days == days
+
+    start_24h, end_24h = _resolve_range("24h", None, end)
+    assert int((end_24h - start_24h).total_seconds()) == 24 * 60 * 60
+
+    start_all, end_all = _resolve_range("all", None, end)
+    assert start_all.isoformat() == "1970-01-01T00:00:00+00:00"
+    assert end_all.isoformat() == "2026-09-22T00:00:00+00:00"
 
 
 def good_response(request_id: str = "req_1") -> dict:
