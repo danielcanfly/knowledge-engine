@@ -711,3 +711,57 @@ def test_existing_required_facet_metadata_is_preserved_by_truncate() -> None:
 
     assert truncated[0]["evidence_id"] == "ev-existing"
     assert truncated[0]["retrieval_metadata"]["required_facet_id"] == "entity_dag"
+
+
+def test_series_evolution_between_parts_extracts_part_entities() -> None:
+    question = (
+        "How did the Harness Theory series move from defining the harness "
+        "boundary to a full responsibility architecture between Part 1 and Part 2?"
+    )
+
+    assert runtime._named_question_entities(question)[:2] == [
+        "Harness Theory Part 1",
+        "Harness Theory Part 2",
+    ]
+    assert all("move from" not in entity for entity in runtime._named_question_entities(question))
+
+
+def test_part_number_entity_matching_is_zero_padded_and_boundary_safe() -> None:
+    part_two = {"facet_id": "entity_harness_theory_part_2", "terms": ["Harness Theory Part 2"]}
+    part_one = {"facet_id": "entity_harness_theory_part_1", "terms": ["Harness Theory Part 1"]}
+
+    assert runtime._direct_facet_text_matches(
+        part_two,
+        "Harness Theory Part 02 | The Complete Harness Architecture",
+    )
+    assert not runtime._direct_facet_text_matches(
+        part_one,
+        "Harness Theory Part 12 | Pattern catalogue",
+    )
+    requirement = closure.SemanticRequirement(
+        requirement_id="entity_harness_theory_part_2",
+        instruction="Name Harness Theory Part 2 explicitly.",
+        evidence_terms=("Harness Theory Part 2",),
+        visible_patterns=(r"Harness Theory Part 2",),
+        exact_phrase="Harness Theory Part 2",
+    )
+    assert closure._selected_evidence_supports_requirement(
+        requirement,
+        {
+            "evidence_id": "ev-part-02",
+            "evidence_type": "passage",
+            "title": "Harness Theory Part 02",
+            "section_title": "Architecture",
+            "passage_text": "Harness Theory Part 02 describes the responsibility architecture.",
+        },
+    )
+    assert not closure._selected_evidence_supports_requirement(
+        requirement,
+        {
+            "evidence_id": "ev-part-12",
+            "evidence_type": "passage",
+            "title": "Harness Theory Part 12",
+            "section_title": "Catalogue",
+            "passage_text": "Harness Theory Part 12 describes the pattern catalogue.",
+        },
+    )

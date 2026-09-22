@@ -2861,9 +2861,8 @@ def _selected_evidence_supports_requirement(
     item: Mapping[str, Any],
 ) -> bool:
     text = _selected_evidence_text(item)
-    folded = text.casefold()
     if requirement.exact_phrase:
-        return requirement.exact_phrase.casefold() in folded
+        return _identity_phrase_matches(requirement.exact_phrase, text)
     if (
         legacy._direct_facet_required_phrases(requirement.requirement_id)
         or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
@@ -2909,7 +2908,7 @@ def _selected_evidence_set_supports_requirement(
         return False
     combined = "\n".join(_selected_evidence_text(item) for item in evidence)
     if requirement.exact_phrase:
-        return requirement.exact_phrase.casefold() in combined.casefold()
+        return _identity_phrase_matches(requirement.exact_phrase, combined)
     if (
         legacy._direct_facet_required_phrases(requirement.requirement_id)
         or legacy._direct_facet_required_quote_groups(requirement.requirement_id)
@@ -3090,9 +3089,8 @@ def _claim_text_covers_requirement(
     normalized = re.sub(r"\s+", " ", str(claim_text)).strip()
     if not normalized:
         return False
-    folded = normalized.casefold()
     if requirement.exact_phrase:
-        return requirement.exact_phrase.casefold() in folded
+        return _identity_phrase_matches(requirement.exact_phrase, normalized)
     return bool(
         requirement.visible_patterns
         and any(
@@ -5835,16 +5833,9 @@ def _identity_phrase_matches(phrase: str, text: str) -> bool:
         return False
     if re.search(r"\bpart\s+\d+\b", normalized_phrase) is None:
         return normalized_phrase in normalized_text
-    tokens = re.findall(r"[a-z0-9]+", normalized_phrase)
-    if not tokens:
-        return False
-    pattern = re.compile(
-        r"(?<![a-z0-9])"
-        + r"[^a-z0-9]+".join(re.escape(token) for token in tokens)
-        + r"(?![a-z0-9])",
-        flags=re.I,
-    )
-    return pattern.search(str(text)) is not None
+    needle = legacy._normalized_graph_entity_identity(normalized_phrase)
+    haystack = legacy._normalized_graph_entity_identity(normalized_text)
+    return bool(needle and f" {needle} " in f" {haystack} ")
 
 
 def _entity_concepts(bundle: ProductionAnswerBundle, entity: str) -> set[str]:

@@ -4504,6 +4504,9 @@ def _named_question_entities(question: str) -> list[str]:
             root,
             flags=re.I,
         ).strip()
+        root = re.sub(r"^(?:the|a|an)\s+", "", root, flags=re.I).strip()
+        if re.search(r"\bseries\b", root, flags=re.I):
+            root = re.split(r"\bseries\b", root, maxsplit=1, flags=re.I)[0].strip()
         for part in re.findall(r"\bPart\s+(\d+)\b", question, flags=re.I):
             add(f"{root} Part {part}" if root else f"Part {part}")
 
@@ -8191,12 +8194,22 @@ def _entity_facet_exact_terms(facet: Mapping[str, Any]) -> tuple[str, ...]:
     )
 
 
+
+
+def _entity_term_matches_text(term: str, text: str) -> bool:
+    term_text = str(term).strip()
+    if not term_text:
+        return False
+    if re.search(r"\bpart\s+\d+\b", term_text, flags=re.I):
+        return _graph_identity_contains(str(text), term_text)
+    return term_text.casefold() in str(text).casefold()
+
+
 def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
     facet_id = str(facet.get("facet_id", ""))
     entity_terms = _entity_facet_exact_terms(facet)
     if entity_terms:
-        text_casefold = str(text).casefold()
-        return int(any(term in text_casefold for term in entity_terms))
+        return int(any(_entity_term_matches_text(term, text) for term in entity_terms))
     phrase_score = _direct_facet_phrase_score(facet_id, text)
     if _direct_facet_required_phrases(facet_id):
         return phrase_score
@@ -8226,8 +8239,7 @@ def _direct_facet_match_score(facet: Mapping[str, Any], text: str) -> int:
 def _direct_facet_text_matches(facet: Mapping[str, Any], text: str) -> bool:
     entity_terms = _entity_facet_exact_terms(facet)
     if entity_terms:
-        text_casefold = str(text).casefold()
-        return any(term in text_casefold for term in entity_terms)
+        return any(_entity_term_matches_text(term, text) for term in entity_terms)
     groups = _direct_facet_required_quote_groups(str(facet.get("facet_id", "")))
     if groups:
         text_casefold = str(text).casefold()
@@ -8241,7 +8253,11 @@ def _direct_facet_covered_markers(
 ) -> set[str]:
     facet_id = str(facet.get("facet_id", ""))
     text_casefold = str(text).casefold()
-    entity_terms = {term for term in _entity_facet_exact_terms(facet) if term in text_casefold}
+    entity_terms = {
+        term
+        for term in _entity_facet_exact_terms(facet)
+        if _entity_term_matches_text(term, text)
+    }
     if entity_terms:
         return entity_terms
     phrases = {
