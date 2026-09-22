@@ -829,3 +829,64 @@ def test_source_of_trust_contract_recovers_traceability_terms() -> None:
     assert "not the source of trust" in source_terms
     assert "underlying material" in source_terms
     assert "claim-to-source" in source_terms
+
+
+def test_comparison_structural_slot_compacts_into_material_slot() -> None:
+    material_requirement = closure.SemanticRequirement(
+        requirement_id="verification_gate",
+        instruction="Include an explicit verification/completion gate.",
+        evidence_terms=("verification", "completion", "gate"),
+        visible_patterns=(r"verification",),
+    )
+    comparison_requirement = closure.SemanticRequirement(
+        requirement_id="comparison_or_distinction",
+        instruction="Distinguish the compared items and state their relationship.",
+        evidence_terms=("compare", "contrast", "different", "relationship"),
+        visible_patterns=(r"different",),
+    )
+    slots = [
+        {
+            "slot_id": "slot_1",
+            "facet_id": "verification_gate",
+            "instruction": material_requirement.instruction,
+            "requirement": material_requirement,
+            "allowed_evidence_ids": ["ev-verification"],
+            "allowed_evidence_labels": ["e1"],
+            "support_quote_by_evidence_id": {
+                "ev-verification": "Verify completion before accepting the result."
+            },
+            "evidence": [],
+        },
+        {
+            "slot_id": "slot_2",
+            "facet_id": "comparison_or_distinction",
+            "instruction": comparison_requirement.instruction,
+            "requirement": comparison_requirement,
+            "allowed_evidence_ids": ["ev-verification", "ev-relationship"],
+            "allowed_evidence_labels": ["e1", "e2"],
+            "support_quote_by_evidence_id": {
+                "ev-relationship": (
+                    "A controlled architecture needs verification, approval, "
+                    "progress, and parallel branches."
+                )
+            },
+            "evidence": [
+                {
+                    "text": (
+                        "A controlled architecture needs verification, approval, "
+                        "progress, and parallel branches."
+                    )
+                }
+            ],
+        },
+    ]
+
+    compacted = closure._compact_structural_slots(slots)
+
+    assert len(compacted) == 1
+    assert compacted[0]["facet_id"] == "verification_gate"
+    assert compacted[0]["co_facet_ids"] == ["comparison_or_distinction"]
+    assert set(compacted[0]["allowed_evidence_ids"]) == {
+        "ev-verification",
+        "ev-relationship",
+    }

@@ -926,6 +926,44 @@ def _compact_entity_identity_slots(
 
 
 
+def _structural_slot_should_compact(slot: Mapping[str, Any]) -> bool:
+    facet_id = str(slot.get("facet_id", ""))
+    if facet_id == "multi_dimension_structure":
+        return True
+    if facet_id != "comparison_or_distinction":
+        return False
+    instruction = str(slot.get("instruction", "")).casefold()
+    evidence_text = " ".join(
+        str(item.get("text", ""))
+        for item in slot.get("evidence", [])
+        if isinstance(item, Mapping)
+    ).casefold()
+    architecture_signature_terms = {
+        "architecture",
+        "complex project",
+        "controlled",
+        "approval",
+        "parallel",
+        "branches",
+    }
+    workflow_support_terms = {"verification", "progress", "state", "gate"}
+    explicit_comparison_terms = {
+        "while",
+        "whereas",
+        "different reliability",
+        "solve different",
+        "contrast",
+        "rather than",
+    }
+    if any(term in evidence_text for term in explicit_comparison_terms):
+        return False
+    return (
+        "distinguish the compared items" in instruction
+        and any(term in evidence_text for term in architecture_signature_terms)
+        and any(term in evidence_text for term in workflow_support_terms)
+    )
+
+
 def _compact_structural_slots(
     slots: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -933,7 +971,7 @@ def _compact_structural_slots(
     structural_slots = [
         slot
         for slot in compacted
-        if str(slot.get("facet_id", "")) == "multi_dimension_structure"
+        if _structural_slot_should_compact(slot)
     ]
     if not structural_slots:
         return compacted
