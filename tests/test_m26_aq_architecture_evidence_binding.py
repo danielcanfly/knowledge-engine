@@ -636,3 +636,33 @@ def test_compacted_entity_facet_is_covered_by_bound_claim() -> None:
     claim = candidate["claims"][0]
     assert claim["facet_ids"] == ["router_decision", "entity_production_router"]
     assert claim["covers"] == ["router_decision", "entity_production_router"]
+
+
+def test_fast_surface_rejects_unsolicited_internal_article_id() -> None:
+    token = "article_deadbeefcafebabe"
+    assert runtime._contains_internal_fragment_leak(
+        f"The graph links {token} to another article.",
+        "What does the graph relationship mean?",
+    )
+    assert not runtime._contains_internal_fragment_leak(
+        f"{token} is the identifier you asked about.",
+        f"What does {token} mean?",
+    )
+
+
+def test_fast_candidate_validator_rejects_internal_id_leak_before_publish() -> None:
+    publication = runtime._validate_fast_provider_candidate(
+        question="What does this graph relationship mean?",
+        selected_evidence=[],
+        provider_output={
+            "parsed": {
+                "status": "answer",
+                "answer_text": (
+                    "Harness Theory Part 1 (article_deadbeefcafebabe) precedes Part 2."
+                ),
+                "citation_ids": ["ev-1"],
+                "abstention_reason": None,
+            }
+        },
+    )
+    assert publication is None

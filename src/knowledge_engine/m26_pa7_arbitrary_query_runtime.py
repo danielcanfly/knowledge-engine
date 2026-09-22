@@ -2481,7 +2481,7 @@ def _validate_fast_provider_candidate(
     if status != "answer":
         return None
     answer_text = re.sub(r"\s+", " ", str(parsed.get("answer_text", ""))).strip()
-    if not answer_text or _contains_internal_fragment_leak(answer_text):
+    if not answer_text or _contains_internal_fragment_leak(answer_text, question):
         return None
     raw_ids = parsed.get("citation_ids")
     if raw_ids is None:
@@ -2540,9 +2540,9 @@ def _validate_fast_provider_candidate(
     }
 
 
-def _contains_internal_fragment_leak(text: str) -> bool:
+def _contains_internal_fragment_leak(text: str, question: str = "") -> bool:
     lowered = text.casefold()
-    return any(
+    if any(
         phrase in lowered
         for phrase in (
             "definition head",
@@ -2555,7 +2555,24 @@ def _contains_internal_fragment_leak(text: str) -> bool:
             "visible coverage",
             "unanswered dimensions",
         )
+    ):
+        return True
+    allowed = {
+        token.casefold()
+        for token in re.findall(
+            r"\b(?:article_[0-9a-f]{8,}|m26pa7(?:ev|loc|edge)_[0-9a-f]{8,}|"
+            r"concept[-_/][A-Za-z0-9_.-]+|ev-[A-Za-z0-9_.-]+|claim_\d+(?:_ref_\d+)?)\b",
+            question,
+            flags=re.I,
+        )
+    }
+    leaked = re.findall(
+        r"\b(?:article_[0-9a-f]{8,}|m26pa7(?:ev|loc|edge)_[0-9a-f]{8,}|"
+        r"concept[-_/][A-Za-z0-9_.-]+|ev-[A-Za-z0-9_.-]+|claim_\d+(?:_ref_\d+)?)\b",
+        text,
+        flags=re.I,
     )
+    return any(token.casefold() not in allowed for token in leaked)
 
 
 def _fast_answer_response(

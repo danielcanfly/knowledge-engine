@@ -3790,7 +3790,11 @@ def _fast_recovery_seed(
     citation_ids = tuple(
         dict.fromkeys(str(item).strip() for item in publication.get("citation_ids", ()))
     )
-    if not answer_text or not citation_ids or legacy._contains_internal_fragment_leak(answer_text):
+    if (
+        not answer_text
+        or not citation_ids
+        or legacy._contains_internal_fragment_leak(answer_text, question)
+    ):
         return None
     evidence_by_id = {
         str(item.get("evidence_id", "")): item
