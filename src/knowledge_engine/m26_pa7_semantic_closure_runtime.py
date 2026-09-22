@@ -1033,6 +1033,25 @@ def _compact_structural_slots(
         ).items():
             target_quotes.setdefault(str(evidence_id), str(quote))
         target["support_quote_by_evidence_id"] = target_quotes
+
+        merged_evidence: list[dict[str, Any]] = []
+        seen_evidence_texts: set[tuple[str, str, str]] = set()
+        for source_slot in (target, structural_slot):
+            for raw_item in source_slot.get("evidence", []):
+                if not isinstance(raw_item, Mapping):
+                    continue
+                item = dict(raw_item)
+                key = (
+                    str(item.get("title", "")),
+                    str(item.get("section", "")),
+                    str(item.get("text", "")),
+                )
+                if key in seen_evidence_texts:
+                    continue
+                seen_evidence_texts.add(key)
+                item["context_index"] = len(merged_evidence) + 1
+                merged_evidence.append(item)
+        target["evidence"] = merged_evidence
         removed_ids.add(str(structural_slot.get("slot_id", "")))
     kept = [slot for slot in compacted if str(slot.get("slot_id", "")) not in removed_ids]
     for index, slot in enumerate(kept, start=1):
