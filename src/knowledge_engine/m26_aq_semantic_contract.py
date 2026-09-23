@@ -550,6 +550,148 @@ def _cross_source_truth_requirements(question: str) -> list[SemanticRequirement]
     ]
 
 
+_SEMANTIC_QUERY_FACET_BRIDGE_IDS = {
+    "compare_left",
+    "compare_right",
+    "composition_component",
+    "composition_target",
+    "supported_task",
+}
+_COMPOSITION_TARGET_MODIFIERS = {
+    "bigger",
+    "broader",
+    "full",
+    "larger",
+    "main",
+    "overall",
+    "wider",
+}
+
+
+def _question_facet_semantic_requirements(
+    question: str,
+    intent_class: str,
+) -> list[SemanticRequirement]:
+    """Promote only explicit or strongly-bound retrieval facets into closure."""
+    question_contract = legacy._question_contract(
+        question=question,
+        intent_class=intent_class,
+    )
+    named_entity_terms: set[str] = set()
+    for entity in legacy._named_question_entities(question):
+        named_entity_terms |= legacy._coverage_terms(entity)
+
+    bridged: list[SemanticRequirement] = []
+    for raw_facet in question_contract.get("required_facets", []):
+        if not isinstance(raw_facet, Mapping):
+            continue
+        facet_id = str(raw_facet.get("facet_id", "")).strip()
+        if not facet_id or facet_id.startswith("entity_"):
+            continue
+        strong_contract = bool(
+            legacy._direct_facet_required_phrases(facet_id)
+            or legacy._direct_facet_required_quote_groups(facet_id)
+        )
+        if facet_id not in _SEMANTIC_QUERY_FACET_BRIDGE_IDS and not strong_contract:
+            continue
+        raw_terms = raw_facet.get("terms", [])
+        if not isinstance(raw_terms, Sequence) or isinstance(raw_terms, (str, bytes)):
+            raw_terms = []
+        phrases = tuple(str(item).strip() for item in raw_terms if str(item).strip())
+        if not phrases:
+            continue
+
+        exact_phrase = ""
+        visible_patterns: tuple[str, ...] = ()
+        instruction: str
+        if facet_id in {"compare_left", "compare_right"}:
+            exact_phrase = phrases[0]
+            evidence_terms = (
+                exact_phrase,
+                *tuple(sorted(legacy._coverage_terms(exact_phrase))),
+            )
+            side = "left" if facet_id == "compare_left" else "right"
+            instruction = (
+                f"Name and ground the {side} side of the comparison: {exact_phrase}."
+            )
+            visible_patterns = (re.escape(exact_phrase),)
+        elif facet_id == "composition_component":
+            all_terms: set[str] = set()
+            for item in phrases:
+                all_terms |= legacy._coverage_terms(item)
+            terms = all_terms - named_entity_terms
+            evidence_terms = tuple(sorted(terms or all_terms))
+            instruction = (
+                "Ground the component whose place in the larger workflow is being asked about."
+            )
+            if evidence_terms:
+                visible_patterns = (
+                    rf"\b(?:{'|'.join(re.escape(term) for term in evidence_terms)})\b",
+                )
+        elif facet_id == "composition_target":
+            all_terms = set()
+            for item in phrases:
+                all_terms |= legacy._coverage_terms(item)
+            terms = all_terms - _COMPOSITION_TARGET_MODIFIERS
+            evidence_terms = tuple(sorted(terms or all_terms))
+            instruction = "Ground the workflow or system that receives the component."
+            if evidence_terms:
+                visible_patterns = (
+                    rf"\b(?:{'|'.join(re.escape(term) for term in evidence_terms)})\b",
+                )
+        elif facet_id == "supported_task":
+            all_terms = set()
+            for item in phrases:
+                all_terms |= legacy._coverage_terms(item)
+            evidence_terms = tuple(sorted(all_terms))
+            instruction = (
+                "Ground the task or work that the named capability is supposed to help with."
+            )
+            if evidence_terms:
+                visible_patterns = (
+                    rf"\b(?:{'|'.join(re.escape(term) for term in evidence_terms)})\b",
+                )
+        elif facet_id == "workflow_agent_control_distinction":
+            evidence_terms = phrases
+            instruction = (
+                "State the control-model distinction: workflows follow predefined paths, "
+                "while agents dynamically direct their own process or tool use."
+            )
+            visible_patterns = (
+                r"(?=.*\bworkflow(?:s)?\b)(?=.*\bagent(?:s)?\b)"
+                r"(?=.*\bpredefined\b)(?=.*\bdynamic(?:ally)?\b).+",
+            )
+        elif facet_id == "codex_parallel_subagent_coding":
+            evidence_terms = phrases
+            instruction = (
+                "Explain that Codex supports parallel subagent workflows for coding work and "
+                "name at least one coordination or isolation requirement."
+            )
+            visible_patterns = (
+                r"(?=.*\bcodex\b)(?=.*\bparallel\b)(?=.*\bsubagents?\b)"
+                r"(?=.*\b(?:partitioning|synchroni[sz]ation|worktrees?|isolation|tests?)\b).+",
+            )
+        else:
+            evidence_terms = phrases
+            instruction = (
+                "Use the runtime-selected evidence that satisfies the "
+                f"{facet_id.replace('_', ' ')} facet."
+            )
+
+        if not evidence_terms:
+            continue
+        bridged.append(
+            SemanticRequirement(
+                requirement_id=facet_id,
+                instruction=instruction,
+                evidence_terms=evidence_terms,
+                visible_patterns=visible_patterns,
+                exact_phrase=exact_phrase,
+            )
+        )
+    return bridged
+
+
 def derive_semantic_requirements(
     question: str,
     intent_class: str,
@@ -614,6 +756,16 @@ def derive_semantic_requirements(
             intent_class=intent_class,
         )
         for requirement in _cross_source_truth_requirements(question):
+            add_question_shape(
+                requirement.requirement_id,
+                requirement.instruction,
+                requirement.evidence_terms,
+                requirement.visible_patterns,
+                exact_phrase=requirement.exact_phrase,
+            )
+        for requirement in _question_facet_semantic_requirements(
+            question, intent_class
+        ):
             add_question_shape(
                 requirement.requirement_id,
                 requirement.instruction,

@@ -326,6 +326,14 @@ DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
         ("tests",),
         ("coverage gaps", "traces"),
     ),
+    "workflow_agent_control_distinction": (
+        ("predefined code paths",),
+        ("dynamically direct their own processes", "dynamically direct their own process"),
+    ),
+    "codex_parallel_subagent_coding": (
+        ("openai codex supports parallel subagent workflows", "codex supports parallel subagent workflows"),
+        ("work partitioning", "synchronisation", "synchronization", "workspace isolation", "worktree"),
+    ),
 }
 DIRECT_FACET_DISPLAY_LABELS = {
     "comfyui_quantization": "comfyui GGUF/FP8 quantization",
@@ -421,6 +429,11 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
         body = normalized[len(prefix) :].strip(" ?.")
         if not body:
             return None
+        if re.search(
+            r"\b(?:difference\s+between|different\s+from|compare|contrast|versus|vs\.?)\b",
+            body,
+        ):
+            return None
         if re.match(
             r"(?:the\s+)?role\s+of\s+.+?\s+(?:in|within|for)\s+.+",
             body,
@@ -463,6 +476,78 @@ def _contextual_definition_query_parts(question: str) -> dict[str, str] | None:
                 "question_prefix": prefix.strip(),
             }
     return None
+
+
+def _comparison_query_parts(question: str) -> dict[str, str] | None:
+    normalized = " ".join(str(question).strip().split()).strip(" ?.")
+    patterns = (
+        re.compile(
+            r"^(?:what\s+is|what's)\s+(?:the\s+)?difference\s+between\s+(.+?)\s+and\s+(.+?)(?:\s+(?:in|within|for)\s+(.+))?$",
+            re.I,
+        ),
+        re.compile(
+            r"^(?:why|how)\s+(?:are|is)\s+(.+?)\s+different\s+from\s+(.+?)(?:\s+(?:in|within|for)\s+(.+))?$",
+            re.I,
+        ),
+        re.compile(
+            r"^how\s+(?:does|do)\s+(.+?)\s+differ\s+from\s+(.+?)(?:\s+(?:in|within|for)\s+(.+))?$",
+            re.I,
+        ),
+        re.compile(
+            r"^(?:compare|contrast)\s+(.+?)\s+(?:and|with)\s+(.+?)(?:\s+(?:in|within|for)\s+(.+))?$",
+            re.I,
+        ),
+    )
+    match = next((pattern.match(normalized) for pattern in patterns if pattern.match(normalized)), None)
+    if match is None:
+        versus = re.match(r"^(.+?)\s+(?:versus|vs\.?)\s+(.+)$", normalized, flags=re.I)
+        if versus is None:
+            return None
+        left, right = versus.group(1), versus.group(2)
+        context = ""
+    else:
+        left, right = match.group(1), match.group(2)
+        context = match.group(3) or ""
+    left = _strip_leading_articles(left).strip(" ?.,;:")
+    right = _strip_leading_articles(right).strip(" ?.,;:")
+    context = _strip_leading_articles(context).strip(" ?.,;:")
+    if not left or not right:
+        return None
+    return {"left": left, "right": right, "context_modifier": context}
+
+
+def _composition_query_parts(question: str) -> dict[str, str] | None:
+    normalized = " ".join(str(question).strip().split()).strip(" ?.")
+    match = re.match(
+        r"^how\s+(?:do|does)\s+(.+?)\s+(?:fit|fits)\s+into\s+(.+)$",
+        normalized,
+        flags=re.I,
+    )
+    if match is None:
+        return None
+    component = _strip_leading_articles(match.group(1)).strip(" ?.,;:")
+    target = _strip_leading_articles(match.group(2)).strip(" ?.,;:")
+    if not component or not target:
+        return None
+    return {"component": component, "target": target}
+
+
+def _help_with_query_parts(question: str) -> dict[str, str] | None:
+    normalized = " ".join(str(question).strip().split()).strip(" ?.")
+    match = re.match(
+        r"^how\s+can\s+(.+?)\s+help\s+with\s+(.+)$",
+        normalized,
+        flags=re.I,
+    )
+    if match is None:
+        return None
+    helper = _strip_leading_articles(match.group(1)).strip(" ?.,;:")
+    task = _strip_leading_articles(match.group(2)).strip(" ?.,;:")
+    if not helper or not task:
+        return None
+    return {"helper": helper, "task": task}
+
+
 CAUSALITY_UPGRADE_TERMS = {
     "cause",
     "caused",
@@ -3312,6 +3397,12 @@ def _semantic_distinct_passages_for_query(
 
 def _question_component_term_sets(question: str) -> list[set[str]]:
     components: list[set[str]] = []
+    comparison_parts = _comparison_query_parts(question)
+    if comparison_parts is not None:
+        for key in ("left", "right"):
+            terms = _coverage_terms(comparison_parts[key])
+            if terms:
+                components.append(terms)
     for entity in _named_question_entities(question):
         terms = _coverage_terms(entity)
         if entity.casefold() in {"dag"}:
@@ -4108,11 +4199,43 @@ def _question_contract(*, question: str, intent_class: str) -> dict[str, Any]:
             ),
         }
     if intent_class == "cross_document_comparison":
-        facets = [
-            {"facet_id": "compare_left", "terms": terms[:6], "required": True},
-            {"facet_id": "compare_right", "terms": terms[:6], "required": True},
-            {"facet_id": "comparison_relation", "terms": ["compare", "contrast"], "required": True},
-        ]
+        comparison_parts = _comparison_query_parts(question)
+        if comparison_parts is not None:
+            facets = [
+                {
+                    "facet_id": "compare_left",
+                    "terms": sorted(_coverage_terms(comparison_parts["left"])),
+                    "required": True,
+                },
+                {
+                    "facet_id": "compare_right",
+                    "terms": sorted(_coverage_terms(comparison_parts["right"])),
+                    "required": True,
+                },
+            ]
+        else:
+            facets = [
+                {"facet_id": "compare_left", "terms": terms[:6], "required": True},
+                {"facet_id": "compare_right", "terms": terms[:6], "required": True},
+            ]
+        comparison_parts = _comparison_query_parts(question)
+        if comparison_parts is not None:
+            left_terms = _coverage_terms(comparison_parts["left"])
+            right_terms = _coverage_terms(comparison_parts["right"])
+            if ({"workflow"} <= left_terms and {"agent"} <= right_terms) or (
+                {"agent"} <= left_terms and {"workflow"} <= right_terms
+            ):
+                facets.insert(
+                    0,
+                    {
+                        "facet_id": "workflow_agent_control_distinction",
+                        "terms": [
+                            "predefined code paths",
+                            "dynamically direct their own processes",
+                        ],
+                        "required": True,
+                    },
+                )
     elif intent_class == "complementary_synthesis":
         facets = []
         seen_facet_ids: set[str] = set()
@@ -4240,6 +4363,27 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
         add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    composition_parts = _composition_query_parts(question)
+    if composition_parts is not None:
+        add("composition_component", [composition_parts["component"]])
+        add("composition_target", [composition_parts["target"]])
+    help_parts = _help_with_query_parts(question)
+    if help_parts is not None:
+        add("supported_task", [help_parts["task"]])
+    if (
+        "codex" in question_casefold
+        and any(marker in question_casefold for marker in ("multi-agent", "multi agent", "subagent", "subagents"))
+        and any(marker in question_casefold for marker in ("coding", "code", "engineering", "repo", "repository", "work"))
+    ):
+        add(
+            "codex_parallel_subagent_coding",
+            [
+                "parallel subagent workflows",
+                "work partitioning",
+                "synchronisation",
+                "workspace isolation",
+            ],
+        )
     if (
         ("hook" in question_casefold or "hooks" in question_casefold)
         and ("plugin" in question_casefold or "plugins" in question_casefold)
@@ -7207,15 +7351,15 @@ def _answer_bearing_query_focus(question: str) -> _AnswerBearingQueryFocus:
             requires_explicit_relation=False,
         )
 
-    comparison_match = re.search(r"\bwhy\s+are\s+(.+?)\s+different\s+from\s+(.+)$", normalized)
-    if comparison_match is not None:
-        left = _strip_leading_articles(comparison_match.group(1))
-        right = _strip_leading_articles(comparison_match.group(2))
+    comparison_parts = _comparison_query_parts(question)
+    if comparison_parts is not None:
+        left = comparison_parts["left"]
+        right = comparison_parts["right"]
         return _AnswerBearingQueryFocus(
             relation="comparison",
             subject_terms=frozenset(_coverage_terms(left) | _coverage_terms(right)),
             context_terms=frozenset(),
-            relation_terms=frozenset({"different", "difference", "between", "versus", "rather"}),
+            relation_terms=frozenset({"different", "difference", "between", "versus", "rather", "contrast"}),
             subject_phrases=tuple(item for item in (left, right) if item),
             requires_explicit_relation=True,
         )
@@ -7870,7 +8014,11 @@ def _augment_evidence_for_intent(
             focus=focus,
             query_terms=query_terms,
         )
-    if intent_class in {"direct_grounded_knowledge", "complementary_synthesis"}:
+    if intent_class in {
+        "cross_document_comparison",
+        "direct_grounded_knowledge",
+        "complementary_synthesis",
+    }:
         evidence = _ensure_required_facet_coverage_passages(
             bundle=bundle,
             evidence=evidence,

@@ -4306,3 +4306,49 @@ def test_generic_dimensions_keep_true_workflow_process_questions_sequential() ->
     requirement_ids = {item.requirement_id for item in requirements}
 
     assert "process_sequence" in requirement_ids
+
+
+def test_strong_query_facets_require_visible_answer_semantics() -> None:
+    workflow_question = "What is the difference between a workflow and an agent in Daniel's writing?"
+    workflow_requirements = derive_semantic_requirements(
+        workflow_question,
+        "cross_document_comparison",
+    )
+    workflow_good = (
+        "A workflow follows predefined code paths, while an agent dynamically directs its own process and tool use."
+    )
+    workflow_bad = (
+        "A workflow and an agent are different layers of a system and both can use tools."
+    )
+    assert "SEMANTIC_VISIBLE_MISSING:workflow_agent_control_distinction" not in _visible_semantic_failures(
+        workflow_good,
+        workflow_requirements,
+        workflow_question,
+    )
+    assert "SEMANTIC_VISIBLE_MISSING:workflow_agent_control_distinction" in _visible_semantic_failures(
+        workflow_bad,
+        workflow_requirements,
+        workflow_question,
+    )
+
+    codex_question = "How can Codex help with multi-agent coding work?"
+    codex_requirements = derive_semantic_requirements(
+        codex_question,
+        "direct_grounded_knowledge",
+    )
+    codex_good = (
+        "Codex supports parallel subagent workflows for coding work, but parallel execution still needs work partitioning and tests."
+    )
+    codex_bad = (
+        "The evidence bundle contains passages relevant to Codex and multi-agent coding work."
+    )
+    assert "SEMANTIC_VISIBLE_MISSING:codex_parallel_subagent_coding" not in _visible_semantic_failures(
+        codex_good,
+        codex_requirements,
+        codex_question,
+    )
+    assert "SEMANTIC_VISIBLE_MISSING:codex_parallel_subagent_coding" in _visible_semantic_failures(
+        codex_bad,
+        codex_requirements,
+        codex_question,
+    )

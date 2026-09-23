@@ -3771,3 +3771,93 @@ def test_tool_migration_rationale_prefers_direct_workflow_evidence() -> None:
 
     assert runtime_module._direct_facet_text_matches(facet, direct)
     assert not runtime_module._direct_facet_text_matches(facet, adjacent_but_wrong)
+
+
+def test_workflow_agent_comparison_requires_control_model_distinction() -> None:
+    question = "What is the difference between a workflow and an agent in Daniel's writing?"
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="cross_document_comparison",
+    )
+    facet = next(
+        item
+        for item in contract["required_facets"]
+        if item["facet_id"] == "workflow_agent_control_distinction"
+    )
+    direct = (
+        "Workflows are systems where LLMs and tools are orchestrated through predefined code paths. "
+        "Agents are systems where LLMs dynamically direct their own processes and tool usage."
+    )
+    adjacent_but_wrong = (
+        "An agent can participate in a workflow, and both may use tools and multiple steps."
+    )
+
+    assert runtime_module._direct_facet_text_matches(facet, direct)
+    assert not runtime_module._direct_facet_text_matches(facet, adjacent_but_wrong)
+
+
+def test_codex_multi_agent_coding_requires_parallel_subagent_evidence() -> None:
+    question = "How can Codex help with multi-agent coding work?"
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+    facet = next(
+        item
+        for item in contract["required_facets"]
+        if item["facet_id"] == "codex_parallel_subagent_coding"
+    )
+    direct = (
+        "OpenAI Codex supports parallel subagent workflows. Parallel execution still needs "
+        "work partitioning, synchronisation, and tests or it amplifies conflict."
+    )
+    adjacent_but_wrong = (
+        "Codex can sustain long-running coding work with context compaction and repeated sessions."
+    )
+
+    assert runtime_module._direct_facet_text_matches(facet, direct)
+    assert not runtime_module._direct_facet_text_matches(facet, adjacent_but_wrong)
+
+
+def test_cross_document_comparison_runs_required_facet_recovery() -> None:
+    question = "What is the difference between a workflow and an agent in Daniel's writing?"
+    documents = [
+        _document(
+            "workflow_noise",
+            title="A product workflow",
+            body="This workflow has several steps and an approval checkpoint.",
+        ),
+        _document(
+            "workflow_agent_direct",
+            title="Workflow versus agent",
+            body=(
+                "Workflows are systems where LLMs and tools are orchestrated through predefined code paths. "
+                "Agents are systems where LLMs dynamically direct their own processes and tool usage."
+            ),
+        ),
+    ]
+    bundle = _bundle_with_documents(documents)
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="cross_document_comparison",
+    )
+
+    selected = runtime_module._augment_evidence_for_intent(
+        bundle=bundle,
+        base_evidence=[],
+        lexical_results=[],
+        trace_id="trace-comparison-required-facet-recovery",
+        intent_class="cross_document_comparison",
+        budget=6,
+        question=question,
+        documents=documents,
+        question_contract=contract,
+    )
+
+    recovered = next(
+        item
+        for item in selected
+        if item.get("retrieval_metadata", {}).get("required_facet_id")
+        == "workflow_agent_control_distinction"
+    )
+    assert recovered["section_id"] == "workflow_agent_direct"

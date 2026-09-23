@@ -2993,6 +2993,40 @@ def _requirement_material_terms(requirement: SemanticRequirement) -> set[str]:
     return terms
 
 
+def _supported_task_is_parallel_coding(requirement: SemanticRequirement) -> bool:
+    if requirement.requirement_id != "supported_task":
+        return False
+    terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+    return {"agent", "coding"}.issubset(terms) and "multi" in terms
+
+
+def _supported_task_text_matches(
+    requirement: SemanticRequirement,
+    text: str,
+) -> bool:
+    if requirement.requirement_id != "supported_task":
+        return False
+    if not _supported_task_is_parallel_coding(requirement):
+        required_terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+        evidence_terms = legacy._meaningful_terms(text)
+        minimum_overlap = 1 if len(required_terms) == 1 else min(2, len(required_terms))
+        return len(required_terms & evidence_terms) >= minimum_overlap
+    normalized = re.sub(r"\s+", " ", str(text).casefold())
+    direct_parallel_coding = bool(
+        re.search(
+            r"\bparallel(?:\s+\w+){0,2}\s+coding agents?\b"
+            r"|\bcoding agents?.{0,160}\b(?:parallel|subagents?|worktrees?)\b"
+            r"|\b(?:repository|repo|worktree|git branch).{0,160}\b"
+            r"(?:parallel agents?|parallel sessions?|subagents?|workers? in parallel)\b"
+            r"|\b(?:parallel agents?|parallel sessions?|subagents?|workers? in parallel)"
+            r".{0,160}\b(?:repository|repo|worktree|git branch)\b",
+            normalized,
+            flags=re.I,
+        )
+    )
+    return direct_parallel_coding
+
+
 def _selected_evidence_supports_requirement(
     requirement: SemanticRequirement,
     item: Mapping[str, Any],
@@ -3011,6 +3045,8 @@ def _selected_evidence_supports_requirement(
             },
             text,
         )
+    if requirement.requirement_id == "supported_task":
+        return _supported_task_text_matches(requirement, text)
     structural_cues = {
         "explanatory_answer": r"\b(?:because|therefore|reason|mechanism|means|allows|prevents|rather than)\b",
         "comparison_or_distinction": r"\b(?:while|whereas|different|distinguish|contrast|rather than|instead)\b",
@@ -5604,12 +5640,7 @@ def _add_generic_answer_dimension_requirements(
             q,
         )
     )
-    generic_how_process = bool(
-        re.search(r"\bhow\s+(?:can|do|does)\b", q)
-        and not asks_comparison
-        and not asks_composition
-    )
-    asks_process = explicit_process or workflow_process or generic_how_process
+    asks_process = explicit_process or workflow_process
     if asks_process:
         add(
             "process_sequence",
@@ -6481,6 +6512,20 @@ def _requirement_document_score(
         ):
             score += 4.0
         return score
+    if requirement.requirement_id == "supported_task":
+        if not _supported_task_text_matches(requirement, text):
+            return 0.0
+        terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+        overlap = len(terms & legacy._meaningful_terms(text))
+        score = 8.0 + float(overlap)
+        text_casefold = text.casefold()
+        if "codex" in text_casefold:
+            score += 3.0
+        if "parallel coding" in text_casefold or "parallel subagent" in text_casefold:
+            score += 4.0
+        if "worktree" in text_casefold or "repository" in text_casefold:
+            score += 2.0
+        return score
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     overlap = len(terms & legacy._meaningful_terms(text))
     phrase_bonus = sum(
@@ -6513,6 +6558,20 @@ def _requirement_evidence_score(
             if _identity_phrase_matches(requirement.exact_phrase, text)
             else 0.0
         )
+    if requirement.requirement_id == "supported_task":
+        if not _supported_task_text_matches(requirement, text):
+            return 0.0
+        terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
+        overlap = len(terms & legacy._meaningful_terms(text))
+        score = 8.0 + float(overlap)
+        text_casefold = text.casefold()
+        if "codex" in text_casefold:
+            score += 3.0
+        if "parallel coding" in text_casefold or "parallel subagent" in text_casefold:
+            score += 4.0
+        if "worktree" in text_casefold or "repository" in text_casefold:
+            score += 2.0
+        return score
     terms = legacy._meaningful_terms(" ".join(requirement.evidence_terms))
     overlap = len(terms & legacy._meaningful_terms(text))
     phrase_bonus = sum(
