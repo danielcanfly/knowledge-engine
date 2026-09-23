@@ -431,3 +431,81 @@ def test_web_adapter_forwards_dense_fallback_channel(monkeypatch: pytest.MonkeyP
         dense_fallback_channel=sentinel,  # type: ignore[arg-type]
     )
     assert observed["dense_fallback_channel"] is sentinel
+
+
+
+def test_fast_candidate_requires_citations_for_strong_migration_facets() -> None:
+    question = "Why did the team shift most engineering work from OpenClaw to Codex?"
+    evidence = [
+        {
+            "evidence_id": "ev_old",
+            "passage_text": (
+                "The real requirement is a fast local loop. Codex CLI is built for a local "
+                "terminal workflow, and adding the whole OpenClaw runtime can be more roundabout."
+            ),
+            "source_id": "old-background",
+        },
+        {
+            "evidence_id": "ev_transition",
+            "passage_text": (
+                "My engineering work gradually moved somewhere else. I kept opening Codex for "
+                "those jobs, and after a while it simply became the main tool."
+            ),
+            "source_id": "direct-migration",
+        },
+        {
+            "evidence_id": "ev_rationale",
+            "passage_text": (
+                "I still found myself steering more often in Codex because the thread, worktree, "
+                "terminal, diff, review and approvals were all right there. I just noticed that "
+                "I was crossing fewer boundaries while doing the same engineering job."
+            ),
+            "source_id": "direct-migration",
+        },
+    ]
+
+    failures = contract._fast_required_facet_citation_failures(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        publication={
+            "answer_text": "The local loop was simpler.",
+            "citation_ids": ["ev_old"],
+        },
+    )
+
+    assert "FAST_CITATION_REQUIRED_FACET_MISSING:migration_transition_event" in failures
+    assert "FAST_CITATION_REQUIRED_FACET_MISSING:migration_rationale" in failures
+
+
+def test_fast_candidate_accepts_citations_that_cover_strong_migration_facets() -> None:
+    question = "Why did the team shift most engineering work from OpenClaw to Codex?"
+    evidence = [
+        {
+            "evidence_id": "ev_transition",
+            "passage_text": (
+                "My engineering work gradually moved somewhere else. I kept opening Codex for "
+                "those jobs, and after a while it simply became the main tool."
+            ),
+            "source_id": "direct-migration",
+        },
+        {
+            "evidence_id": "ev_rationale",
+            "passage_text": (
+                "I still found myself steering more often in Codex because the thread, worktree, "
+                "terminal, diff, review and approvals were all right there. I just noticed that "
+                "I was crossing fewer boundaries while doing the same engineering job."
+            ),
+            "source_id": "direct-migration",
+        },
+    ]
+
+    assert contract._fast_required_facet_citation_failures(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        publication={
+            "answer_text": "Codex became the main engineering tool because the integrated loop crossed fewer boundaries.",
+            "citation_ids": ["ev_transition", "ev_rationale"],
+        },
+    ) == []

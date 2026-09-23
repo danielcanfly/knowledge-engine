@@ -2508,6 +2508,7 @@ def test_provider_evidence_item_is_compact_and_stable() -> None:
         "text_sha256",
         "text_role",
         "channels",
+        "strong_required_facet_id",
     }
     assert evidence["evidence_id"] == "ev_semantic"
     assert evidence["locator_id"] == "loc_semantic"
@@ -3747,30 +3748,43 @@ def test_pre_acceptance_question_recovers_evidence_acceptance_contract() -> None
     assert runtime_module._deterministic_support_ref_for_facet(acceptance, facet) is not None
 
 
-def test_tool_migration_rationale_prefers_direct_workflow_evidence() -> None:
+def test_tool_migration_rationale_prefers_direct_migration_evidence() -> None:
     question = "Why did the team shift most engineering work from OpenClaw to Codex?"
     contract = runtime_module._question_contract(
         question=question,
         intent_class="direct_grounded_knowledge",
     )
-    facet = next(
+    transition = next(
+        item
+        for item in contract["required_facets"]
+        if item["facet_id"] == "migration_transition_event"
+    )
+    rationale = next(
         item
         for item in contract["required_facets"]
         if item["facet_id"] == "migration_rationale"
     )
-    direct = (
-        "The real requirement there is a fast local loop and low-friction file and command "
-        "access. Codex CLI is built precisely for that local terminal workflow. If you are "
-        "mostly doing high-frequency repo work, adding the whole OpenClaw runtime first is "
-        "often more roundabout, not more advanced."
+    direct_transition = (
+        "My engineering work gradually moved somewhere else. Most days I was dealing with "
+        "implementation inside repositories, parallel changes, reviews, debugging and "
+        "verification. I kept opening Codex for those jobs, and after a while it simply "
+        "became the main tool."
+    )
+    direct_rationale = (
+        "I still found myself steering more often in Codex because the thread, worktree, "
+        "terminal, diff, review and approvals were all right there. I did not switch because "
+        "of one release note. I just noticed, over time, that I was crossing fewer boundaries "
+        "while doing the same engineering job."
     )
     adjacent_but_wrong = (
-        "OpenClaw supports OpenAI Codex OAuth for external tools and workflows, and OpenAI "
-        "is useful for difficult coding work."
+        "The real requirement is a fast local loop. Codex CLI is built for a local terminal "
+        "workflow, and adding the whole OpenClaw runtime can be more roundabout."
     )
 
-    assert runtime_module._direct_facet_text_matches(facet, direct)
-    assert not runtime_module._direct_facet_text_matches(facet, adjacent_but_wrong)
+    assert runtime_module._direct_facet_text_matches(transition, direct_transition)
+    assert runtime_module._direct_facet_text_matches(rationale, direct_rationale)
+    assert not runtime_module._direct_facet_text_matches(transition, adjacent_but_wrong)
+    assert not runtime_module._direct_facet_text_matches(rationale, adjacent_but_wrong)
 
 
 def test_workflow_agent_comparison_requires_control_model_distinction() -> None:
@@ -3861,3 +3875,65 @@ def test_cross_document_comparison_runs_required_facet_recovery() -> None:
         == "workflow_agent_control_distinction"
     )
     assert recovered["section_id"] == "workflow_agent_direct"
+
+
+def test_strong_facet_support_ref_keeps_all_required_quote_groups() -> None:
+    question = "How can Codex help with multi-agent coding work?"
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+    facet = next(
+        item
+        for item in contract["required_facets"]
+        if item["facet_id"] == "codex_parallel_subagent_coding"
+    )
+    passage = (
+        "A work unit may need an isolated Git branch or worktree, container or filesystem "
+        "snapshot, database schema or test tenant, queue or topic namespace, object-store "
+        "prefix, temporary credential scope, port, service instance, or external sandbox. "
+        "Current Claude Code documentation supports worktree isolation for parallel sessions "
+        "and subagents, while OpenAI Codex supports parallel subagent workflows."
+    )
+    item = {
+        "evidence_id": "ev_parallel",
+        "locator_id": "loc_parallel",
+        "passage_text": passage,
+    }
+
+    ref = runtime_module._deterministic_support_ref_for_facet(item, facet)
+
+    assert ref is not None
+    assert runtime_module._direct_facet_text_matches(facet, ref["exact_quote"])
+    assert "worktree" in ref["exact_quote"].casefold()
+    assert "codex supports parallel subagent workflows" in ref["exact_quote"].casefold()
+
+
+def test_deterministic_answer_surface_does_not_truncate_strong_facet_contract() -> None:
+    passage = (
+        "A work unit may need an isolated Git branch or worktree, container or filesystem "
+        "snapshot, database schema or test tenant, queue or topic namespace, object-store "
+        "prefix, temporary credential scope, port, service instance, or external sandbox. "
+        "Current Claude Code documentation supports worktree isolation for parallel sessions "
+        "and subagents, while OpenAI Codex supports parallel subagent workflows."
+    )
+    claim = {
+        "claim_id": "claim_1",
+        "facet_ids": ["codex_parallel_subagent_coding"],
+        "surface_text": passage,
+        "support_refs": [
+            {
+                "evidence_id": "ev_parallel",
+                "locator_id": "loc_parallel",
+                "exact_quote": passage,
+            }
+        ],
+    }
+    answer = runtime_module._deterministic_answer_text([claim])
+    facet = {
+        "facet_id": "codex_parallel_subagent_coding",
+        "terms": ["parallel subagent workflows", "worktree"],
+    }
+
+    assert runtime_module._direct_facet_text_matches(facet, answer)
+    assert "codex supports parallel subagent workflows" in answer.casefold()

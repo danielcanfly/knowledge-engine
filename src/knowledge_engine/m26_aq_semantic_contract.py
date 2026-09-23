@@ -3663,6 +3663,69 @@ def _question_answer_alignment_failures(
     return []
 
 
+def _fast_required_facet_citation_failures(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    publication: Mapping[str, Any],
+) -> list[str]:
+    question_contract = legacy._question_contract(
+        question=question,
+        intent_class=intent_class,
+    )
+    strong_facets = []
+    for raw_facet in question_contract.get("required_facets", []):
+        if not isinstance(raw_facet, Mapping):
+            continue
+        facet_id = str(raw_facet.get("facet_id", "")).strip()
+        if not facet_id:
+            continue
+        if not (
+            legacy._direct_facet_required_phrases(facet_id)
+            or legacy._direct_facet_required_quote_groups(facet_id)
+        ):
+            continue
+        strong_facets.append(dict(raw_facet))
+    if not strong_facets:
+        return []
+
+    evidence_by_id = {
+        str(item.get("evidence_id", "")): item
+        for item in evidence
+        if str(item.get("evidence_id", ""))
+    }
+    cited_items = [
+        evidence_by_id[citation_id]
+        for citation_id in publication.get("citation_ids", [])
+        if citation_id in evidence_by_id
+    ]
+
+    def evidence_text(item: Mapping[str, Any]) -> str:
+        return " ".join(
+            str(item.get(key, ""))
+            for key in (
+                "title",
+                "section_title",
+                "passage_text",
+                "source_identity",
+                "source_id",
+                "concept_id",
+            )
+        )
+
+    failures: list[str] = []
+    for facet in strong_facets:
+        facet_id = str(facet.get("facet_id", ""))
+        if any(
+            legacy._direct_facet_text_matches(facet, evidence_text(item))
+            for item in cited_items
+        ):
+            continue
+        failures.append(f"FAST_CITATION_REQUIRED_FACET_MISSING:{facet_id}")
+    return failures
+
+
 def _unsupported_external_markers(
     question: str,
     evidence: Sequence[Mapping[str, Any]],
@@ -3892,11 +3955,18 @@ def _try_fast_supported_answer(
         answer_text=str(publication.get("answer_text", "")),
         evidence=evidence,
     )
-    if alignment_failures:
+    facet_citation_failures = _fast_required_facet_citation_failures(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        publication=publication,
+    )
+    fast_failures = [*alignment_failures, *facet_citation_failures]
+    if fast_failures:
         return _FastAttemptOutcome(
             envelope=FastAttemptEnvelope(
                 publication=dict(publication),
-                rejection_reason_codes=tuple(str(item) for item in alignment_failures),
+                rejection_reason_codes=tuple(str(item) for item in fast_failures),
             )
         )
     response = legacy._fast_answer_response(

@@ -269,10 +269,15 @@ DIRECT_FACET_EXACT_PHRASES = {
         "minimal working state",
         "one variable at a time",
     ),
+    "migration_transition_event": (
+        "my engineering work gradually moved somewhere else",
+        "it simply became the main tool",
+        "shifted most of my engineering work",
+    ),
     "migration_rationale": (
-        "fast local loop",
-        "Codex CLI is built precisely for that local terminal workflow",
-        "adding the whole OpenClaw runtime first is often more roundabout",
+        "the thread, worktree, terminal, diff, review and approvals were all right there",
+        "crossing fewer boundaries while doing the same engineering job",
+        "the amount of setup and switching",
     ),
 }
 DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
@@ -2451,9 +2456,11 @@ def _fast_synthesis_payload(
             "Return exactly one JSON object with keys status, answer_text, citation_ids, "
             "and abstention_reason. status must be answer or abstain. citation_ids must "
             "be evidence_id values from the supplied evidence bundle. Cite the evidence "
-            "you actually used. Do not mention internal labels, exact-quote scaffolding, "
-            "or unsupported claims. If the supplied evidence is genuinely insufficient, "
-            "return status abstain."
+            "you actually used. When evidence items include a non-empty strong_required_facet_id, "
+            "an answer must cite at least one supplied evidence item for every distinct strong "
+            "required facet that the answer is expected to cover. Do not mention internal labels, "
+            "exact-quote scaffolding, or unsupported claims. If the supplied evidence is genuinely "
+            "insufficient, return status abstain."
         ),
         "messages": [
             {
@@ -3635,6 +3642,32 @@ def _deterministic_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
             surface = "; ".join(clause for clause in clauses if clause)
         else:
             surface = _bounded_sentence(surface_text, max_chars=260)
+            facet_ids = [
+                str(item)
+                for item in (
+                    claim.get("facet_ids", [])
+                    if isinstance(claim.get("facet_ids", []), Sequence)
+                    and not isinstance(claim.get("facet_ids", []), (str, bytes))
+                    else []
+                )
+                if str(item)
+            ]
+            strong_facets = [
+                {"facet_id": facet_id, "terms": []}
+                for facet_id in facet_ids
+                if _direct_facet_required_phrases(facet_id)
+                or _direct_facet_required_quote_groups(facet_id)
+            ]
+            if strong_facets and any(
+                not _direct_facet_text_matches(facet, surface)
+                for facet in strong_facets
+            ):
+                full_surface = re.sub(r"\s+", " ", surface_text).strip()
+                if all(
+                    _direct_facet_text_matches(facet, full_surface)
+                    for facet in strong_facets
+                ):
+                    surface = full_surface
         if surface:
             label = _deterministic_claim_label(claim.get("facet_ids", []))
             prefix = f"{label}: " if label else ""
@@ -3727,12 +3760,19 @@ def _deterministic_support_ref_for_facet(
         if not _direct_facet_text_matches(facet, quote):
             return None
         if len(quote) > 240:
-            quote = _bounded_quote_around_terms(quote, grouped_terms, max_chars=240)
+            bounded = _bounded_quote_around_terms(quote, grouped_terms, max_chars=240)
+            if _direct_facet_text_matches(facet, bounded):
+                quote = bounded
+            else:
+                quote = re.sub(r"\s+", " ", quote).strip()
+        if not _direct_facet_text_matches(facet, quote):
+            return None
         return {
             "evidence_id": str(item["evidence_id"]),
             "locator_id": str(item["locator_id"]),
             "exact_quote": quote,
             "exact_support_snippet": quote,
+            "exact_quote_sha256": sha256_bytes(quote.encode("utf-8")),
             "uncertainty": "low",
         }
     if not _direct_facet_required_phrases(facet_id):
@@ -4150,6 +4190,21 @@ def _build_multi_evidence_provider_payload(
 
 
 def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = item.get("retrieval_metadata", {})
+    required_facet_id = (
+        str(metadata.get("required_facet_id", ""))
+        if isinstance(metadata, Mapping)
+        else ""
+    )
+    strong_required_facet_id = (
+        required_facet_id
+        if required_facet_id
+        and (
+            _direct_facet_required_phrases(required_facet_id)
+            or _direct_facet_required_quote_groups(required_facet_id)
+        )
+        else ""
+    )
     return {
         "evidence_id": str(item["evidence_id"]),
         "evidence_type": str(item.get("evidence_type", "passage")),
@@ -4162,6 +4217,7 @@ def _provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
         "text_sha256": str(item.get("passage_text_sha256", "")),
         "text_role": _evidence_text_role(item),
         "channels": [str(channel) for channel in item.get("channels", [])],
+        "strong_required_facet_id": strong_required_facet_id,
     }
 
 
@@ -4449,16 +4505,25 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
             add("migration_origin_openclaw", ["OpenClaw"])
         if "codex" in question_casefold:
             add("migration_target_codex", ["Codex", "Codex CLI", "OpenAI Codex"])
+        if "openclaw" in question_casefold and "codex" in question_casefold:
+            add(
+                "migration_transition_event",
+                [
+                    "engineering work gradually moved",
+                    "shifted most engineering work",
+                    "became the main tool",
+                ],
+            )
         add(
             "migration_rationale",
             [
-                "fast local loop",
-                "local terminal workflow",
-                "persistent gateway",
-                "operational overhead",
-                "roundabout",
-                "more direct",
-                "stable local",
+                "worktree",
+                "terminal",
+                "diff",
+                "review",
+                "approvals",
+                "crossing fewer boundaries",
+                "setup and switching",
             ],
         )
     if (
