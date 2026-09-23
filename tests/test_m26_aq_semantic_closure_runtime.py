@@ -4272,3 +4272,37 @@ def test_tesc_partial_candidate_keeps_supported_a_and_explicit_unsupported_b_bou
         for claim in candidate["claims"]
         if claim.get("claim_type") != "MODEL_EXPLANATION"
     )
+
+
+def test_generic_dimensions_do_not_treat_workflow_comparison_as_process_sequence() -> None:
+    requirements = derive_semantic_requirements(
+        "What is the difference between a workflow and an agent in Daniel's writing?",
+        "cross_document_comparison",
+    )
+    requirement_ids = {item.requirement_id for item in requirements}
+
+    assert "comparison_or_distinction" in requirement_ids
+    assert "process_sequence" not in requirement_ids
+
+
+def test_generic_dimensions_treat_fit_into_workflow_as_composition_not_sequence() -> None:
+    requirements = derive_semantic_requirements(
+        "How do Codex skills fit into a bigger workflow?",
+        "direct_grounded_knowledge",
+    )
+    requirement_ids = {item.requirement_id for item in requirements}
+
+    assert {"entity_codex", "explanatory_answer", "composition_relationship"}.issubset(
+        requirement_ids
+    )
+    assert "process_sequence" not in requirement_ids
+
+
+def test_generic_dimensions_keep_true_workflow_process_questions_sequential() -> None:
+    requirements = derive_semantic_requirements(
+        "How does this workflow process a request step by step?",
+        "direct_grounded_knowledge",
+    )
+    requirement_ids = {item.requirement_id for item in requirements}
+
+    assert "process_sequence" in requirement_ids

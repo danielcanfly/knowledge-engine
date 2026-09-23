@@ -5588,13 +5588,28 @@ def _add_generic_answer_dimension_requirements(
             ],
         )
 
-    asks_process = bool(
-        re.search(r"\b(?:process|steps?|workflow|sequence)\b", q)
-        or (
-            re.search(r"\bhow\s+(?:can|do|does)\b", q)
-            and not asks_comparison
+    asks_composition = bool(
+        re.search(
+            r"\b(?:combine|combined|together|work together|fit together|fit into|fits into|integrate|integrates)\b",
+            q,
         )
     )
+    explicit_process = bool(re.search(r"\b(?:process|steps?|sequence)\b", q))
+    workflow_process = bool(
+        re.search(r"\bworkflow\b", q)
+        and not asks_comparison
+        and not asks_composition
+        and re.search(
+            r"\b(?:how|run|runs|running|execute|executes|execution|operate|operates|operating)\b",
+            q,
+        )
+    )
+    generic_how_process = bool(
+        re.search(r"\bhow\s+(?:can|do|does)\b", q)
+        and not asks_comparison
+        and not asks_composition
+    )
+    asks_process = explicit_process or workflow_process or generic_how_process
     if asks_process:
         add(
             "process_sequence",
@@ -5606,15 +5621,15 @@ def _add_generic_answer_dimension_requirements(
             [r"\b(?:first|then|next|after|before|step|process|workflow|sequence)\b"],
         )
 
-    if re.search(r"\b(?:combine|combined|together|work together|fit together)\b", q):
+    if asks_composition:
         add(
             "composition_relationship",
             "Explain how the named parts compose and what the combined workflow does.",
             _dimension_evidence_terms(
                 question,
-                fallback=("combine", "together", "workflow", "composition"),
+                fallback=("combine", "together", "workflow", "composition", "fit", "integrate"),
             ),
-            [r"\b(?:combine|together|workflow|compose|composition|integrate)\b"],
+            [r"\b(?:combine|together|workflow|compose|composition|integrate|fit)\b"],
         )
 
     if re.search(r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b", q):
