@@ -268,7 +268,12 @@ DIRECT_FACET_EXACT_PHRASES = {
         "boring on purpose",
         "minimal working state",
         "one variable at a time",
-    )
+    ),
+    "migration_rationale": (
+        "fast local loop",
+        "Codex CLI is built precisely for that local terminal workflow",
+        "adding the whole OpenClaw runtime first is often more roundabout",
+    ),
 }
 DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
     "source_truth_routing": (
@@ -291,6 +296,35 @@ DIRECT_FACET_REQUIRED_QUOTE_TERM_GROUPS = {
     "resource_constraint": (
         ("resource", "resources", "runway"),
         ("runway", "timing", "people", "venture", "founder"),
+    ),
+    "lead_agent_role": (
+        ("lead agent", "coordinator", "supervisor"),
+        ("assign", "decompose", "synthesise", "synthesize", "final synthesis"),
+    ),
+    "worker_role": (
+        ("worker", "workers", "subagent", "subagents"),
+        ("structured findings", "execute", "search assigned", "bounded retrieval"),
+    ),
+    "checker_role": (
+        ("reviewer", "verifier", "evaluator", "acceptance", "check conflicts"),
+    ),
+    "agent_role_split": (
+        ("structured result", "structured findings", "source citations", "coverage gaps"),
+        ("aggregator", "verifier", "final owner", "aggregation"),
+    ),
+    "hook_lifecycle_behavior": (
+        ("hooks attach validation", "hook attaches behaviour"),
+        ("explicit events",),
+    ),
+    "plugin_host_capability": (
+        ("plugin means a capability package",),
+        ("installed under",),
+    ),
+    "acceptance_evidence": (
+        ("verify and accept",),
+        ("artefacts", "artifacts"),
+        ("tests",),
+        ("coverage gaps", "traces"),
     ),
 }
 DIRECT_FACET_DISPLAY_LABELS = {
@@ -4206,6 +4240,92 @@ def _direct_question_facets(question: str) -> list[dict[str, Any]]:
     named_entities = _named_question_entities(question)
     for entity in named_entities[:6]:
         add(f"entity_{_facet_id_for_term(entity)}", [entity])
+    if (
+        ("hook" in question_casefold or "hooks" in question_casefold)
+        and ("plugin" in question_casefold or "plugins" in question_casefold)
+        and any(
+            term in question_casefold
+            for term in (
+                "automate",
+                "automation",
+                "capability",
+                "capabilities",
+                "extend",
+                "extension",
+                "change what",
+            )
+        )
+    ):
+        add(
+            "hook_lifecycle_behavior",
+            [
+                "hooks",
+                "lifecycle events",
+                "validation",
+                "logging",
+                "context injection",
+                "cleanup",
+                "policy extensions",
+            ],
+        )
+        add(
+            "plugin_host_capability",
+            [
+                "plugins",
+                "capability package",
+                "host contract",
+                "installed into a host",
+                "extends a host",
+            ],
+        )
+    if (
+        "before" in question_casefold
+        and any(term in question_casefold for term in ("accept", "approve"))
+        and any(term in question_casefold for term in ("check", "verify", "review", "accept", "approve"))
+    ):
+        add(
+            "acceptance_evidence",
+            [
+                "verify and accept",
+                "artefacts",
+                "artifacts",
+                "tests",
+                "sources",
+                "assumptions",
+                "coverage gaps",
+                "traces",
+            ],
+        )
+    if (
+        any(term in question_casefold for term in ("shift", "moved", "move", "switch", "switched", "migration", "migrate"))
+        and "from" in question_casefold
+        and "to" in question_casefold
+    ):
+        if "openclaw" in question_casefold:
+            add("migration_origin_openclaw", ["OpenClaw"])
+        if "codex" in question_casefold:
+            add("migration_target_codex", ["Codex", "Codex CLI", "OpenAI Codex"])
+        add(
+            "migration_rationale",
+            [
+                "fast local loop",
+                "local terminal workflow",
+                "persistent gateway",
+                "operational overhead",
+                "roundabout",
+                "more direct",
+                "stable local",
+            ],
+        )
+    if (
+        ("lead agent" in question_casefold or "lead agents" in question_casefold)
+        and "worker" in question_casefold
+        and ("checker" in question_casefold or "checkers" in question_casefold)
+    ):
+        add("lead_agent_role", ["lead agent", "coordinator", "supervisor", "decompose", "assign", "synthesis"])
+        add("worker_role", ["workers", "subagents", "structured findings", "execute", "search assigned"])
+        add("checker_role", ["checker", "reviewer", "verifier", "evaluator", "acceptance", "conflicts"])
+        add("agent_role_split", ["structured result", "source citations", "coverage gaps", "aggregator", "final owner"])
     cross_source_truth_query = bool(
         (
             "top_k" in question_casefold
@@ -4524,6 +4644,12 @@ def _named_question_entities(question: str) -> list[str]:
 
     patterns = (
         r"Harness Theory Part \d+",
+        r"OpenAI Codex",
+        r"Codex CLI",
+        r"OpenClaw",
+        r"Codex",
+        r"lead agents?",
+        r"workers?",
         r"Graphology",
         r"Sigma\.js",
         r"Obsidian",

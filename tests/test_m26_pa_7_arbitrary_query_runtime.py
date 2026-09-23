@@ -3603,3 +3603,171 @@ def test_tesc_semantic_review_missing_or_malformed_claim_ids_fail_closed() -> No
         )
 
     assert exc.value.code == "M26-PA7-ME-066"
+
+
+def test_capability_automation_question_recovers_hook_and_plugin_semantics() -> None:
+    question = "How do Codex hooks and plugins change what I can automate?"
+    documents = [
+        _document(
+            "codex_identity",
+            title="Codex capability surface",
+            body="Codex exposes a capability surface to the user.",
+        ),
+        _document(
+            "hook_semantics",
+            title="Hook lifecycle semantics",
+            body=(
+                "Hooks attach validation, logging, context injection, cleanup and policy "
+                "extensions to explicit events rather than turning the core loop into "
+                "intertwined conditionals."
+            ),
+        ),
+        _document(
+            "plugin_semantics",
+            title="Plugin host semantics",
+            body=(
+                "In this series, a plugin means a capability package installed under a "
+                "particular host's discovery, installation, registration, permission and "
+                "lifecycle contract."
+            ),
+        ),
+        _document(
+            "generic_automation",
+            title="Automation overview",
+            body="Hooks and plugins can both appear in an automation system.",
+        ),
+    ]
+    bundle = _bundle_with_documents(documents)
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+
+    assert {
+        "entity_codex",
+        "hook_lifecycle_behavior",
+        "plugin_host_capability",
+    }.issubset({facet["facet_id"] for facet in contract["required_facets"]})
+
+    selected = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-capability-automation-contract",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=6,
+        question_contract=contract,
+    )
+    by_facet = {
+        item.get("retrieval_metadata", {}).get("required_facet_id"): item
+        for item in selected
+    }
+
+    assert by_facet["hook_lifecycle_behavior"]["section_id"] == "hook_semantics"
+    assert by_facet["plugin_host_capability"]["section_id"] == "plugin_semantics"
+    assert runtime_module._deterministic_support_ref_for_facet(
+        by_facet["hook_lifecycle_behavior"],
+        next(
+            facet
+            for facet in contract["required_facets"]
+            if facet["facet_id"] == "hook_lifecycle_behavior"
+        ),
+    ) is not None
+    assert runtime_module._deterministic_support_ref_for_facet(
+        by_facet["plugin_host_capability"],
+        next(
+            facet
+            for facet in contract["required_facets"]
+            if facet["facet_id"] == "plugin_host_capability"
+        ),
+    ) is not None
+
+
+def test_pre_acceptance_question_recovers_evidence_acceptance_contract() -> None:
+    question = "What should I check before I accept Codex's work?"
+    documents = [
+        _document(
+            "codex_identity",
+            title="Codex work",
+            body="Codex can perform repository work inside a controlled harness.",
+        ),
+        _document(
+            "acceptance_good",
+            title="Evidence and acceptance",
+            body=(
+                "Which artefacts, tests, sources, assumptions, coverage gaps, and traces "
+                "must return before the parent can verify and accept the result?"
+            ),
+        ),
+        _document(
+            "acceptance_noise",
+            title="Product workflow",
+            body=(
+                "AI can draft acceptance criteria and early test cases while product "
+                "verification design remains a human responsibility."
+            ),
+        ),
+    ]
+    bundle = _bundle_with_documents(documents)
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+
+    assert "acceptance_evidence" in {
+        facet["facet_id"] for facet in contract["required_facets"]
+    }
+
+    selected = runtime_module._ensure_required_facet_coverage_passages(
+        bundle=bundle,
+        evidence=[],
+        trace_id="trace-pre-acceptance-contract",
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        limit=4,
+        question_contract=contract,
+    )
+    acceptance = next(
+        item
+        for item in selected
+        if item.get("retrieval_metadata", {}).get("required_facet_id")
+        == "acceptance_evidence"
+    )
+    facet = next(
+        facet
+        for facet in contract["required_facets"]
+        if facet["facet_id"] == "acceptance_evidence"
+    )
+
+    assert acceptance["section_id"] == "acceptance_good"
+    assert not runtime_module._direct_facet_text_matches(
+        facet,
+        documents[2]["body"],
+    )
+    assert runtime_module._deterministic_support_ref_for_facet(acceptance, facet) is not None
+
+
+def test_tool_migration_rationale_prefers_direct_workflow_evidence() -> None:
+    question = "Why did the team shift most engineering work from OpenClaw to Codex?"
+    contract = runtime_module._question_contract(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+    )
+    facet = next(
+        item
+        for item in contract["required_facets"]
+        if item["facet_id"] == "migration_rationale"
+    )
+    direct = (
+        "The real requirement there is a fast local loop and low-friction file and command "
+        "access. Codex CLI is built precisely for that local terminal workflow. If you are "
+        "mostly doing high-frequency repo work, adding the whole OpenClaw runtime first is "
+        "often more roundabout, not more advanced."
+    )
+    adjacent_but_wrong = (
+        "OpenClaw supports OpenAI Codex OAuth for external tools and workflows, and OpenAI "
+        "is useful for difficult coding work."
+    )
+
+    assert runtime_module._direct_facet_text_matches(facet, direct)
+    assert not runtime_module._direct_facet_text_matches(facet, adjacent_but_wrong)
