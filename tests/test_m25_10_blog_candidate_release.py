@@ -112,3 +112,83 @@ def test_section_search_description_does_not_inherit_source_frontmatter() -> Non
     }
 
     assert subject._section_search_description(article) == "Harness Theory Part 09"
+
+
+
+def test_build_pack_artifacts_uses_supplied_pack_id() -> None:
+    raw = (
+        b"---\n"
+        b"title: Example\n"
+        b"description: Example description\n"
+        b"---\n"
+        b"\n"
+        b"## Section\n"
+        b"Body text.\n"
+    )
+    article = {
+        "article_id": "source_example",
+        "slug": "example",
+        "title": "Example",
+        "description": "Example description",
+        "canonical_url": "https://example.test/example/",
+        "series_id": "series_example",
+        "series_title": "Example Series",
+        "origin_repository": "owner/repo",
+        "origin_commit": "a" * 40,
+        "origin_path": "src/content/blog/example/en.md",
+        "origin_blob_sha": "b" * 40,
+        "content_sha256": hashlib.sha256(raw).hexdigest(),
+        "owner": "Daniel Huang",
+        "license": "owner-provided",
+        "trust": "author-authored",
+    }
+    pack = {
+        "article_by_id": {"source_example": article},
+        "source_bytes": {"source_example": raw},
+        "nodes": [
+            {
+                "node_id": "series_node",
+                "node_type": "Series",
+                "title": "Example Series",
+            },
+            {
+                "node_id": "article_node",
+                "node_type": "Article",
+                "source_article_id": "source_example",
+                "title": "Example",
+            },
+            {
+                "node_id": "section_node",
+                "node_type": "Section",
+                "source_article_id": "source_example",
+                "parent_article_node_id": "article_node",
+                "title": "Section",
+                "source_locator": {"start_line": 6, "end_line": 7},
+                "content_sha256": hashlib.sha256(b"## Section\nBody text.").hexdigest(),
+            },
+        ],
+        "edges": [],
+    }
+
+    artifacts = subject.build_pack_artifacts(
+        pack,
+        "candidate-release",
+        expected_semantic_documents=2,
+        pack_id="daniel-blog-en-180-test",
+    )
+
+    assert artifacts["source_index"][0]["path"] == (
+        "_documents/daniel-blog-en-180-test/sources/example.md"
+    )
+    section_graph_node = next(
+        item for item in artifacts["graph_v2_nodes"] if item["concept_id"] == "section_node"
+    )
+    assert section_graph_node["path"] == (
+        "_documents/daniel-blog-en-180-test/sources/example.md"
+    )
+    series_graph_node = next(
+        item for item in artifacts["graph_v2_nodes"] if item["concept_id"] == "series_node"
+    )
+    assert series_graph_node["path"] == (
+        "_documents/daniel-blog-en-180-test/master-inventory.json"
+    )

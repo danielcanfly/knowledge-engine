@@ -339,6 +339,7 @@ def build_pack_artifacts(
     *,
     expected_semantic_documents: int | None = None,
     normalize_series_precedes: bool = False,
+    pack_id: str = "daniel-blog-en-156",
 ) -> dict[str, Any]:
     if normalize_series_precedes:
         pack = normalize_pack_series_precedes(pack)
@@ -361,7 +362,7 @@ def build_pack_artifacts(
     for article_id, article in sorted(article_by_id.items()):
         raw = source_bytes[article_id]
         article_node = article_nodes[article_id]
-        path = f"_documents/daniel-blog-en-156/sources/{article['slug']}.md"
+        path = f"_documents/{pack_id}/sources/{article['slug']}.md"
         description = _source_backed_description(article, raw)
         source_index.append(
             {
@@ -448,9 +449,9 @@ def build_pack_artifacts(
         source_id = node.get("source_article_id")
         article = article_by_id.get(source_id) if source_id else None
         path = (
-            f"_documents/daniel-blog-en-156/sources/{article['slug']}.md"
+            f"_documents/{pack_id}/sources/{article['slug']}.md"
             if article
-            else "_documents/daniel-blog-en-156/master-inventory.json"
+            else f"_documents/{pack_id}/master-inventory.json"
         )
         graph_nodes.append(
             {
@@ -476,7 +477,7 @@ def build_pack_artifacts(
                 "aliases": [],
                 "path": path,
                 "provenance_record": (
-                    "_documents/daniel-blog-en-156/admission.json"
+                    f"_documents/{pack_id}/admission.json"
                 ),
             }
         )
@@ -562,7 +563,7 @@ def build_pack_artifacts(
             "review_status": "approved",
             "review_id": "m25-10-blog-source-admission",
             "provenance_record": (
-                "_documents/daniel-blog-en-156/admission.json"
+                f"_documents/{pack_id}/admission.json"
             ),
             "provenance_ref": "structural-source-layout",
             "generated_inverse": False,

@@ -39,18 +39,95 @@ def _pretty_bytes(value: Any) -> bytes:
     ).encode()
 
 
+def _source_bound_candidate_release_id(
+    *,
+    engine_sha: str,
+    source_commit_sha: str,
+    admission_sha256: str,
+) -> str:
+    return (
+        f"m25blog-{source_commit_sha[:12]}-{admission_sha256[:12]}-"
+        f"{live_candidate._engine_sha_suffix(engine_sha)}"
+    )
+
+
+def _pack_population(pack: Mapping[str, Any]) -> dict[str, int]:
+    nodes = list(pack["nodes"])
+    edges = list(pack["edges"])
+    node_types = {
+        kind: sum(1 for node in nodes if node.get("node_type") == kind)
+        for kind in ("Series", "Article", "Section")
+    }
+    source_count = len(pack["article_by_id"])
+    if node_types["Article"] != source_count:
+        raise IntegrityError("PA7_ARCH_REPAIR_CANDIDATE_ARTICLE_POPULATION_MISMATCH")
+    return {
+        "sources": source_count,
+        "series": node_types["Series"],
+        "articles": node_types["Article"],
+        "sections": node_types["Section"],
+        "graph_nodes": len(nodes),
+        "graph_edges": len(edges),
+        "semantic_documents": node_types["Article"] + node_types["Section"],
+    }
+
+
 def build_semantic_arch_repair_candidate_bundle(
     pack: Mapping[str, Any],
     *,
     engine_sha: str,
+    source_repository: str | None = None,
+    source_commit_sha: str | None = None,
+    admission_sha256: str | None = None,
+    pack_id: str | None = None,
 ) -> ProductionAnswerBundle:
-    release_id = live_candidate._candidate_release_id(engine_sha)
+    explicit_identity = any(
+        value is not None
+        for value in (source_repository, source_commit_sha, admission_sha256)
+    )
+    if explicit_identity and not all(
+        value is not None
+        for value in (source_repository, source_commit_sha, admission_sha256)
+    ):
+        raise IntegrityError("PA7_ARCH_REPAIR_CANDIDATE_SOURCE_IDENTITY_INCOMPLETE")
+    if not explicit_identity:
+        source_repository = live_candidate.SOURCE_REPOSITORY
+        source_commit_sha = live_candidate.SOURCE_SHA
+        admission_sha256 = live_candidate.ADMISSION_SHA
+    else:
+        repositories = {
+            str(article.get("origin_repository", ""))
+            for article in pack["article_by_id"].values()
+        }
+        commits = {
+            str(article.get("origin_commit", ""))
+            for article in pack["article_by_id"].values()
+        }
+        if repositories != {str(source_repository)} or commits != {str(source_commit_sha)}:
+            raise IntegrityError("PA7_ARCH_REPAIR_CANDIDATE_SOURCE_IDENTITY_MISMATCH")
+    assert source_repository is not None
+    assert source_commit_sha is not None
+    assert admission_sha256 is not None
     normalized_pack = candidate_release.normalize_pack_series_precedes(pack)
+    counts = _pack_population(normalized_pack)
+    if pack_id is None:
+        if not explicit_identity:
+            pack_id = "daniel-blog-en-156"
+        else:
+            pack_id = f"daniel-blog-en-{counts['sources']}-{source_commit_sha[:8]}"
+    release_id = _source_bound_candidate_release_id(
+        engine_sha=engine_sha,
+        source_commit_sha=source_commit_sha,
+        admission_sha256=admission_sha256,
+    )
     artifacts = candidate_release.build_pack_artifacts(
         normalized_pack,
         release_id,
-        expected_semantic_documents=SEMANTIC_ARCH_REPAIR_COUNTS["semantic_documents"],
+        expected_semantic_documents=counts["semantic_documents"],
+        pack_id=pack_id,
     )
+    counts["lexical_documents"] = len(artifacts["lexical_documents"])
+    counts["semantic_documents"] = len(artifacts["semantic_inputs"])
     payloads: dict[str, dict[str, Any]] = {
         "graph": {
             "schema_version": "knowledge-engine-document-graph/v1",
@@ -63,7 +140,7 @@ def build_semantic_arch_repair_candidate_bundle(
             "release": {
                 "release_id": release_id,
                 "engine_commit_sha": engine_sha,
-                "source_commit_sha": live_candidate.SOURCE_SHA,
+                "source_commit_sha": source_commit_sha,
                 "foundation_commit_sha": live_candidate.FOUNDATION_SHA,
             },
             "nodes": artifacts["graph_v2_nodes"],
@@ -84,9 +161,9 @@ def build_semantic_arch_repair_candidate_bundle(
         "document_source_index": {
             "schema_version": "knowledge-source-document-index/v1",
             "release_id": release_id,
-            "source_repository": live_candidate.SOURCE_REPOSITORY,
-            "source_commit_sha": live_candidate.SOURCE_SHA,
-            "source_count": SEMANTIC_ARCH_REPAIR_COUNTS["sources"],
+            "source_repository": source_repository,
+            "source_commit_sha": source_commit_sha,
+            "source_count": counts["sources"],
             "sources": artifacts["source_index"],
         },
         "provenance": {
@@ -123,22 +200,22 @@ def build_semantic_arch_repair_candidate_bundle(
         "identities": {
             "engine_commit_sha": engine_sha,
             "repair_parent_sha": SEMANTIC_ARCH_REPAIR_PARENT_SHA,
-            "source_repository": live_candidate.SOURCE_REPOSITORY,
-            "source_commit_sha": live_candidate.SOURCE_SHA,
+            "source_repository": source_repository,
+            "source_commit_sha": source_commit_sha,
             "foundation_commit_sha": live_candidate.FOUNDATION_SHA,
-            "admission_sha256": live_candidate.ADMISSION_SHA,
+            "admission_sha256": admission_sha256,
             "repair_kind": SEMANTIC_ARCH_REPAIR_KIND,
             "repaired_source_graph_canonical_sha256": canonical_sha256(source_graph),
         },
         "counts": {
-            "document_sources": SEMANTIC_ARCH_REPAIR_COUNTS["sources"],
-            "document_series": 25,
-            "document_articles": 156,
-            "document_sections": SEMANTIC_ARCH_REPAIR_COUNTS["sections"],
-            "document_graph_nodes": SEMANTIC_ARCH_REPAIR_COUNTS["graph_nodes"],
-            "document_graph_edges": SEMANTIC_ARCH_REPAIR_COUNTS["graph_edges"],
-            "lexical_documents": SEMANTIC_ARCH_REPAIR_COUNTS["lexical_documents"],
-            "semantic_documents": SEMANTIC_ARCH_REPAIR_COUNTS["semantic_documents"],
+            "document_sources": counts["sources"],
+            "document_series": counts["series"],
+            "document_articles": counts["articles"],
+            "document_sections": counts["sections"],
+            "document_graph_nodes": counts["graph_nodes"],
+            "document_graph_edges": counts["graph_edges"],
+            "lexical_documents": counts["lexical_documents"],
+            "semantic_documents": counts["semantic_documents"],
         },
         "retrieval": {
             "lexical": True,
@@ -191,13 +268,24 @@ def semantic_arch_repair_candidate_mismatch(
 ) -> str | None:
     identities = bundle.manifest.get("identities")
     authority = bundle.manifest.get("authority")
-    if not isinstance(identities, Mapping) or not isinstance(authority, Mapping):
+    counts = bundle.manifest.get("counts")
+    if (
+        not isinstance(identities, Mapping)
+        or not isinstance(authority, Mapping)
+        or not isinstance(counts, Mapping)
+    ):
         return "PA7_ARCH_REPAIR_CANDIDATE_MANIFEST_IDENTITY_MISMATCH"
     if identities.get("repair_kind") != SEMANTIC_ARCH_REPAIR_KIND:
         return "PA7_ARCH_REPAIR_CANDIDATE_REPAIR_KIND_MISMATCH"
     engine_sha = str(identities.get("engine_commit_sha", ""))
+    source_commit_sha = str(identities.get("source_commit_sha", ""))
+    admission_sha256 = str(identities.get("admission_sha256", ""))
     try:
-        expected_release_id = live_candidate._candidate_release_id(engine_sha)
+        expected_release_id = _source_bound_candidate_release_id(
+            engine_sha=engine_sha,
+            source_commit_sha=source_commit_sha,
+            admission_sha256=admission_sha256,
+        )
     except IntegrityError:
         return "PA7_ARCH_REPAIR_CANDIDATE_ENGINE_SHA_MISMATCH"
     if bundle.release_id != expected_release_id:
@@ -210,25 +298,41 @@ def semantic_arch_repair_candidate_mismatch(
         return "PA7_ARCH_REPAIR_CANDIDATE_AUTHORITY_MISMATCH"
     if authority.get("public_production_traffic_authorized") is not False:
         return "PA7_ARCH_REPAIR_CANDIDATE_AUTHORITY_MISMATCH"
+
     semantic_inputs = bundle.semantic_inputs or {}
-    populations = {
-        "graph_nodes": len(bundle.graph_v2.get("nodes", [])),
-        "graph_edges": len(bundle.graph_v2.get("edges", [])),
+    graph_nodes = list(bundle.graph_v2.get("nodes", []))
+    actual = {
+        "document_sources": len((bundle.document_source_index or {}).get("sources", [])),
+        "document_series": sum(1 for node in graph_nodes if node.get("type") == "Series"),
+        "document_articles": sum(1 for node in graph_nodes if node.get("type") == "Article"),
+        "document_sections": sum(1 for node in graph_nodes if node.get("type") == "Section"),
+        "document_graph_nodes": len(graph_nodes),
+        "document_graph_edges": len(bundle.graph_v2.get("edges", [])),
         "lexical_documents": len(bundle.lexical_index.get("documents", [])),
         "semantic_documents": len(semantic_inputs.get("documents", [])),
     }
-    expected = {
-        key: SEMANTIC_ARCH_REPAIR_COUNTS[key]
-        for key in populations
-    }
-    if populations != expected:
+    try:
+        expected = {key: int(counts[key]) for key in actual}
+    except (KeyError, TypeError, ValueError):
         return "PA7_ARCH_REPAIR_CANDIDATE_POPULATION_MISMATCH"
+    if actual != expected:
+        return "PA7_ARCH_REPAIR_CANDIDATE_POPULATION_MISMATCH"
+    source_index = bundle.document_source_index or {}
+    if int(source_index.get("source_count", -1)) != actual["document_sources"]:
+        return "PA7_ARCH_REPAIR_CANDIDATE_POPULATION_MISMATCH"
+    source_documents = bundle.source_documents or {}
+    documents = source_documents.get("documents", {})
+    if not isinstance(documents, Mapping) or len(documents) != actual["document_sources"]:
+        return "PA7_ARCH_REPAIR_CANDIDATE_POPULATION_MISMATCH"
+
     release = bundle.graph_v2.get("release")
     if not isinstance(release, Mapping):
         return "PA7_ARCH_REPAIR_CANDIDATE_SCHEMA_MISMATCH"
     if release.get("release_id") != bundle.release_id:
         return "PA7_ARCH_REPAIR_CANDIDATE_SCHEMA_MISMATCH"
     if release.get("engine_commit_sha") != engine_sha:
+        return "PA7_ARCH_REPAIR_CANDIDATE_SCHEMA_MISMATCH"
+    if release.get("source_commit_sha") != source_commit_sha:
         return "PA7_ARCH_REPAIR_CANDIDATE_SCHEMA_MISMATCH"
     if bundle.graph.get("release_id") != bundle.release_id:
         return "PA7_ARCH_REPAIR_CANDIDATE_SCHEMA_MISMATCH"
