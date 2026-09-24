@@ -5558,6 +5558,12 @@ def _coordinated_question_subjects(question: str) -> list[str]:
         subject = re.sub(
             r"^(?:a|an|the|and)\s+", "", part.strip(), flags=re.I
         )
+        subject = re.sub(
+            r"\s+\b(?:split|divide|share|handle|manage|coordinate)\b.*$",
+            "",
+            subject,
+            flags=re.I,
+        ).strip()
         if not subject or len(subject.split()) > 6:
             continue
         key = subject.casefold()
@@ -6025,7 +6031,21 @@ def _identity_phrase_matches(phrase: str, text: str) -> bool:
     if not normalized_phrase:
         return False
     if re.search(r"\bpart\s+\d+\b", normalized_phrase) is None:
-        return normalized_phrase in normalized_text
+        if normalized_phrase in normalized_text:
+            return True
+        role_singular = {
+            "lead agents": "lead agent",
+            "workers": "worker",
+            "checkers": "checker",
+        }.get(normalized_phrase)
+        if role_singular is None:
+            return False
+        return bool(
+            re.search(
+                rf"(?<![a-z0-9]){re.escape(role_singular)}(?![a-z0-9])",
+                normalized_text,
+            )
+        )
     needle = legacy._normalized_graph_entity_identity(normalized_phrase)
     haystack = legacy._normalized_graph_entity_identity(normalized_text)
     return bool(needle and f" {needle} " in f" {haystack} ")

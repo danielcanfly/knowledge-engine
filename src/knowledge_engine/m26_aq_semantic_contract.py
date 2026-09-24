@@ -2099,6 +2099,14 @@ def _supported_semantic_recovery_candidate(
     )
     if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
         return candidate
+    candidate = _agent_role_split_candidate(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    )
+    if candidate is not None and _recovery_candidate_aligned(question, candidate, evidence):
+        return candidate
     candidate = _positive_answerability_requirement_candidate(
         question=question,
         intent_class=intent_class,
@@ -2798,6 +2806,106 @@ def _lifecycle_control_comparison_candidate(
         surface=surface,
         refs=refs,
         support_mode="runtime_bound_lifecycle_control_comparison",
+    )
+
+
+def _agent_role_split_candidate(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> dict[str, Any] | None:
+    if intent_class != "direct_grounded_knowledge":
+        return None
+    required_ids = {
+        str(getattr(item, "requirement_id", ""))
+        for item in requirements
+        if str(getattr(item, "requirement_id", ""))
+    }
+    role_facet_ids = (
+        "lead_agent_role",
+        "worker_role",
+        "checker_role",
+        "agent_role_split",
+    )
+    if not set(role_facet_ids).issubset(required_ids):
+        return None
+
+    contract = legacy._question_contract(
+        question=question,
+        intent_class=intent_class,
+    )
+    facets_by_id = {
+        str(item.get("facet_id", "")): item
+        for item in contract.get("required_facets", [])
+        if isinstance(item, Mapping)
+    }
+
+    refs: list[dict[str, str]] = []
+    for facet_id in role_facet_ids:
+        facet = facets_by_id.get(facet_id)
+        if facet is None:
+            return None
+        best: tuple[
+            float,
+            float,
+            str,
+            Mapping[str, Any],
+            dict[str, str],
+        ] | None = None
+        for item in evidence:
+            if item.get("evidence_type") != "passage":
+                continue
+            text = " ".join(
+                str(item.get(key, ""))
+                for key in (
+                    "title",
+                    "section_title",
+                    "passage_text",
+                    "source_identity",
+                    "source_id",
+                )
+            )
+            if not legacy._direct_facet_text_matches(facet, text):
+                continue
+            ref = legacy._deterministic_support_ref_for_facet(item, facet)
+            if ref is None:
+                continue
+            score = float(legacy._direct_facet_match_score(facet, text))
+            metadata = item.get("retrieval_metadata", {})
+            tagged = float(
+                isinstance(metadata, Mapping)
+                and str(metadata.get("required_facet_id", "")) == facet_id
+            )
+            stable_identity = "|".join(
+                (
+                    str(item.get("source_id", "")),
+                    str(item.get("section_id", "")),
+                    str(item.get("concept_id", "")),
+                )
+            )
+            rank = (tagged, score, stable_identity, item, ref)
+            if best is None or rank[:3] > best[:3]:
+                best = rank
+        if best is None:
+            return None
+        refs.append(best[4])
+
+    surface = (
+        "Lead agents decompose and assign the work, workers execute bounded tasks "
+        "and return structured findings, and checkers verify conflicts or acceptance "
+        "before the lead or final owner synthesizes the result. This split keeps "
+        "execution bounded while preserving verification and final ownership."
+    )
+    return _single_claim_candidate(
+        question=question,
+        intent_class=intent_class,
+        relation=None,
+        claim_role="direct",
+        surface=surface,
+        refs=refs,
+        support_mode="runtime_bound_agent_role_split_surface",
     )
 
 

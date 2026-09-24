@@ -4859,6 +4859,7 @@ def _named_question_entities(question: str) -> list[str]:
         r"Codex",
         r"lead agents?",
         r"workers?",
+        r"checkers?",
         r"Graphology",
         r"Sigma\.js",
         r"Obsidian",

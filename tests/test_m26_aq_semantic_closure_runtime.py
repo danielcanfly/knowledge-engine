@@ -4352,3 +4352,131 @@ def test_strong_query_facets_require_visible_answer_semantics() -> None:
         codex_requirements,
         codex_question,
     )
+
+
+def test_coordinated_subjects_strip_shared_trailing_predicate() -> None:
+    question = "How should lead agents, workers, and checkers split multi-agent coding work?"
+
+    assert closure_runtime._coordinated_question_subjects(question) == [
+        "lead agents",
+        "workers",
+        "checkers",
+    ]
+
+
+def test_role_split_requirements_do_not_promote_trailing_predicate_to_entity() -> None:
+    question = "How should lead agents, workers, and checkers split multi-agent coding work?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    ids = {item.requirement_id for item in requirements}
+
+    assert "entity_lead_agents" in ids
+    assert "entity_workers" in ids
+    assert "entity_checkers" in ids
+    assert "entity_checkers_split_multi_agent_coding_work" not in ids
+    assert {"lead_agent_role", "worker_role", "checker_role", "agent_role_split"}.issubset(ids)
+
+
+def test_agent_role_split_recovery_requires_all_role_facets() -> None:
+    question = "How should lead agents, workers, and checkers split multi-agent coding work?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _rich_passage(
+            "lead",
+            "A lead agent should decompose the work, assign bounded tasks, and perform final synthesis.",
+            "lead-source",
+        ),
+        _rich_passage(
+            "worker",
+            "Workers execute bounded retrieval and return structured findings to the coordinator.",
+            "worker-source",
+        ),
+        _rich_passage(
+            "checker",
+            "A checker acts as a reviewer and verifier for acceptance and can check conflicts before closure.",
+            "checker-source",
+        ),
+        _rich_passage(
+            "split",
+            "Workers return a structured result with source citations and coverage gaps; an aggregator or verifier supports the final owner.",
+            "split-source",
+        ),
+    ]
+    tagged_facets = {
+        "lead": "lead_agent_role",
+        "worker": "worker_role",
+        "checker": "checker_role",
+        "split": "agent_role_split",
+    }
+    for item in evidence:
+        item["retrieval_metadata"] = {
+            "required_facet_id": tagged_facets[str(item["evidence_id"])],
+        }
+
+    candidate = contract._agent_role_split_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+    )
+
+    assert candidate is not None
+    surface = str(candidate["answer_text"])
+    assert "Lead agents" in surface
+    assert "workers" in surface
+    assert "checkers" in surface
+    assert contract.evaluate_visible_semantics(surface, requirements, question) == []
+    refs = candidate["claims"][0]["support_refs"]
+    assert len(refs) == 4
+    assert {ref["evidence_id"] for ref in refs} == {"lead", "worker", "checker", "split"}
+
+
+def test_agent_role_split_recovery_fails_closed_without_checker_support() -> None:
+    question = "How should lead agents, workers, and checkers split multi-agent coding work?"
+    requirements = derive_semantic_requirements(question, "direct_grounded_knowledge")
+    evidence = [
+        _rich_passage(
+            "lead",
+            "A lead agent should decompose the work, assign bounded tasks, and perform final synthesis.",
+            "lead-source",
+        ),
+        _rich_passage(
+            "worker",
+            "Workers execute bounded retrieval and return structured findings to the coordinator.",
+            "worker-source",
+        ),
+        _rich_passage(
+            "split",
+            "Workers return a structured result with source citations and coverage gaps; an aggregator supports the final owner.",
+            "split-source",
+        ),
+    ]
+
+    assert contract._agent_role_split_candidate(
+        question=question,
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+        requirements=requirements,
+    ) is None
+
+
+def test_identity_phrase_matching_allows_bounded_role_singular_plural_equivalence() -> None:
+    assert closure_runtime._identity_phrase_matches(
+        "lead agents",
+        "The Lead Agent owns final synthesis.",
+    )
+    assert closure_runtime._identity_phrase_matches(
+        "workers",
+        "A Worker executes bounded tasks.",
+    )
+    assert closure_runtime._identity_phrase_matches(
+        "checkers",
+        "The Checker verifies acceptance.",
+    )
+    assert not closure_runtime._identity_phrase_matches(
+        "lead agents",
+        "The system uses agentic planning.",
+    )
+    assert not closure_runtime._identity_phrase_matches(
+        "workers",
+        "The design is workerless.",
+    )
