@@ -1,0 +1,311 @@
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Any
+
+from knowledge_engine.m14_retrieval import (
+    _graph_adjacency,
+    _normalize_document,
+    _ordered,
+    _score_document,
+    _semantic_boosts,
+    _tokens,
+    retrieve_wiki_first,
+)
+
+SOURCE_AUTHORITY = {
+    "release_id": "m26blog-ec79a3cad1d8-59012fe3818c-4260fcb53440",
+    "source_repository_commit": "a738f20b16f10925c8adfe4d625be8db30fb269c",
+    "source_admission_sha256": "ec79a3cad1d84a936a6420b64c3ec43859ebd296eee992b2654dd8537d62da2d",
+    "pack_sha256": "59012fe3818cc1c1e45bed4812cef19f00075bb644b7e0b5fe3cb3a68e0498f8",
+}
+
+# Expected source/facet labels come from the frozen A2/B1 authority. They are
+# diagnostic expectations only and are never imported by runtime code.
+CASES = (
+    (
+        "S02",
+        "What does Harness Theory say an agent harness is responsible for?",
+        "daniel_blog_en__harness-theory-part-1",
+        "A working definition of a harness",
+    ),
+    (
+        "S03",
+        "What is the difference between a workflow and an agent?",
+        "daniel_blog_en__ai-agentic-workflow-series-6",
+        "workflow shell, agent islands",
+    ),
+    (
+        "S07",
+        "What evidence should a user inspect in Codex after a task is marked done?",
+        "daniel_blog_en__codex-agent-harness-command-center-part-3",
+        "engineering work needs evidence",
+    ),
+    (
+        "S11",
+        "What does Daniel mean by production RAG, and how does it differ from a toy RAG demo?",
+        "daniel_blog_en__from-rag-to-production-rag-part-3",
+        "where production and demo part ways",
+    ),
+    (
+        "S12",
+        "When does a LoRA adapter not need to be merged into its base model?",
+        "daniel_blog_en__local-llm-fine-tuning-08",
+        "adapters do not have to be merged",
+    ),
+    (
+        "S14",
+        "What does a citation check catch that a faithfulness check can miss?",
+        "daniel_blog_en__from-rag-to-production-rag-part-3",
+        "where production and demo part ways",
+    ),
+    (
+        "S20",
+        "What should a validator do in an LLM application?",
+        "daniel_blog_en__pm-llm-application-engineering-02",
+        "four gates",
+    ),
+    (
+        "S21",
+        "How do tasks let work outlive an HTTP request?",
+        "daniel_blog_en__stateless-mcp-architecture-part-2",
+        "Tasks: let the work outlive the HTTP request",
+    ),
+    (
+        "S22",
+        "What makes an MCP contract healthy rather than merely full of fields?",
+        "daniel_blog_en__mcp-engineering-deep-dive-03",
+        "good contract does not mean more fields",
+    ),
+    (
+        "S26",
+        "Why are tasks different from request-scoped state?",
+        "daniel_blog_en__stateless-mcp-architecture-part-2",
+        "Separate the responsibilities a session used to collect",
+    ),
+    (
+        "S27",
+        "Why does a retrieval miss need to be separated from a generation failure?",
+        "daniel_blog_en__rag-engineering-in-practice-06",
+        "did retrieval fail, or did generation fail",
+    ),
+)
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if line.strip():
+                rows.append(json.loads(line))
+    return rows
+
+
+def _semantic_index(path: Path) -> dict[str, Any] | None:
+    rows = _load_jsonl(path)
+    if not rows:
+        return None
+    return {"schema_version": "knowledge-engine-semantic-index/v1", "documents": rows}
+
+
+def _compatibility_graph(documents: list[dict[str, Any]]) -> dict[str, Any]:
+    nodes: dict[str, str] = {}
+    for document in documents:
+        concept_id = str(document["concept_id"])
+        nodes.setdefault(concept_id, str(document.get("audience") or "public"))
+    return {
+        "schema_version": "knowledge-os-graph/v1",
+        "nodes": [
+            {"concept_id": concept_id, "audience": audience}
+            for concept_id, audience in sorted(nodes.items())
+        ],
+        "edges": [],
+    }
+
+
+def _fold(value: Any) -> str:
+    return " ".join(str(value or "").casefold().split())
+
+
+def _facet_matches(title: Any, expected_fragment: str) -> bool:
+    title_folded = _fold(title)
+    expected_folded = _fold(expected_fragment)
+    return bool(expected_folded and expected_folded in title_folded)
+
+
+def _full_section_ranking(
+    *,
+    question: str,
+    documents: list[dict[str, Any]],
+    semantic_index: dict[str, Any] | None,
+    graph: dict[str, Any],
+) -> list[dict[str, Any]]:
+    query_terms = _tokens(question)
+    semantic_boosts, _ = _semantic_boosts(
+        semantic_index,
+        query_terms=query_terms,
+    )
+    _, node_audiences = _graph_adjacency(graph)
+    scored: dict[str, dict[str, Any]] = {}
+    for raw_document in documents:
+        document = _normalize_document(raw_document, node_audiences=node_audiences)
+        item = _score_document(
+            document,
+            query_terms=query_terms,
+            semantic_boosts=semantic_boosts,
+        )
+        if item is not None:
+            scored[document["section_id"]] = item
+    return _ordered(scored)
+
+
+def _source_id(document: dict[str, Any]) -> str:
+    return str(document.get("source_id") or "")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lexical", type=Path, required=True)
+    parser.add_argument("--semantic", type=Path, required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    args = parser.parse_args()
+
+    documents = _load_jsonl(args.lexical)
+    concept_to_source: dict[str, str] = {}
+    for document in documents:
+        concept_to_source[str(document["concept_id"])] = _source_id(document)
+
+    lexical_index = {"documents": documents}
+    semantic_index = _semantic_index(args.semantic)
+    graph = _compatibility_graph(documents)
+    provenance = {"records": []}
+
+    case_rows: list[dict[str, Any]] = []
+    for case_id, question, expected_source_id, expected_facet in CASES:
+        # limit=20 is the maximum public scorer window and exposes the exact
+        # concept-deduplicated ordering without changing the runtime top-8 gate.
+        result = retrieve_wiki_first(
+            query=question,
+            allowed_audiences={"public", "internal"},
+            lexical_index=lexical_index,
+            graph=graph,
+            provenance=provenance,
+            semantic_index=semantic_index,
+            relation_aware_expansion=False,
+            limit=20,
+        )
+        observed: list[dict[str, Any]] = []
+        expected_source_rank: int | None = None
+        source_best_section_id = ""
+        source_best_section_title = ""
+        for index, item in enumerate(result.get("results", []), start=1):
+            source_id = concept_to_source.get(str(item.get("concept_id") or ""), "")
+            row = {
+                "rank": index,
+                "source_id": source_id,
+                "concept_id": item.get("concept_id"),
+                "section_id": item.get("section_id"),
+                "section_title": item.get("section_title"),
+                "score": item.get("score"),
+                "score_components": item.get("score_components"),
+            }
+            observed.append(row)
+            if source_id == expected_source_id and expected_source_rank is None:
+                expected_source_rank = index
+                source_best_section_id = str(item.get("section_id") or "")
+                source_best_section_title = str(item.get("section_title") or "")
+
+        full_sections = _full_section_ranking(
+            question=question,
+            documents=documents,
+            semantic_index=semantic_index,
+            graph=graph,
+        )
+        target_rows: list[dict[str, Any]] = []
+        for raw_rank, scored in enumerate(full_sections, start=1):
+            document = scored["document"]
+            if (
+                _source_id(document) == expected_source_id
+                and _facet_matches(document.get("section_title"), expected_facet)
+            ):
+                target_rows.append(
+                    {
+                        "raw_section_rank": raw_rank,
+                        "section_id": document["section_id"],
+                        "section_title": document["section_title"],
+                        "score": scored["score"],
+                        "score_components": scored["score_components"],
+                    }
+                )
+        target = target_rows[0] if target_rows else None
+        target_is_source_best = bool(
+            target
+            and source_best_section_id
+            and str(target["section_id"]) == source_best_section_id
+        )
+        source_hit_top8 = expected_source_rank is not None and expected_source_rank <= 8
+        target_available_top8 = source_hit_top8 and target_is_source_best
+
+        if target is None:
+            first_bad_stage = "TARGET_FACET_NOT_SCOREABLE"
+        elif not target_is_source_best:
+            first_bad_stage = "INTRA_SOURCE_SECTION_COLLAPSE"
+        elif not source_hit_top8:
+            first_bad_stage = "GLOBAL_RANKING_BELOW_TOP8"
+        else:
+            first_bad_stage = "TARGET_SECTION_AVAILABLE_TOP8_SELECTION_OR_CONTEXT_NEXT"
+
+        case_rows.append(
+            {
+                "case_id": case_id,
+                "question": question,
+                "expected_source_id": expected_source_id,
+                "expected_facet_fragment": expected_facet,
+                "expected_source_rank_within_top20": expected_source_rank,
+                "source_best_section_id": source_best_section_id,
+                "source_best_section_title": source_best_section_title,
+                "source_hit_top8": source_hit_top8,
+                "target_section": target,
+                "target_section_match_count": len(target_rows),
+                "target_is_source_best": target_is_source_best,
+                "target_available_top8": target_available_top8,
+                "first_bad_stage": first_bad_stage,
+                "top20": observed,
+            }
+        )
+
+    payload = {
+        "schema_version": "m26-aqv2-r1-successor-first-bad-trace/v2",
+        "authority": SOURCE_AUTHORITY,
+        "lexical_document_count": len(documents),
+        "semantic_document_count": len((semantic_index or {}).get("documents", [])),
+        "runtime_top_k": 8,
+        "runtime_concept_deduplication": True,
+        "cases": case_rows,
+    }
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "lexical_document_count": payload["lexical_document_count"],
+        "semantic_document_count": payload["semantic_document_count"],
+        "cases": [
+            {
+                "case_id": row["case_id"],
+                "expected_source_rank_within_top20": row["expected_source_rank_within_top20"],
+                "source_hit_top8": row["source_hit_top8"],
+                "target_section_rank": (
+                    None if row["target_section"] is None else row["target_section"]["raw_section_rank"]
+                ),
+                "target_is_source_best": row["target_is_source_best"],
+                "first_bad_stage": row["first_bad_stage"],
+            }
+            for row in case_rows
+        ],
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
