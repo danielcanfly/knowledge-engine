@@ -2386,6 +2386,50 @@ def test_verification_candidate_publishes_minimal_bounded_schema() -> None:
     )
 
 
+def test_verification_candidate_preserves_material_tail_when_payload_fits_budget() -> None:
+    quote = (
+        "Background context about bounded multi-agent execution and role ownership " * 3
+        + "a supervisor can assign and verify work before final synthesis"
+    )
+    assert len(quote) > 120
+    candidate = {
+        "schema_version": "aq3-provider-candidate/v3",
+        "status": "answer_candidate",
+        "relation": None,
+        "selected_evidence_ids": ["ev_tail"],
+        "answer_text": "Lead agents assign and verify work before final synthesis [[claim_1]].",
+        "claims": [
+            {
+                "claim_id": "claim_1",
+                "claim_role": "direct",
+                "claim_type": "EVIDENCE_FACT",
+                "surface_text": "Lead agents assign and verify work before final synthesis.",
+                "facet_ids": ["lead_agent_role"],
+                "support_mode": "exact_quote",
+                "support_refs": [
+                    {
+                        "evidence_id": "ev_tail",
+                        "locator_id": "loc_tail",
+                        "exact_quote": quote,
+                        "uncertainty": "low",
+                    }
+                ],
+            }
+        ],
+        "missing_facets": [],
+        "abstention_reason": None,
+    }
+
+    published = _verification_candidate(candidate)
+    published_quote = published["claims"][0]["support_refs"][0]["exact_quote"]
+    provider_text = json.dumps(published, ensure_ascii=False, separators=(",", ":"))
+
+    assert "a supervisor can assign and verify work" in published_quote
+    assert len(published_quote) > 120
+    assert len(published_quote) <= 800
+    assert len(provider_text) <= closure_runtime.MAX_VERIFICATION_PROVIDER_TEXT_CHARS
+
+
 def test_runtime_bound_graph_claim_preserves_provider_selected_edge_only_support() -> None:
     edge = _graph_edge("ev_edge", "part_1", "part_2", "precedes")
     part_1 = {
