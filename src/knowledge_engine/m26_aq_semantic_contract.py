@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -3659,6 +3660,7 @@ def run_owner_arbitrary_query(
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: legacy.RuntimeEventSink | None = None,
+    qa_evidence_sink: Callable[[Sequence[Mapping[str, Any]]], None] | None = None,
 ) -> dict[str, Any]:
     import time
 
@@ -3809,6 +3811,10 @@ def run_owner_arbitrary_query(
         intent_class=intent_class,
         requirements=requirements,
     )
+    if qa_evidence_sink is not None:
+        # QA observation must never change answer runtime behavior.
+        with suppress(Exception):
+            qa_evidence_sink(evidence)
     legacy._emit_runtime_event(
         event_sink,
         "stage.completed",

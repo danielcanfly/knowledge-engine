@@ -310,6 +310,61 @@ def test_web_dto_matches_cli_runtime_response_identity() -> None:
     assert dto["identities"]["resolved_gate_self_sha256"] == runtime["resolved_gate_self_sha256"]
 
 
+def test_qa_evidence_callback_is_bounded_and_not_in_runtime_response() -> None:
+    observed: list[dict[str, Any]] = []
+    runtime = run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="Compare routers and adaptive planning for permission-first controls.",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=ExactSpanProvider(),
+        dense_channel=LocalDenseProjectionChannel(),
+        qa_evidence_sink=lambda evidence: observed.extend(dict(item) for item in evidence),
+    )
+    assert observed
+    assert any(str(item.get("passage_text") or "") for item in observed)
+    assert "passage_text" not in json.dumps(runtime.get("selected_evidence", []))
+    assert "_qa_evidence_context" not in runtime
+
+    bounded = m26_ask_api._bounded_qa_evidence_context(observed)
+    assert 1 <= len(bounded) <= 8
+    assert all(0 < len(item["passage_text"]) <= 800 for item in bounded)
+
+    public_dto = build_web_query_dto(runtime)
+    qa_dto = build_web_query_dto(runtime, internal_qa_evidence_context=bounded)
+    assert "_qa_evidence_context" not in public_dto
+    assert qa_dto["_qa_evidence_context"] == bounded
+    assert public_dto["canonical_runtime"]["runtime_response_sha256"] == qa_dto[
+        "canonical_runtime"
+    ]["runtime_response_sha256"]
+
+
+
+def test_web_adapter_qa_context_is_opt_in_and_private() -> None:
+    kwargs = {
+        "root": ROOT,
+        "gate_path": GATE_PATH,
+        "request_payload": {
+            "question": "Compare routers and adaptive planning for permission-first controls."
+        },
+        "owner_subject_hash": OWNER_SUBJECT_HASH,
+        "dense_channel": LocalDenseProjectionChannel(),
+    }
+    public_dto = run_owner_query_for_web(provider_client=ExactSpanProvider(), **kwargs)
+    qa_dto = run_owner_query_for_web(
+        provider_client=ExactSpanProvider(), include_internal_qa_context=True, **kwargs
+    )
+
+    assert "_qa_evidence_context" not in public_dto
+    assert qa_dto["_qa_evidence_context"]
+    assert all(item.get("passage_text") for item in qa_dto["_qa_evidence_context"])
+    assert all(len(item["passage_text"]) <= 800 for item in qa_dto["_qa_evidence_context"])
+    assert public_dto["canonical_runtime"]["entrypoint"] == qa_dto["canonical_runtime"][
+        "entrypoint"
+    ]
+
+
+
 def test_owner_graph_dto_binds_exact_release_artifact_and_counts() -> None:
     dto = build_owner_graph_dto(
         FakeActiveRelease(),

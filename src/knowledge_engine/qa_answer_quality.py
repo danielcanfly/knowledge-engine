@@ -744,6 +744,7 @@ def _build_failure_trace(
     evaluation: Mapping[str, Any],
 ) -> dict[str, Any]:
     raw_trace = dict(trace or {})
+    raw_trace.pop("_qa_evidence_context", None)
     return _redact(
         {
             "schema_version": QA_FAILURE_TRACE_SCHEMA,

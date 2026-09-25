@@ -620,6 +620,7 @@ async def _answer_event_stream(
                 owner_subject_hash=os.environ["KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH"],
                 event_sink=sink,
                 max_provider_calls=PUBLIC_FAST_ANSWER_MAX_PROVIDER_CALLS,
+                include_internal_qa_context=True,
                 **kwargs,
             )
             event_queue.put({"type": "_dto", "dto": dto})
@@ -849,6 +850,11 @@ def _publish_qa_internal_context(request_id: str, dto: Mapping[str, Any]) -> Non
         "status",
     }
     context = {key: dto[key] for key in allowed if key in dto}
+    qa_evidence = dto.get("_qa_evidence_context")
+    if isinstance(qa_evidence, list):
+        context["_qa_evidence_context"] = [
+            dict(item) for item in qa_evidence if isinstance(item, Mapping)
+        ]
     now = time.monotonic()
     with _qa_internal_context_lock:
         expired = [

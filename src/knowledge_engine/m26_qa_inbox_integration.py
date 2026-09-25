@@ -256,7 +256,9 @@ class QaAnswerCaptureMiddleware:
             normalized_answer.setdefault("request_id", correlation_id)
             from .m26_public_api import consume_qa_internal_context
 
-            normalized_answer.update(consume_qa_internal_context(correlation_id))
+            internal_context = consume_qa_internal_context(correlation_id)
+            qa_evidence_context = internal_context.pop("_qa_evidence_context", None)
+            normalized_answer.update(internal_context)
             if error and "reason_codes" not in normalized_answer:
                 normalized_answer["reason_codes"] = _error_reason_codes(error)
             trace = {
@@ -279,6 +281,8 @@ class QaAnswerCaptureMiddleware:
                 "sse_terminal": error or {"status": "ok"},
                 "timing": {"total_ms": latency_ms},
             }
+            if isinstance(qa_evidence_context, list):
+                trace["_qa_evidence_context"] = qa_evidence_context
             submit_answer_capture(
                 self.repository_provider,
                 question=question,

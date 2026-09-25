@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -133,8 +133,16 @@ def run_owner_query_for_web(
     max_provider_calls: int = SEMANTIC_CLOSURE_MAX_PROVIDER_CALLS,
     max_cost: Decimal = Decimal("0.10"),
     event_sink: Callable[[Mapping[str, Any]], None] | None = None,
+    include_internal_qa_context: bool = False,
 ) -> dict[str, Any]:
     question = validate_query_request(request_payload)
+    qa_evidence_context: list[dict[str, Any]] = []
+
+    def capture_qa_evidence(evidence: Sequence[Mapping[str, Any]]) -> None:
+        qa_evidence_context.clear()
+        qa_evidence_context.extend(_bounded_qa_evidence_context(evidence))
+
+    qa_evidence_sink = capture_qa_evidence if include_internal_qa_context else None
     if dense_channel is None:
         dense_channel = active_release_dense_channel_from_env(require_remote=require_remote_dense)
     if provider_client is None and not _should_use_default_provider_routing():
@@ -151,8 +159,11 @@ def run_owner_query_for_web(
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
             event_sink=event_sink,
+            qa_evidence_sink=qa_evidence_sink,
         )
-        return build_web_query_dto(runtime_response)
+        return build_web_query_dto(
+            runtime_response, internal_qa_evidence_context=qa_evidence_context
+        )
     if provider_client is None:
         return _run_owner_query_for_web_with_default_provider_routing(
             root=root,
@@ -166,6 +177,8 @@ def run_owner_query_for_web(
             max_provider_calls=max_provider_calls,
             max_cost=max_cost,
             event_sink=event_sink,
+            qa_evidence_sink=qa_evidence_sink,
+            qa_evidence_context=qa_evidence_context,
         )
     runtime_response = run_owner_arbitrary_query(
         root=root,
@@ -180,8 +193,11 @@ def run_owner_query_for_web(
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
         event_sink=event_sink,
+        qa_evidence_sink=qa_evidence_sink,
     )
-    return build_web_query_dto(runtime_response)
+    return build_web_query_dto(
+        runtime_response, internal_qa_evidence_context=qa_evidence_context
+    )
 
 
 def _should_use_default_provider_routing() -> bool:
@@ -201,6 +217,8 @@ def _run_owner_query_for_web_with_default_provider_routing(
     max_provider_calls: int,
     max_cost: Decimal,
     event_sink: Callable[[Mapping[str, Any]], None] | None,
+    qa_evidence_sink: Callable[[Sequence[Mapping[str, Any]]], None] | None,
+    qa_evidence_context: list[dict[str, Any]],
 ) -> dict[str, Any]:
     gate = load_json(gate_path)
     routing_client = build_provider_routing_client(
@@ -220,10 +238,13 @@ def _run_owner_query_for_web_with_default_provider_routing(
         max_provider_calls=max_provider_calls,
         max_cost=max_cost,
         event_sink=event_sink,
+        qa_evidence_sink=qa_evidence_sink,
     )
     runtime_response = dict(runtime_response)
     runtime_response["provider_routing"] = routing_client.telemetry()
-    return build_web_query_dto(runtime_response)
+    return build_web_query_dto(
+        runtime_response, internal_qa_evidence_context=qa_evidence_context
+    )
 
 
 def _semantic_contract_dto() -> dict[str, str]:
@@ -233,7 +254,11 @@ def _semantic_contract_dto() -> dict[str, str]:
     }
 
 
-def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
+def build_web_query_dto(
+    runtime_response: Mapping[str, Any],
+    *,
+    internal_qa_evidence_context: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     citations = _web_citations(runtime_response)
     response_identity = runtime_response.get("canonical_runtime")
     if isinstance(response_identity, Mapping):
@@ -325,6 +350,15 @@ def build_web_query_dto(runtime_response: Mapping[str, Any]) -> dict[str, Any]:
         "provider_routing": dict(_mapping(runtime_response.get("provider_routing"))),
         "privacy": dict(_mapping(runtime_response.get("privacy"))),
         "mutations": dict(_mapping(runtime_response.get("mutations"))),
+        **(
+            {
+                "_qa_evidence_context": [
+                    dict(item) for item in internal_qa_evidence_context
+                ]
+            }
+            if internal_qa_evidence_context
+            else {}
+        ),
         "integrity": {
             "unsupported_accepted_claims": int(
                 runtime_response.get("unsupported_accepted_claims", 0)
@@ -681,6 +715,33 @@ def _manifest_graph_v2_sha256(manifest: Mapping[str, Any]) -> str:
         if isinstance(artifact, str):
             return artifact
     return ""
+
+
+QA_EVALUATOR_MAX_SUPPORT_ITEMS = 8
+QA_EVALUATOR_MAX_SUPPORT_CHARS = 800
+
+
+def _bounded_qa_evidence_context(
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in list(evidence)[:QA_EVALUATOR_MAX_SUPPORT_ITEMS]:
+        passage_text = " ".join(str(item.get("passage_text") or "").split())[
+            :QA_EVALUATOR_MAX_SUPPORT_CHARS
+        ]
+        if not passage_text:
+            continue
+        rows.append(
+            {
+                "evidence_id": item.get("evidence_id"),
+                "source_id": item.get("source_id"),
+                "source_identity": item.get("source_identity"),
+                "section_id": item.get("section_id"),
+                "locator_id": item.get("locator_id"),
+                "passage_text": passage_text,
+            }
+        )
+    return rows
 
 
 def _web_citations(runtime_response: Mapping[str, Any]) -> list[dict[str, Any]]:

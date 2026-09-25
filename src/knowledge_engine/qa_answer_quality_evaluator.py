@@ -227,6 +227,8 @@ def build_semantic_evaluation_input(
         return str(value)[:MAX_EVALUATION_STRING_CHARS]
 
     payload = {key: bound(answer_payload[key]) for key in sorted(allowed) if key in answer_payload}
+    if forensic_trace and isinstance(forensic_trace.get("_qa_evidence_context"), list):
+        payload["selected_evidence"] = bound(forensic_trace["_qa_evidence_context"])
     package = {
         "question": " ".join(str(question).split())[:MAX_EVALUATION_QUESTION_CHARS],
         "answer": payload,

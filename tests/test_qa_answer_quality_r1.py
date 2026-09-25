@@ -13,7 +13,7 @@ from knowledge_engine.m26_public_api import (
     _terminal_event_from_dto,
     consume_qa_internal_context,
 )
-from knowledge_engine.qa_answer_quality import submit_answer_capture
+from knowledge_engine.qa_answer_quality import _build_failure_trace, submit_answer_capture
 from knowledge_engine.qa_answer_quality_evaluator import (
     ANSWER_QUALITY_CRITERION_MAX,
     ANSWER_QUALITY_RUBRIC_VERSION,
@@ -176,6 +176,58 @@ def test_semantic_input_is_deterministic_bounded_and_excludes_secrets() -> None:
     )
 
 
+def test_ephemeral_qa_support_reaches_judge_but_not_failure_trace() -> None:
+    answer = response(
+        "qa-evidence",
+        selected_evidence=[{"source_id": "s1", "evidence_id": "e1"}],
+    )
+    trace = {
+        "correlation_id": "qa-evidence",
+        "_qa_evidence_context": [
+            {
+                "citation_id": "c1",
+                "evidence_id": "e1",
+                "source_id": "s1",
+                "passage_text": "Exact source support visible only to the semantic judge.",
+            }
+        ],
+    }
+    package = build_semantic_evaluation_input(
+        question="Q", answer_payload=answer, forensic_trace=trace
+    )
+    assert package["answer"]["selected_evidence"][0]["passage_text"] == (
+        "Exact source support visible only to the semantic judge."
+    )
+    assert "_qa_evidence_context" not in json.dumps(package)
+
+    failure_trace = _build_failure_trace(
+        event={
+            "event_id": "aq_test",
+            "trace_id": "qa-evidence",
+            "timestamp": "2026-09-25T12:00:00Z",
+            "question": "Q",
+            "country": "ZZ",
+            "release_identity": {},
+            "index_identity": {},
+            "latency_ms": 1,
+        },
+        response=answer,
+        trace=trace,
+        evaluation={
+            "score": 80,
+            "criteria": {},
+            "hard_fail_reasons": [],
+            "failure_stage": "answer_quality",
+            "failure_class": "quality_below_threshold",
+            "failure_signature": "sig",
+        },
+    )
+    persisted = json.dumps(failure_trace)
+    assert "Exact source support visible only to the semantic judge." not in persisted
+    assert "_qa_evidence_context" not in persisted
+
+
+
 @pytest.mark.parametrize(
     ("provider_output", "expected_code"),
     [("not json", "EVALUATOR_OUTPUT_INVALID"), (TimeoutError(), "EVALUATOR_TIMEOUT")],
@@ -315,6 +367,13 @@ def test_public_terminal_schema_is_unchanged_and_internal_context_is_one_shot() 
         provider_routing={},
         semantic_closure={"private": True},
         retrieval={"private": True},
+        _qa_evidence_context=[
+            {
+                "citation_id": "c1",
+                "source_id": "s1",
+                "passage_text": "Evaluator-only support.",
+            }
+        ],
     )
     terminal = _terminal_event_from_dto(dto)
     assert set(terminal) == {
@@ -328,6 +387,9 @@ def test_public_terminal_schema_is_unchanged_and_internal_context_is_one_shot() 
     _publish_qa_internal_context("r7", dto)
     internal = consume_qa_internal_context("r7")
     assert internal["semantic_closure"] == {"private": True}
+    assert internal["_qa_evidence_context"][0]["passage_text"] == "Evaluator-only support."
+    assert "_qa_evidence_context" not in terminal
+    assert "Evaluator-only support." not in json.dumps(terminal)
     assert consume_qa_internal_context("r7") == {}
 
 

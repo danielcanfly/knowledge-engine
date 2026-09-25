@@ -223,6 +223,7 @@ ORDER_SURFACE_TERMS = {
 }
 
 RuntimeEventSink = Callable[[Mapping[str, Any]], None]
+QaEvidenceSink = Callable[[Sequence[Mapping[str, Any]]], None]
 
 
 def _emit_runtime_event(
@@ -1452,6 +1453,7 @@ def run_owner_arbitrary_query(
     max_cost: Decimal = Decimal("0.10"),
     answer_bundle: ProductionAnswerBundle | None = None,
     event_sink: RuntimeEventSink | None = None,
+    qa_evidence_sink: QaEvidenceSink | None = None,
 ) -> dict[str, Any]:
     """Compatibility shim that cannot bypass the canonical semantic runtime.
 
@@ -1476,6 +1478,7 @@ def run_owner_arbitrary_query(
         max_cost=max_cost,
         answer_bundle=answer_bundle,
         event_sink=event_sink,
+        qa_evidence_sink=qa_evidence_sink,
     )
 
     started = time.monotonic()
