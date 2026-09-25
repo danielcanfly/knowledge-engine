@@ -842,6 +842,7 @@ def semantic_contract_manifest() -> dict[str, Any]:
             "unsupported_accepted_claims": 0,
             "protected_mutations": 0,
             "post_render_semantic_validation": True,
+            "population_role_scope_validation": True,
             "internal_reference_leak_rejection": True,
             "provider_visible_prose_required": True,
             "semantic_recovery_publication": False,
@@ -942,6 +943,61 @@ _ALIGNMENT_STOPWORDS = {
     "of", "on", "or", "should", "than", "that", "the", "their", "this",
     "to", "what", "when", "which", "who", "why", "with", "would", "about",
 }
+
+_POPULATION_ROLE_ALIASES: dict[str, tuple[str, ...]] = {
+    "founder": ("founder", "founders", "cofounder", "cofounders", "co-founder", "co-founders"),
+    "operator_employee": (
+        "operator",
+        "operators",
+        "employee",
+        "employees",
+        "staff member",
+        "staff members",
+        "team member",
+        "team members",
+    ),
+    "customer_user": ("customer", "customers", "user", "users", "end user", "end users"),
+    "investor": ("investor", "investors", "venture capitalist", "venture capitalists"),
+    "manager_leader": ("manager", "managers", "leader", "leaders"),
+    "engineer_developer": ("engineer", "engineers", "developer", "developers"),
+}
+_POPULATION_ROLE_PREDICATES = {
+    "are",
+    "avoid",
+    "build",
+    "can",
+    "choose",
+    "create",
+    "do",
+    "focus",
+    "have",
+    "lack",
+    "make",
+    "must",
+    "need",
+    "needs",
+    "ought",
+    "should",
+    "stop",
+    "turn",
+    "use",
+    "work",
+}
+_POPULATION_TRANSFER_MARKERS = (
+    "by analogy",
+    "transferable lesson",
+    "transferable principle",
+    "the source focuses on",
+    "the source discusses",
+    "the evidence focuses on",
+    "the evidence discusses",
+    "a reasonable inference",
+    "an inference for",
+    "applied to",
+    "can apply this lesson",
+    "can apply the same principle",
+    "lesson for",
+)
 _RECOVERY_INTERNAL_SURFACE_MARKERS = (
     "direct answer:",
     "need relation:",
@@ -3396,7 +3452,115 @@ def _question_answer_alignment_failures(
     }
     if evidence_terms and not (answer_terms & evidence_terms):
         return ["QUESTION_ANSWER_ALIGNMENT_UNSUPPORTED_SURFACE"]
+    role_scope_failures = _population_role_alignment_failures(
+        question=question, answer_text=answer_text, evidence=evidence
+    )
+    if role_scope_failures:
+        return role_scope_failures
     return []
+
+
+def _population_role_alignment_failures(
+    *,
+    question: str,
+    answer_text: str,
+    evidence: Sequence[Mapping[str, Any]],
+) -> list[str]:
+    question_roles = _population_role_mentions(question)
+    if not question_roles:
+        return []
+    support_sentences = [
+        sentence
+        for item in evidence
+        for sentence in _material_sentences(str(item.get("passage_text", "")))
+        if _asserted_population_roles(sentence)
+    ]
+    if not support_sentences:
+        return []
+    answer_sentences = _material_sentences(answer_text)
+    for index, sentence in enumerate(answer_sentences):
+        asserted_roles = _asserted_population_roles(sentence) & question_roles
+        if not asserted_roles:
+            continue
+        context = " ".join(answer_sentences[max(0, index - 1) : index + 1]).casefold()
+        if any(marker in context for marker in _POPULATION_TRANSFER_MARKERS):
+            continue
+        answer_predicate_terms = _population_predicate_terms(sentence)
+        if len(answer_predicate_terms) < 2:
+            continue
+        ranked_support: list[tuple[int, float, set[str], str]] = []
+        for support_sentence in support_sentences:
+            support_roles = _asserted_population_roles(support_sentence)
+            if not support_roles:
+                continue
+            support_predicate_terms = _population_predicate_terms(support_sentence)
+            overlap = answer_predicate_terms & support_predicate_terms
+            if len(overlap) < 2:
+                continue
+            union = answer_predicate_terms | support_predicate_terms
+            ranked_support.append(
+                (len(overlap), len(overlap) / max(len(union), 1), support_roles, support_sentence)
+            )
+        if not ranked_support:
+            continue
+        _overlap_count, _ratio, best_support_roles, _support_sentence = max(
+            ranked_support, key=lambda item: (item[0], item[1])
+        )
+        if asserted_roles.isdisjoint(best_support_roles):
+            return ["QUESTION_ANSWER_ALIGNMENT_ROLE_SCOPE"]
+    return []
+
+
+def _material_sentences(text: str) -> list[str]:
+    normalized = " ".join(str(text or "").split())
+    if not normalized:
+        return []
+    return [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+", normalized)
+        if sentence.strip()
+    ]
+
+
+def _population_role_mentions(text: str) -> set[str]:
+    normalized = re.sub(r"[-_]", " ", str(text or "").casefold())
+    roles: set[str] = set()
+    for role, aliases in _POPULATION_ROLE_ALIASES.items():
+        if any(re.search(rf"\b{re.escape(alias.replace('-', ' '))}\b", normalized) for alias in aliases):
+            roles.add(role)
+    return roles
+
+
+def _asserted_population_roles(sentence: str) -> set[str]:
+    normalized = re.sub(r"[-_]", " ", str(sentence or "").casefold())
+    roles: set[str] = set()
+    for role, aliases in _POPULATION_ROLE_ALIASES.items():
+        for alias in aliases:
+            phrase = re.escape(alias.replace("-", " "))
+            match = re.search(rf"\b{phrase}\b", normalized)
+            if match is None or match.start() > 72:
+                continue
+            tail_tokens = re.findall(r"[a-z]+", normalized[match.end() :])[:4]
+            if any(token in _POPULATION_ROLE_PREDICATES for token in tail_tokens):
+                roles.add(role)
+                break
+    return roles
+
+
+def _population_predicate_terms(sentence: str) -> set[str]:
+    role_tokens = {
+        token
+        for aliases in _POPULATION_ROLE_ALIASES.values()
+        for alias in aliases
+        for token in re.findall(r"[a-z]+", alias.casefold())
+    }
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", str(sentence or "").casefold())
+        if token not in _ALIGNMENT_STOPWORDS
+        and token not in role_tokens
+        and len(token) > 2
+    }
 
 
 def _unsupported_external_markers(
@@ -3595,10 +3759,14 @@ def _try_fast_supported_answer(
     )
     if publication is None:
         return None
+    citation_ids = {str(item) for item in publication.get("citation_ids", []) if str(item)}
+    cited_evidence = [
+        item for item in evidence if str(item.get("evidence_id", "")) in citation_ids
+    ]
     if _question_answer_alignment_failures(
         question=question,
         answer_text=str(publication.get("answer_text", "")),
-        evidence=evidence,
+        evidence=cited_evidence or evidence,
     ):
         return None
     response = legacy._fast_answer_response(

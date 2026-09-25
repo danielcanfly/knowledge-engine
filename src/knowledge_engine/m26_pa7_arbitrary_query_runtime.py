@@ -2333,9 +2333,12 @@ def _fast_synthesis_payload(
             "Return exactly one JSON object with keys status, answer_text, citation_ids, "
             "and abstention_reason. status must be answer or abstain. citation_ids must "
             "be evidence_id values from the supplied evidence bundle. Cite the evidence "
-            "you actually used. Do not mention internal labels, exact-quote scaffolding, "
-            "or unsupported claims. If the supplied evidence is genuinely insufficient, "
-            "return status abstain."
+            "you actually used. Preserve the population, actor, and role scope of the evidence: "
+            "do not silently turn evidence about one role or population into a direct claim about "
+            "another. If the question targets a different role, explicitly label the answer as a "
+            "transferable lesson or inference from the source, or abstain. Do not mention internal "
+            "labels, exact-quote scaffolding, or unsupported claims. If the supplied evidence is "
+            "genuinely insufficient, return status abstain."
         ),
         "messages": [
             {

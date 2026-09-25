@@ -152,6 +152,100 @@ def test_fast_public_path_publishes_single_call_answer(
     }
 
 
+def test_role_scope_drift_cannot_be_published_as_canonical_fast_answer(
+    monkeypatch: pytest.MonkeyPatch,
+    fast_path_bundle: tuple[Any, dict[str, Any], dict[str, Any]],
+) -> None:
+    bundle, evidence, retrieval = fast_path_bundle
+    evidence = {
+        **evidence,
+        "passage_text": (
+            "Early employees create leverage not by collecting titles, but by moving closer "
+            "and closer to the company's actual bottlenecks. Strong operators turn fuzzy "
+            "problems into work a team can understand, prioritise and ship."
+        ),
+        "text": (
+            "Early employees create leverage not by collecting titles, but by moving closer "
+            "and closer to the company's actual bottlenecks. Strong operators turn fuzzy "
+            "problems into work a team can understand, prioritise and ship."
+        ),
+    }
+    provider = FastAnswerProvider(
+        answer_text=(
+            "Founders should stop chasing titles and instead dive straight into the company's "
+            "actual bottlenecks."
+        ),
+        citation_ids=["ev_skill"],
+    )
+
+    monkeypatch.setattr(semantic_runtime, "load_production_answer_bundle", lambda: bundle)
+    monkeypatch.setattr(
+        runtime,
+        "_run_lexical_primary_retrieval",
+        lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]),
+    )
+    monkeypatch.setattr(runtime, "_select_evidence", lambda **_kwargs: [evidence])
+    monkeypatch.setattr(runtime, "_has_meaningful_overlap", lambda _question, _evidence: True)
+
+    response = runtime.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="How can founders turn ambiguity into useful work quickly?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=provider,
+    )
+
+    assert provider.call_classes == ["aq_fast_answer_synthesis"]
+    assert response.get("answer_text") != provider.answer_text
+    assert response["semantic_closure"]["canonical_fast_candidate"] == {
+        "attempted": True,
+        "accepted": False,
+        "semantic_repair_invoked": True,
+    }
+
+
+
+def test_explicit_population_transfer_can_publish_as_one_call_fast_answer(
+    monkeypatch: pytest.MonkeyPatch,
+    fast_path_bundle: tuple[Any, dict[str, Any], dict[str, Any]],
+) -> None:
+    bundle, evidence, retrieval = fast_path_bundle
+    passage = (
+        "Early employees create leverage not by collecting titles, but by moving closer "
+        "and closer to the company's actual bottlenecks. Strong operators turn fuzzy "
+        "problems into work a team can understand, prioritise and ship."
+    )
+    evidence = {**evidence, "passage_text": passage, "text": passage}
+    qualified = (
+        "The source focuses on early employees rather than founders. A transferable lesson "
+        "for founders is to move closer to the company's actual bottlenecks."
+    )
+    provider = FastAnswerProvider(answer_text=qualified, citation_ids=["ev_skill"])
+
+    monkeypatch.setattr(semantic_runtime, "load_production_answer_bundle", lambda: bundle)
+    monkeypatch.setattr(
+        runtime,
+        "_run_lexical_primary_retrieval",
+        lambda **_kwargs: (retrieval["lexical"], retrieval["dense"]),
+    )
+    monkeypatch.setattr(runtime, "_select_evidence", lambda **_kwargs: [evidence])
+    monkeypatch.setattr(runtime, "_has_meaningful_overlap", lambda _question, _evidence: True)
+
+    response = runtime.run_owner_arbitrary_query(
+        root=ROOT,
+        gate=load_json(GATE_PATH),
+        question="How can founders turn ambiguity into useful work quickly?",
+        owner_subject_hash=OWNER_SUBJECT_HASH,
+        provider_client=provider,
+    )
+
+    assert provider.call_classes == ["aq_fast_answer_synthesis"]
+    assert response["status"] == "owner_only_cited_answer"
+    assert response["answer_text"] == qualified
+    assert response["semantic_closure"]["canonical_fast_candidate"]["accepted"] is True
+
+
+
 @pytest.mark.parametrize(
     "provider_factory",
     [
@@ -205,3 +299,114 @@ def test_invalid_fast_public_candidate_uses_bounded_semantic_retry_then_abstains
         "accepted": False,
         "semantic_repair_invoked": True,
     }
+
+
+def test_fast_alignment_rejects_unqualified_population_role_substitution() -> None:
+    question = "How can founders turn ambiguity into useful work quickly?"
+    evidence = [
+        {
+            "passage_text": (
+                "Early employees create leverage not by collecting titles, but by moving closer "
+                "and closer to the company's actual bottlenecks. The strongest operators turn "
+                "fuzzy problems into work a team can understand, prioritise and ship."
+            )
+        }
+    ]
+    failures = semantic_runtime._question_answer_alignment_failures(
+        question=question,
+        answer_text=(
+            "Founders should stop chasing titles and instead dive straight into the company's "
+            "real bottlenecks."
+        ),
+        evidence=evidence,
+    )
+    assert failures == ["QUESTION_ANSWER_ALIGNMENT_ROLE_SCOPE"]
+
+
+def test_incident_20260925_exact_cited_section_rejects_founder_role_drift() -> None:
+    question = "How can founders turn ambiguity into useful work quickly?"
+    cited_section = (
+        "The real leverage is not your title. It is how close you are to the company's core "
+        "problems. Early employees create leverage not by collecting titles, but by moving "
+        "closer and closer to the company's actual bottlenecks. Can you understand the product? "
+        "The customer? The economic engine? Can you turn the fuzzy, cross-functional no-man's-land "
+        "into something the company can actually scale? The work that changes your trajectory is "
+        "often the work with cross-functional impact. So if someone asked me now what early "
+        "startup employees should get good at, I would answer: become useful to the problems "
+        "that actually matter."
+    )
+    live_answer = (
+        "Founders should stop chasing titles and instead dive straight into the company's real "
+        "bottlenecks. By getting close to the product, the customer and the economic engine, they "
+        "can spot fuzzy cross-functional areas and turn those into concrete high-impact tasks."
+    )
+
+    failures = semantic_runtime._question_answer_alignment_failures(
+        question=question,
+        answer_text=live_answer,
+        evidence=[{"passage_text": cited_section}],
+    )
+
+    assert failures == ["QUESTION_ANSWER_ALIGNMENT_ROLE_SCOPE"]
+
+
+
+def test_fast_alignment_allows_explicitly_qualified_population_transfer() -> None:
+    question = "How can founders turn ambiguity into useful work quickly?"
+    evidence = [
+        {
+            "passage_text": (
+                "Early employees create leverage not by collecting titles, but by moving closer "
+                "and closer to the company's actual bottlenecks."
+            )
+        }
+    ]
+    failures = semantic_runtime._question_answer_alignment_failures(
+        question=question,
+        answer_text=(
+            "The source focuses on early employees rather than founders. A transferable lesson "
+            "for founders is to move closer to the company's actual bottlenecks."
+        ),
+        evidence=evidence,
+    )
+    assert failures == []
+
+
+def test_fast_alignment_treats_customer_and_user_as_same_population_family() -> None:
+    failures = semantic_runtime._question_answer_alignment_failures(
+        question="How can customers reduce onboarding friction?",
+        answer_text="Customers can reduce onboarding friction by clarifying the first workflow.",
+        evidence=[
+            {
+                "passage_text": (
+                    "Users can reduce onboarding friction by clarifying the first workflow and "
+                    "removing unnecessary setup steps."
+                )
+            }
+        ],
+    )
+    assert failures == []
+
+
+def test_fast_synthesis_prompt_requires_population_role_scope_preservation() -> None:
+    payload = runtime._fast_synthesis_payload(
+        question="How can founders turn ambiguity into useful work quickly?",
+        trace_id="trace-role-scope",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            {
+                "evidence_id": "ev1",
+                "evidence_type": "passage",
+                "locator_id": "section1",
+                "source_id": "source1",
+                "source_identity": "source1",
+                "section_id": "section1",
+                "concept_id": "concept1",
+                "passage_text": "Early employees turn fuzzy problems into useful work.",
+                "channels": ["lexical"],
+            }
+        ],
+    )
+    system = str(payload["system"])
+    assert "Preserve the population, actor, and role scope of the evidence" in system
+    assert "transferable lesson or inference" in system
