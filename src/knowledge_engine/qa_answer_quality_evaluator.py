@@ -104,6 +104,25 @@ _DETERMINISTIC_HARD_FAILS = {
     "MATERIAL_CLAIM_SUPPORT_UNVERIFIED": "material_claim_support_verified",
     "CITATION_LOCATOR_INVALID": "citation_locator_valid",
 }
+_SERVER_OWNED_HARD_FAIL_CODES = frozenset(
+    {
+        *_DETERMINISTIC_HARD_FAILS,
+        "RUNTIME_OR_PROVIDER_FAILURE",
+        "EMPTY_ANSWER",
+        "ANSWER_WITHOUT_MEANINGFUL_EVIDENCE",
+        "UNEXPLAINED_ABSTENTION",
+    }
+)
+_SAFE_ABSTENTION_STATUSES = frozenset(
+    {"not_found", "abstain", "safe_abstain", "safe_abstention"}
+)
+
+
+def is_safe_abstention(answer_payload: Mapping[str, Any]) -> bool:
+    status_value = str(
+        answer_payload.get("terminal_status") or answer_payload.get("status") or ""
+    ).casefold()
+    return bool(answer_payload.get("safe_abstention")) or status_value in _SAFE_ABSTENTION_STATUSES
 
 
 def deterministic_hard_fail_codes(answer_payload: Mapping[str, Any]) -> tuple[str, ...]:
@@ -122,11 +141,7 @@ def deterministic_hard_fail_codes(answer_payload: Mapping[str, Any]) -> tuple[st
     if any(marker in status_value for marker in ("error", "invalid", "failed")):
         codes.add("RUNTIME_OR_PROVIDER_FAILURE")
     answer = str(answer_payload.get("answer_text") or answer_payload.get("answer") or "").strip()
-    safe_abstention = bool(answer_payload.get("safe_abstention")) or status_value in {
-        "not_found",
-        "abstain",
-        "safe_abstain",
-    }
+    safe_abstention = is_safe_abstention(answer_payload)
     evidence = any(
         isinstance(answer_payload.get(key), list) and answer_payload.get(key)
         for key in ("selected_evidence", "citations", "sources", "source_cards")
@@ -139,7 +154,7 @@ def deterministic_hard_fail_codes(answer_payload: Mapping[str, Any]) -> tuple[st
     if (
         safe_abstention
         and not (isinstance(reason_codes, list) and reason_codes)
-        and status_value not in {"not_found", "abstain", "safe_abstain"}
+        and status_value not in _SAFE_ABSTENTION_STATUSES
     ):
         codes.add("UNEXPLAINED_ABSTENTION")
     return tuple(sorted(codes))
@@ -149,6 +164,7 @@ def canonical_failure_provenance(
     *,
     hard_fail_codes: tuple[str, ...],
     criterion_scores: Mapping[str, int] | None = None,
+    safe_abstention: bool = False,
 ) -> tuple[str, str, str]:
     """Derive server-owned failure taxonomy; provider labels are diagnostic only."""
     codes = tuple(sorted(set(hard_fail_codes)))
@@ -160,6 +176,8 @@ def canonical_failure_provenance(
         stage, failure_class = "evidence", "citation_or_evidence_gap"
     elif "UNEXPLAINED_ABSTENTION" in codes:
         stage, failure_class = "abstention", "inappropriate_abstention"
+    elif safe_abstention:
+        stage, failure_class = "abstention", "safe_abstention_below_quality_threshold"
     elif "EMPTY_ANSWER" in codes:
         stage, failure_class = "synthesis", "empty_answer"
     else:
@@ -353,6 +371,10 @@ class ProviderAnswerQualityEvaluator:
             "abstention_appropriateness (max 5: abstain only when evidence is insufficient and explain why). "
             "Evidence-only grounding is mandatory. A safe abstention is appropriate when the supplied "
             "evidence cannot support an answer; an unexplained or answerable abstention is a hard fail. "
+            "Do not treat a justified safe abstention as EMPTY_ANSWER merely because answer_text is empty. "
+            "The server owns structural hard-fail facts including EMPTY_ANSWER, UNEXPLAINED_ABSTENTION, "
+            "RUNTIME_OR_PROVIDER_FAILURE, ANSWER_WITHOUT_MEANINGFUL_EVIDENCE, and runtime integrity codes; "
+            "do not emit those codes in hard_fail_codes. "
             "Do not score homepage, Suggested Questions, topic balance, corpus representativeness, or "
             "question-framing dimensions. Return exactly one raw JSON object with no markdown, prose, "
             "or reasoning wrapper. The JSON must contain criterion_scores containing exactly: "
@@ -390,11 +412,10 @@ class ProviderAnswerQualityEvaluator:
         model_codes = output.get("hard_fail_codes", output.get("hard_fail_reasons", []))
         if not isinstance(model_codes, list):
             raise AnswerQualityEvaluationError("hard_fail_codes must be a list")
+        model_code_set = {str(code).strip() for code in model_codes if str(code).strip()}
+        model_code_set.difference_update(_SERVER_OWNED_HARD_FAIL_CODES)
         codes = tuple(
-            sorted(
-                set(str(code).strip() for code in model_codes if str(code).strip())
-                | set(deterministic_hard_fail_codes(answer_payload))
-            )
+            sorted(model_code_set | set(deterministic_hard_fail_codes(answer_payload)))
         )
         score = sum(
             value
@@ -412,6 +433,7 @@ class ProviderAnswerQualityEvaluator:
             failure_stage, failure_class, failure_signature = canonical_failure_provenance(
                 hard_fail_codes=codes,
                 criterion_scores=normalized_criteria,
+                safe_abstention=is_safe_abstention(answer_payload),
             )
         evaluation = AnswerQualityEvaluation(
             score=score,

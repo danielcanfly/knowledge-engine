@@ -94,6 +94,8 @@ def test_semantic_prompt_contains_complete_operational_rubric_and_untrusted_boun
     assert "Use only the supplied" in prompt
     assert "untrusted data" in prompt
     assert "safe abstention" in prompt
+    assert "Do not treat a justified safe abstention as EMPTY_ANSWER" in prompt
+    assert "server owns structural hard-fail facts" in prompt
     assert "Suggested Questions" in prompt
 
 
@@ -289,6 +291,81 @@ def test_appropriate_and_inappropriate_abstention_are_distinguished() -> None:
     )
     assert inappropriate.result == "fail"
     assert "UNEXPLAINED_ABSTENTION" in inappropriate.hard_fail_codes
+
+
+def test_model_cannot_override_server_owned_empty_answer_for_safe_abstention() -> None:
+    provider = CapturingProvider(
+        json.dumps(
+            {
+                "criterion_scores": ANSWER_QUALITY_CRITERION_MAX,
+                "hard_fail_codes": ["EMPTY_ANSWER"],
+            }
+        )
+    )
+    adapter = ProviderAnswerQualityEvaluator(
+        provider, provider_name="qualified-provider", model="qualified-model"
+    )
+    result = adapter.evaluate(
+        question="Q",
+        answer_payload={
+            "status": "safe_abstention",
+            "safe_abstention": True,
+            "answer_text": "",
+            "reason_codes": ["VERIFICATION_COULD_NOT_AUTHORIZE_ANSWER"],
+        },
+        forensic_trace=None,
+    )
+    assert result.result == "pass"
+    assert "EMPTY_ANSWER" not in result.hard_fail_codes
+
+
+def test_actual_empty_non_abstention_remains_server_owned_hard_fail() -> None:
+    provider = CapturingProvider(
+        json.dumps(
+            {
+                "criterion_scores": ANSWER_QUALITY_CRITERION_MAX,
+                "hard_fail_codes": [],
+            }
+        )
+    )
+    adapter = ProviderAnswerQualityEvaluator(
+        provider, provider_name="qualified-provider", model="qualified-model"
+    )
+    result = adapter.evaluate(
+        question="Q",
+        answer_payload={"status": "answered", "answer_text": ""},
+        forensic_trace=None,
+    )
+    assert result.result == "fail"
+    assert result.hard_fail_codes == ("EMPTY_ANSWER",)
+    assert result.failure_class == "empty_answer"
+
+
+def test_safe_abstention_low_score_is_clustered_as_abstention_not_empty_answer() -> None:
+    criteria = {name: 0 for name in ANSWER_QUALITY_CRITERION_MAX}
+    criteria["abstention_appropriateness"] = 5
+    provider = CapturingProvider(
+        json.dumps({"criterion_scores": criteria, "hard_fail_codes": ["EMPTY_ANSWER"]})
+    )
+    adapter = ProviderAnswerQualityEvaluator(
+        provider, provider_name="qualified-provider", model="qualified-model"
+    )
+    result = adapter.evaluate(
+        question="Q",
+        answer_payload={
+            "status": "safe_abstention",
+            "safe_abstention": True,
+            "answer_text": "",
+            "reason_codes": ["VERIFICATION_COULD_NOT_AUTHORIZE_ANSWER"],
+        },
+        forensic_trace=None,
+    )
+    assert result.result == "fail"
+    assert result.score == 5
+    assert result.hard_fail_codes == ()
+    assert result.failure_stage == "abstention"
+    assert result.failure_class == "safe_abstention_below_quality_threshold"
+
 
 
 def test_semantic_failure_trace_uses_canonical_provenance_and_server_signature(tmp_path) -> None:

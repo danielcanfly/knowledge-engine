@@ -46,6 +46,7 @@ from .qa_answer_quality_evaluator import (
     AnswerQualityEvaluatorUnavailable,
     AnswerQualitySemanticEvaluator,
     canonical_failure_provenance,
+    is_safe_abstention,
     validate_answer_quality_evaluation,
 )
 from .qa_failure_clustering import FailureClusterIdentity, build_failure_cluster_identity
@@ -368,6 +369,7 @@ class SqliteQaRepository:
             failure_stage, failure_class, failure_signature = canonical_failure_provenance(
                 hard_fail_codes=evaluation.hard_fail_codes,
                 criterion_scores=evaluation.criterion_scores,
+                safe_abstention=is_safe_abstention(answer_payload),
             )
             cluster_identity = build_failure_cluster_identity(
                 question=event["question"],
