@@ -4007,69 +4007,111 @@ def _try_fast_supported_answer(
     question_sha: str,
     started: float,
 ) -> _FastAttemptOutcome:
-    payload = legacy._fast_synthesis_payload(
+    base_payload = legacy._fast_synthesis_payload(
         question=question,
         trace_id=trace_id,
         intent_class=intent_class,
         evidence=evidence,
     )
-    try:
-        provider_result = provider.call(payload, legacy.FAST_SYNTHESIS_CALL_CLASS)
-        normalized = legacy._normalize_fast_provider_result(provider_result)
-    except LiveGateError as exc:
-        response = legacy._fast_abstention_response(
-            gate=gate,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
-            bundle=bundle,
-            lexical_result=lexical_result,
-            dense_result=dense_result,
+    last_envelope: FastAttemptEnvelope | None = None
+    last_attempt_reason_codes: tuple[str, ...] = ()
+    accepted_publication: Mapping[str, Any] | None = None
+    accepted_normalized: Mapping[str, Any] | None = None
+    accepted_attempt = 0
+    fast_failures: list[str] = []
+
+    for attempt in (1, 2):
+        payload = dict(base_payload)
+        if attempt > 1:
+            payload["bounded_repair_attempt"] = {
+                "schema_version": "m26-aq-fast-synthesis-bounded-repair/v1",
+                "policy": "Reuse the same runtime-selected evidence. Do not add facts. Return an answer only if cited evidence supports it; otherwise abstain.",
+                "previous_reason_codes": list(last_attempt_reason_codes),
+            }
+        try:
+            provider_result = provider.call(payload, legacy.FAST_SYNTHESIS_CALL_CLASS)
+            normalized = legacy._normalize_fast_provider_result(provider_result)
+        except LiveGateError as exc:
+            response = legacy._fast_abstention_response(
+                gate=gate,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                reason_codes=[type(exc).__name__, "PROVIDER_CALL_FAILED"],
+                bundle=bundle,
+                lexical_result=lexical_result,
+                dense_result=dense_result,
+                selected_evidence=evidence,
+                intent_class=intent_class,
+                provider_invoked=True,
+                provider_identity=legacy._fast_provider_identity(provider),
+                provider_result={
+                    "call_class": legacy.FAST_SYNTHESIS_CALL_CLASS,
+                    "cost_usd": "0",
+                },
+            )
+            response["semantic_closure"] = {
+                "requirements": [runtime._requirement_public(item) for item in requirements],
+                "support_proof": [],
+                "failures": ["PROVIDER_CALL_FAILED"],
+                "canonical_fast_candidate": {
+                    "attempted": True,
+                    "accepted": False,
+                    "semantic_repair_invoked": False,
+                    "bounded_fast_repair_attempted": attempt > 1,
+                    "fast_attempts": attempt,
+                    "fail_closed": True,
+                },
+            }
+            return _FastAttemptOutcome(response=_response_with_contract(response))
+        except (httpx.HTTPError, KeyError, ValueError) as exc:
+            last_attempt_reason_codes = (type(exc).__name__, "FAST_PROVIDER_RESULT_INVALID")
+            continue
+
+        if legacy._fast_public_abstention_publication(normalized) is not None:
+            last_attempt_reason_codes = ("FAST_PROVIDER_ABSTAINED",)
+            continue
+
+        publication = legacy._validate_fast_provider_candidate(
+            question=question,
             selected_evidence=evidence,
-            intent_class=intent_class,
-            provider_invoked=True,
-            provider_identity=legacy._fast_provider_identity(provider),
-            provider_result={
-                "call_class": legacy.FAST_SYNTHESIS_CALL_CLASS,
-                "cost_usd": "0",
-            },
+            provider_output=normalized,
         )
-        response["semantic_closure"] = {
-            "requirements": [runtime._requirement_public(item) for item in requirements],
-            "support_proof": [],
-            "failures": ["PROVIDER_CALL_FAILED"],
-            "canonical_fast_candidate": {
-                "attempted": True,
-                "accepted": False,
-                "semantic_repair_invoked": False,
-                "fail_closed": True,
-            },
-        }
-        return _FastAttemptOutcome(response=_response_with_contract(response))
-    except (httpx.HTTPError, KeyError, ValueError):
+        if publication is None:
+            last_attempt_reason_codes = ("FAST_PROVIDER_CANDIDATE_INVALID",)
+            continue
+
+        alignment_failures = _question_answer_alignment_failures(
+            question=question,
+            answer_text=str(publication.get("answer_text", "")),
+            evidence=evidence,
+        )
+        facet_citation_failures = _fast_required_facet_citation_failures(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            publication=publication,
+        )
+        fast_failures = [*alignment_failures, *facet_citation_failures]
+        if fast_failures:
+            last_attempt_reason_codes = tuple(str(item) for item in fast_failures)
+            last_envelope = FastAttemptEnvelope(
+                publication=dict(publication),
+                rejection_reason_codes=tuple(str(item) for item in fast_failures),
+            )
+            continue
+
+        accepted_publication = publication
+        accepted_normalized = normalized
+        accepted_attempt = attempt
+        break
+
+    if accepted_publication is None or accepted_normalized is None:
+        if last_envelope is not None:
+            return _FastAttemptOutcome(envelope=last_envelope)
         return _FastAttemptOutcome()
-    if legacy._fast_public_abstention_publication(normalized) is not None:
-        return _FastAttemptOutcome()
-    publication = legacy._validate_fast_provider_candidate(
-        question=question,
-        selected_evidence=evidence,
-        provider_output=normalized,
-    )
-    if publication is None:
-        return _FastAttemptOutcome()
-    alignment_failures = _question_answer_alignment_failures(
-        question=question,
-        answer_text=str(publication.get("answer_text", "")),
-        evidence=evidence,
-    )
-    facet_citation_failures = _fast_required_facet_citation_failures(
-        question=question,
-        intent_class=intent_class,
-        evidence=evidence,
-        publication=publication,
-    )
-    fast_failures = [*alignment_failures, *facet_citation_failures]
+    publication = accepted_publication
+    normalized = accepted_normalized
     if fast_failures:
         return _FastAttemptOutcome(
             envelope=FastAttemptEnvelope(
@@ -4099,6 +4141,8 @@ def _try_fast_supported_answer(
             "attempted": True,
             "accepted": True,
             "semantic_repair_invoked": False,
+            "bounded_fast_repair_attempted": accepted_attempt > 1,
+            "fast_attempts": accepted_attempt,
         },
         "semantic_contract": _semantic_contract_public(),
     }

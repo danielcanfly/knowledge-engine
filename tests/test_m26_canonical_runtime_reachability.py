@@ -124,6 +124,7 @@ def test_canonical_path_derives_strengthens_and_publishes_semantic_closure(
     assert calls["strengthen"] == 1
     assert [call_class for _, call_class in provider.calls] == [
         "aq_fast_answer_synthesis",
+        "aq_fast_answer_synthesis",
         "aq_semantic_closure",
         "aq_semantic_closure_repair",
     ]
@@ -405,6 +406,7 @@ def test_frozen_residual_structural_slice_reaches_semantic_closure(
     )
 
     assert [call_class for _, call_class in provider.calls] == [
+        "aq_fast_answer_synthesis",
         "aq_fast_answer_synthesis",
         "aq_semantic_closure",
         "aq_semantic_closure_repair",
