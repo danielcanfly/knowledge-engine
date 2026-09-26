@@ -344,19 +344,24 @@ def active_release_dense_channel_from_env(
         "qdrant_api_key": api_key,
     }
     present = {key for key, value in values.items() if value}
-    if present and len(present) != len(values):
-        missing = sorted(set(values) - present)
-        raise PA7ArbitraryQueryError(
-            "PA7_ACTIVE_RELEASE_REMOTE_DENSE_CONFIG_PARTIAL",
-            "partial remote dense configuration: " + ",".join(missing),
-        )
     if len(present) == len(values):
         return ActiveReleaseQdrantDenseChannel(ActiveReleaseDenseConfig(**values))
     if require_remote:
-        raise PA7ArbitraryQueryError(
-            "PA7_ACTIVE_RELEASE_REMOTE_DENSE_CONFIG_MISSING",
-            "remote dense configuration is required",
+        missing = sorted(set(values) - present)
+        code = (
+            "PA7_ACTIVE_RELEASE_REMOTE_DENSE_CONFIG_PARTIAL"
+            if present
+            else "PA7_ACTIVE_RELEASE_REMOTE_DENSE_CONFIG_MISSING"
         )
+        detail = (
+            "partial remote dense configuration: " + ",".join(missing)
+            if present
+            else "remote dense configuration is required"
+        )
+        raise PA7ArbitraryQueryError(code, detail)
+    # Cloudflare account/token variables are shared with Workers AI routing and may
+    # legitimately be present when remote dense retrieval is disabled. A partial
+    # remote-dense environment must not poison the explicit local fallback path.
     return LocalDenseProjectionChannel()
 
 
