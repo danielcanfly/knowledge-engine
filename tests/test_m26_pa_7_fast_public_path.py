@@ -410,3 +410,85 @@ def test_fast_synthesis_prompt_requires_population_role_scope_preservation() -> 
     system = str(payload["system"])
     assert "Preserve the population, actor, and role scope of the evidence" in system
     assert "transferable lesson or inference" in system
+
+
+INCIDENT_SECTION = (
+    "The real leverage is not your title. It is how close you are to the company's core "
+    "problems. Early employees create leverage not by collecting titles, but by moving "
+    "closer to the company's actual bottlenecks. Can you understand the product? "
+    "The customer? The economic engine? Can you turn the fuzzy, cross-functional "
+    "no-man's-land into something the company can actually scale? The work that changes "
+    "your trajectory is often the work with cross-functional impact. So if someone asked "
+    "me now what early startup employees should get good at, I would answer: become useful "
+    "to the problems that actually matter."
+)
+
+
+def test_fast_sentence_support_rejects_adjacent_plausible_expansion() -> None:
+    failures = semantic_runtime._fast_sentence_support_failures(
+        answer_text=(
+            "Early-stage employees should concentrate on finding and plugging the "
+            "organization's gaps and bottlenecks rather than worrying about titles. "
+            "By widening their own judgment, technical range, and operating scope as "
+            "the business evolves, they grow with the company."
+        ),
+        evidence=[{"passage_text": INCIDENT_SECTION}],
+    )
+    assert failures == ["FAST_SENTENCE_SUPPORT_LOW_COVERAGE"]
+
+
+def test_fast_sentence_support_accepts_tight_paraphrase_of_cited_passage() -> None:
+    failures = semantic_runtime._fast_sentence_support_failures(
+        answer_text=(
+            "Early employees should focus less on titles and move closer to the company's "
+            "actual bottlenecks, product, customers, and economic engine."
+        ),
+        evidence=[{"passage_text": INCIDENT_SECTION}],
+    )
+    assert failures == []
+
+
+def test_fast_sentence_support_accepts_explicit_transfer_framing() -> None:
+    failures = semantic_runtime._fast_sentence_support_failures(
+        answer_text=(
+            "The source focuses on early employees rather than founders. "
+            "A transferable lesson for founders is to move closer to the company's "
+            "actual bottlenecks."
+        ),
+        evidence=[
+            {
+                "passage_text": (
+                    "Early employees create leverage not by collecting titles, but by moving "
+                    "closer to the company's actual bottlenecks."
+                )
+            }
+        ],
+    )
+    assert failures == []
+
+
+def test_fast_synthesis_prompt_requires_sentence_level_evidence_discipline() -> None:
+    payload = runtime._fast_synthesis_payload(
+        question="What should early startup employees focus on instead of titles?",
+        trace_id="trace-fast-grounding",
+        intent_class="direct_grounded_knowledge",
+        evidence=[
+            {
+                "evidence_id": "ev1",
+                "evidence_type": "passage",
+                "locator_id": "section1",
+                "source_id": "source1",
+                "source_identity": "source1",
+                "section_id": "section1",
+                "concept_id": "concept1",
+                "passage_text": "Early employees should move closer to actual bottlenecks.",
+                "channels": ["lexical"],
+            }
+        ],
+    )
+    system = str(payload["system"])
+    assert (
+        "Every material sentence must stay tightly within what the cited passage "
+        "explicitly supports"
+    ) in system
+    assert "Prefer a shorter answer over an expanded answer" in system
