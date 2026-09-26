@@ -172,7 +172,14 @@ jobs:
         run: |
           set -euo pipefail
           ssh oracle-knowledge "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
-          ssh oracle-knowledge "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" | tee "$WORK_DIR/evidence/backend-deploy.log"
+          remote_runner="/tmp/knowledge-engine-deploy-$EXPECTED_DEPLOY_SHA.sh"
+          scp deploy/deploy.sh "oracle-knowledge:$remote_runner"
+          ssh oracle-knowledge             "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA' REMOTE_RUNNER='$remote_runner' bash -se" <<'REMOTE'             | tee "$WORK_DIR/evidence/backend-deploy.log"
+          set -euo pipefail
+          trap 'rm -f "$REMOTE_RUNNER"' EXIT
+          chmod 700 "$REMOTE_RUNNER"
+          bash "$REMOTE_RUNNER"
+          REMOTE
 
       - name: Smoke owner-only backend routes locally on Oracle
         run: |

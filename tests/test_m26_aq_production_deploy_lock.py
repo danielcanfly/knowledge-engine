@@ -43,7 +43,9 @@ def test_backend_redeploy_binds_exact_checked_out_sha_to_deploy_script() -> None
     assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"' in workflow
     assert "scripts/configure_oracle_ssh.sh" in workflow
     assert "RELEASE_SHA='$EXPECTED_DEPLOY_SHA'" in workflow
-    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" in workflow
+    assert 'scp deploy/deploy.sh "oracle-knowledge:$remote_runner"' in workflow
+    assert 'bash "$REMOTE_RUNNER"' in workflow
+    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" not in workflow
 
 
 def test_production_deploy_binds_accepted_qdrant_collection() -> None:

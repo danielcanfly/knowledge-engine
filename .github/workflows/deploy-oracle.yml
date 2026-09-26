@@ -179,7 +179,17 @@ jobs:
           RELEASE_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
+          # Execute the deploy runner from the exact requested revision checked
+          # out on the Actions runner. Do not bootstrap from the VM's previous
+          # checkout, otherwise changes to deploy.sh take effect one release late.
+          remote_runner="/tmp/knowledge-engine-deploy-$RELEASE_SHA.sh"
+          scp deploy/deploy.sh "$ORACLE_VM_USER@$ORACLE_VM_HOST:$remote_runner"
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST"             "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' REMOTE_RUNNER='$remote_runner' bash -se" <<'REMOTE'
+          set -euo pipefail
+          trap 'rm -f "$REMOTE_RUNNER"' EXIT
+          chmod 700 "$REMOTE_RUNNER"
+          bash "$REMOTE_RUNNER"
+          REMOTE
       - name: Verify deployed standard runtime identity
         env:
           RELEASE_SHA: ${{ inputs.git_sha }}
@@ -194,6 +204,71 @@ jobs:
           test "$running" = "$RELEASE_SHA"
           printf 'STANDARD_RUNTIME_HEAD=%s\nSTANDARD_RUNTIME_SHA=%s\n' "$actual" "$running"
           REMOTE
+
+      - name: Verify canonical API ingress
+        env:
+          RELEASE_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          sudo -n cmp -s             deploy/nginx/api.danielcanfly.com.conf             /etc/nginx/sites-enabled/llamaindex-demo || {
+            echo "NGINX_CANONICAL_CONFIG_MISMATCH" >&2
+            exit 1
+          }
+
+          effective="$(sudo -n nginx -T 2>&1)"
+          if grep -q '127\.0\.0\.1:18000' <<<"$effective"; then
+            echo "NGINX_RETIRED_UPSTREAM_STILL_EFFECTIVE" >&2
+            exit 1
+          fi
+          if grep -q 'X-M26-Build-SHA' <<<"$effective"; then
+            echo "NGINX_STATIC_BUILD_HEADER_STILL_EFFECTIVE" >&2
+            exit 1
+          fi
+
+          for spec in "/v1/answers/health 200" "/v1/health 200" "/ 404"; do
+            path="${spec% *}"
+            expected="${spec##* }"
+            actual="$(curl -ksS               --resolve api.danielcanfly.com:443:127.0.0.1               --output /dev/null               --write-out '%{http_code}'               --max-time 10               "https://api.danielcanfly.com$path")"
+            test "$actual" = "$expected" || {
+              echo "LOCAL_INGRESS_STATUS_MISMATCH path=$path expected=$expected actual=$actual" >&2
+              exit 1
+            }
+          done
+          echo "LOCAL_API_INGRESS=PASS"
+          REMOTE
+
+          for spec in "/v1/answers/health 200" "/v1/health 200" "/ 404"; do
+            path="${spec% *}"
+            expected="${spec##* }"
+            actual="$(curl --silent --show-error               --output /dev/null               --write-out '%{http_code}'               --max-time 15               "https://api.danielcanfly.com$path" || true)"
+            test "$actual" = "$expected" || {
+              echo "PUBLIC_INGRESS_STATUS_MISMATCH path=$path expected=$expected actual=$actual" >&2
+              exit 1
+            }
+          done
+
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --silent --show-error             --output /dev/null             --dump-header "$headers"             --max-time 15             https://api.danielcanfly.com/v1/answers/health
+          public_header="$(awk '
+            BEGIN { IGNORECASE=1 }
+            /^x-m26-build-sha:/ {
+              value=$0
+              sub(/^[^:]+:[[:space:]]*/, "", value)
+              sub(/\r$/, "", value)
+              print value
+            }
+          ' "$headers" | tail -n 1)"
+          if [[ -n "$public_header" && "$public_header" != "$RELEASE_SHA" ]]; then
+            echo "PUBLIC_STALE_BUILD_HEADER expected=$RELEASE_SHA actual=$public_header" >&2
+            exit 1
+          fi
+          echo "PUBLIC_API_INGRESS=PASS"
+
       - name: Optional public identity gate
         if: ${{ inputs.require_public_identity }}
         env:

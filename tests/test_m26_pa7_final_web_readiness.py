@@ -476,7 +476,9 @@ def test_final_web_live_workflow_binds_backend_pages_and_runtime_rows() -> None:
     assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_DEPLOY_SHA"' in workflow
     assert "scripts/configure_oracle_ssh.sh" in workflow
     assert "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$EXPECTED_DEPLOY_SHA'" in workflow
-    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" in workflow
+    assert 'scp deploy/deploy.sh "oracle-knowledge:$remote_runner"' in workflow
+    assert 'bash "$REMOTE_RUNNER"' in workflow
+    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" not in workflow
     assert "backend-owner-smoke.json" in workflow
     assert '"deploy_sha": os.environ["EXPECTED_DEPLOY_SHA"]' in workflow
     assert '"health_build_sha"' in workflow
