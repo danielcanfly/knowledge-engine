@@ -41,20 +41,24 @@ from .qa_answer_quality_evaluator import (
     ANSWER_QUALITY_CRITERION_MAX,
     ANSWER_QUALITY_PASS_THRESHOLD,
     ANSWER_QUALITY_RUBRIC_VERSION,
+    SEMANTIC_EVALUATOR_VERSION,
     AnswerQualityEvaluation,
     AnswerQualityEvaluationError,
     AnswerQualityEvaluatorUnavailable,
     AnswerQualitySemanticEvaluator,
+    answer_quality_evaluation_from_payload,
     canonical_failure_provenance,
     is_safe_abstention,
+    semantic_evaluation_fingerprint,
     validate_answer_quality_evaluation,
 )
 from .qa_failure_clustering import FailureClusterIdentity, build_failure_cluster_identity
 from .storage import FileObjectStore, ObjectStore, sha256_bytes
 
-QA_SQLITE_SCHEMA = "knowledge-engine-answer-quality-sqlite/v3"
+QA_SQLITE_SCHEMA = "knowledge-engine-answer-quality-sqlite/v4"
 QA_DB_PATH_ENV = "M26_QA_DB_PATH"
 QA_DEFAULT_PRODUCTION_DB = Path("/var/lib/knowledge-engine/public-api/qa-inbox.sqlite3")
+QA_EVALUATION_CACHE_MAX = 20_000
 EVALUATION_PENDING = "PENDING"
 EVALUATION_ANSWERED = "ANSWERED"
 EVALUATION_NOT_EVALUATED = "NOT_EVALUATED"
@@ -105,6 +109,17 @@ class SqliteQaRepository:
                     cluster_count INTEGER NOT NULL, membership_json TEXT NOT NULL,
                     object_key TEXT NOT NULL, sha256 TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS qa_evaluation_cache (
+                    fingerprint TEXT PRIMARY KEY,
+                    rubric_version TEXT NOT NULL,
+                    evaluator_version TEXT NOT NULL,
+                    evaluation_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_used_at TEXT NOT NULL,
+                    hit_count INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS qa_evaluation_cache_last_used_idx
+                    ON qa_evaluation_cache(last_used_at DESC);
                 """
             )
             exists = connection.execute(
@@ -293,6 +308,30 @@ class SqliteQaRepository:
         event = self.get_event(event_id)
         if event["evaluation_status"] != EVALUATION_PENDING:
             return event
+        fingerprint = None
+        cacheable = (
+            str(getattr(evaluator, "evaluator_version", "")).strip()
+            == SEMANTIC_EVALUATOR_VERSION
+        )
+        if cacheable:
+            fingerprint = semantic_evaluation_fingerprint(
+                question=event["question"],
+                answer_payload=answer_payload,
+                forensic_trace=forensic_trace,
+                evaluator_provider=str(getattr(evaluator, "provider_name", "")),
+                evaluator_model=str(getattr(evaluator, "model", "")),
+            )
+            cached = self._cached_evaluation(fingerprint)
+            if cached is not None:
+                return self._persist_evaluation(
+                    event_id,
+                    cached,
+                    answer_payload,
+                    forensic_trace,
+                    _elapsed_ms(started),
+                    evaluation_fingerprint=fingerprint,
+                    evaluation_cache_hit=True,
+                )
         try:
             evaluation = validate_answer_quality_evaluation(
                 evaluator.evaluate(
@@ -301,6 +340,8 @@ class SqliteQaRepository:
                     forensic_trace=forensic_trace,
                 )
             )
+            if fingerprint is not None:
+                evaluation = self._cache_or_canonicalize_evaluation(fingerprint, evaluation)
         except AnswerQualityEvaluatorUnavailable:
             return self.mark_not_evaluated(
                 event_id, reason_code="EVALUATOR_UNAVAILABLE", latency_ms=_elapsed_ms(started)
@@ -318,8 +359,67 @@ class SqliteQaRepository:
                 event_id, reason_code="EVALUATOR_ERROR", latency_ms=_elapsed_ms(started)
             )
         return self._persist_evaluation(
-            event_id, evaluation, answer_payload, forensic_trace, _elapsed_ms(started)
+            event_id,
+            evaluation,
+            answer_payload,
+            forensic_trace,
+            _elapsed_ms(started),
+            evaluation_fingerprint=fingerprint,
+            evaluation_cache_hit=False,
         )
+
+    def _cached_evaluation(self, fingerprint: str) -> AnswerQualityEvaluation | None:
+        now = _iso_now()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT evaluation_json FROM qa_evaluation_cache WHERE fingerprint=?",
+                (fingerprint,),
+            ).fetchone()
+            if row is None:
+                connection.rollback()
+                return None
+            connection.execute(
+                "UPDATE qa_evaluation_cache SET last_used_at=?,hit_count=hit_count+1 WHERE fingerprint=?",
+                (now, fingerprint),
+            )
+            connection.commit()
+        return answer_quality_evaluation_from_payload(_load(row["evaluation_json"], {}))
+
+    def _cache_or_canonicalize_evaluation(
+        self, fingerprint: str, evaluation: AnswerQualityEvaluation
+    ) -> AnswerQualityEvaluation:
+        now = _iso_now()
+        payload = _dump(evaluation.to_payload())
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "INSERT OR IGNORE INTO qa_evaluation_cache("
+                "fingerprint,rubric_version,evaluator_version,evaluation_json,"
+                "created_at,last_used_at,hit_count) VALUES(?,?,?,?,?,?,0)",
+                (
+                    fingerprint,
+                    evaluation.rubric_version,
+                    evaluation.evaluator_version,
+                    payload,
+                    now,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                "SELECT evaluation_json FROM qa_evaluation_cache WHERE fingerprint=?",
+                (fingerprint,),
+            ).fetchone()
+            connection.execute(
+                "DELETE FROM qa_evaluation_cache WHERE fingerprint IN ("
+                "SELECT fingerprint FROM qa_evaluation_cache ORDER BY last_used_at DESC "
+                "LIMIT -1 OFFSET ?)",
+                (QA_EVALUATION_CACHE_MAX,),
+            )
+            connection.commit()
+        if row is None:
+            raise AnswerQualityEvaluationError("evaluation cache write was not durable")
+        return answer_quality_evaluation_from_payload(_load(row["evaluation_json"], {}))
 
     def mark_not_evaluated(
         self, event_id: str, *, reason_code: str, latency_ms: int = 0
@@ -357,6 +457,9 @@ class SqliteQaRepository:
         answer_payload: Mapping[str, Any],
         forensic_trace: Mapping[str, Any] | None,
         latency_ms: int,
+        *,
+        evaluation_fingerprint: str | None = None,
+        evaluation_cache_hit: bool = False,
     ) -> dict[str, Any]:
         event = self.get_event(event_id)
         if event["evaluation_status"] != EVALUATION_PENDING:
@@ -378,6 +481,9 @@ class SqliteQaRepository:
                 intent_family=evaluation.failure_intent,
             )
         evaluator_payload = evaluation.to_payload()
+        if evaluation_fingerprint:
+            evaluator_payload["evaluation_fingerprint"] = evaluation_fingerprint
+            evaluator_payload["evaluation_cache_hit"] = bool(evaluation_cache_hit)
         if evaluation.result == "fail":
             evaluator_payload.update(
                 {

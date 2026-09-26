@@ -132,6 +132,7 @@ PY
       echo "DEPLOYMENT_RUNTIME_SHA=$container_build_sha"
       echo "DEPLOYMENT_IMAGE_ID=$image_id"
       echo "DEPLOYMENT_HEALTH_PASSED"
+      DEPLOY_PATH="$DEPLOY_PATH" bash "$DEPLOY_PATH/deploy/reconcile-nginx-api.sh"
       return 0
     fi
     rm -f "$health_probe"

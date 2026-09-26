@@ -542,6 +542,28 @@ class FrozenEvidenceSelectorAdapter:
         return tuple(strengthened)
 
 
+def _validate_remote_dense_transport_env() -> None:
+    api_key = (
+        os.environ.get("QDRANT_API_KEY_READ")
+        or os.environ.get("QDRANT_READ_ONLY_API_KEY")
+        or os.environ.get("QDRANT_API_KEY")
+        or ""
+    )
+    values = {
+        "cloudflare_account_id": os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
+        "cloudflare_api_token": os.environ.get("CLOUDFLARE_AI_TOKEN")
+        or os.environ.get("CLOUDFLARE_API_TOKEN", ""),
+        "qdrant_url": os.environ.get("QDRANT_URL", ""),
+        "qdrant_api_key": api_key,
+    }
+    missing = sorted(key for key, value in values.items() if not value)
+    if missing:
+        raise legacy.PA7ArbitraryQueryError(
+            "PA7_REMOTE_DENSE_CONFIG_MISSING",
+            "missing remote dense configuration: " + ",".join(missing),
+        )
+
+
 def build_track2_staging_runtime_dependencies(
     *,
     root: Path | None = None,
@@ -554,6 +576,10 @@ def build_track2_staging_runtime_dependencies(
     remote_dense_required = _track2_remote_dense_required()
     configured_collection = os.environ.get("M26_PA7_DENSE_COLLECTION", "").strip()
     if remote_dense_required:
+        # Validate transport credentials before touching the production bundle.
+        # This keeps a missing remote-dense contract deterministic even when the
+        # surrounding process has unrelated ambient R2 configuration.
+        _validate_remote_dense_transport_env()
         active_bundle = load_production_answer_bundle()
         active = getattr(active_bundle, "active_release", None)
         if active is None:

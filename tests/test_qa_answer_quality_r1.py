@@ -522,3 +522,126 @@ def test_slow_evaluator_does_not_delay_capture_return(tmp_path) -> None:
     while repo.get_event(event_id)["evaluation_status"] == "PENDING" and time.monotonic() < deadline:
         time.sleep(0.02)
     assert repo.get_event(event_id)["evaluation_status"] == "ANSWERED"
+
+
+def test_semantic_input_scopes_ephemeral_evidence_to_actual_citations() -> None:
+    answer = response(
+        "scope",
+        citations=[{"citation_id": "c1", "source_id": "s1", "section_id": "sec-1"}],
+    )
+    trace = {
+        "_qa_evidence_context": [
+            {
+                "source_id": "s2",
+                "section_id": "sec-2",
+                "passage_text": "Distractor evidence must not reach the judge.",
+            },
+            {
+                "source_id": "s1",
+                "section_id": "sec-1",
+                "passage_text": "The cited evidence is the only relevant support.",
+            },
+        ],
+        "provider_events": [{"provider": "noise"}],
+        "timing": {"total_ms": 99999},
+        "correlation_id": "volatile-request-id",
+    }
+    package = build_semantic_evaluation_input(
+        question="What matters?", answer_payload=answer, forensic_trace=trace
+    )
+    selected = package["answer"]["selected_evidence"]
+    assert len(selected) == 1
+    assert selected[0]["source_id"] == "s1"
+    rendered = json.dumps(package, sort_keys=True)
+    assert "Distractor evidence" not in rendered
+    assert "volatile-request-id" not in rendered
+    assert "provider_events" not in rendered
+
+
+def test_semantic_fingerprint_ignores_runtime_noise_but_changes_with_cited_support() -> None:
+    from knowledge_engine.qa_answer_quality_evaluator import semantic_evaluation_fingerprint
+
+    answer = response(
+        "fingerprint-a",
+        citations=[{"citation_id": "c1", "source_id": "s1", "section_id": "sec-1"}],
+    )
+    trace_a = {
+        "_qa_evidence_context": [
+            {"source_id": "s1", "section_id": "sec-1", "passage_text": "Stable support."},
+            {"source_id": "s2", "section_id": "sec-2", "passage_text": "Noise A."},
+        ],
+        "timing": {"total_ms": 1},
+        "provider_events": [{"id": "a"}],
+    }
+    trace_b = {
+        "_qa_evidence_context": [
+            {"source_id": "s1", "section_id": "sec-1", "passage_text": "Stable support."},
+            {"source_id": "s3", "section_id": "sec-3", "passage_text": "Noise B."},
+        ],
+        "timing": {"total_ms": 9000},
+        "provider_events": [{"id": "b"}],
+    }
+    assert semantic_evaluation_fingerprint(
+        question="Q", answer_payload=answer, forensic_trace=trace_a
+    ) == semantic_evaluation_fingerprint(
+        question="Q", answer_payload={**answer, "request_id": "fingerprint-b"}, forensic_trace=trace_b
+    )
+
+    trace_c = {
+        "_qa_evidence_context": [
+            {"source_id": "s1", "section_id": "sec-1", "passage_text": "Different support."},
+        ]
+    }
+    assert semantic_evaluation_fingerprint(
+        question="Q", answer_payload=answer, forensic_trace=trace_a
+    ) != semantic_evaluation_fingerprint(
+        question="Q", answer_payload=answer, forensic_trace=trace_c
+    )
+
+
+def test_sqlite_reuses_canonical_semantic_evaluation_for_identical_package(tmp_path) -> None:
+    repo = repository(tmp_path)
+    trace = {
+        "_qa_evidence_context": [
+            {"source_id": "s1", "passage_text": "Stable cited support."},
+        ]
+    }
+    first_answer = response("cache-first")
+    first_event = repo.record_answer(
+        question="Same semantic package", response=first_answer, latency_ms=1
+    )
+    high_provider = CapturingProvider(
+        json.dumps({"criterion_scores": ANSWER_QUALITY_CRITERION_MAX, "hard_fail_codes": []})
+    )
+    first = repo.evaluate_event(
+        first_event["event_id"],
+        evaluator=ProviderAnswerQualityEvaluator(
+            high_provider, provider_name="qualified-provider", model="qualified-model"
+        ),
+        answer_payload=first_answer,
+        forensic_trace=trace,
+    )
+    assert first["score"] == 100
+    assert first["evaluator"]["evaluation_cache_hit"] is False
+
+    low = dict(ANSWER_QUALITY_CRITERION_MAX)
+    low["completeness_facets"] = 0
+    low_provider = CapturingProvider(
+        json.dumps({"criterion_scores": low, "hard_fail_codes": []})
+    )
+    second_answer = response("cache-second")
+    second_event = repo.record_answer(
+        question="Same semantic package", response=second_answer, latency_ms=1
+    )
+    second = repo.evaluate_event(
+        second_event["event_id"],
+        evaluator=ProviderAnswerQualityEvaluator(
+            low_provider, provider_name="qualified-provider", model="qualified-model"
+        ),
+        answer_payload=second_answer,
+        forensic_trace=trace,
+    )
+    assert second["score"] == 100
+    assert second["result"] == "pass"
+    assert second["evaluator"]["evaluation_cache_hit"] is True
+    assert low_provider.payload == {}

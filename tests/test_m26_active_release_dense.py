@@ -192,7 +192,27 @@ def test_collection_environment_cannot_override_active_release(
     assert not hasattr(channel.config, "qdrant_collection")
 
 
-def test_partial_remote_configuration_fails_closed(
+def test_partial_remote_configuration_falls_back_locally_when_remote_not_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in (
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_AI_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "QDRANT_URL",
+        "QDRANT_API_KEY_READ",
+        "QDRANT_READ_ONLY_API_KEY",
+        "QDRANT_API_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example")
+
+    channel = active_release_dense_channel_from_env(require_remote=False)
+
+    assert isinstance(channel, LocalDenseProjectionChannel)
+
+
+def test_partial_remote_configuration_fails_closed_when_remote_required(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for key in (
@@ -211,7 +231,7 @@ def test_partial_remote_configuration_fails_closed(
         PA7ArbitraryQueryError,
         match="PA7_ACTIVE_RELEASE_REMOTE_DENSE_CONFIG_PARTIAL",
     ):
-        active_release_dense_channel_from_env(require_remote=False)
+        active_release_dense_channel_from_env(require_remote=True)
 
 
 def test_local_projection_is_explicit_fallback_when_remote_not_required(
