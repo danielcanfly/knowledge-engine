@@ -49,23 +49,91 @@ jobs:
           compose_ps="$(docker compose ps --format json 2>/dev/null || true)"
           recent_processes="$(ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true)"
           python3 - <<'PY'
+          import hashlib
           import json
           import os
           import subprocess
           from pathlib import Path
-          current_sha = os.popen('git rev-parse HEAD 2>/dev/null').read().strip()
-          compose_ps = os.popen('docker compose ps --format json 2>/dev/null').read().strip()
-          processes = os.popen("ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true").read()[-4000:]
-          health = os.popen('curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8080/v1/health || true').read().strip()
+
+          def run(command: str) -> tuple[int, str]:
+              completed = subprocess.run(
+                  command,
+                  shell=True,
+                  text=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.STDOUT,
+                  check=False,
+              )
+              return completed.returncode, completed.stdout
+
+          def status(command: str) -> str:
+              _, output = run(command)
+              return output.strip()
+
+          current_sha = status('git rev-parse HEAD 2>/dev/null')
+          compose_ps = status('docker compose ps --format json 2>/dev/null')
+          processes = status("ps -eo pid,ppid,etime,comm,args | grep -E 'docker|git|deploy|compose' | grep -v grep | tail -20 || true")[-4000:]
+          health = status('curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:8080/v1/health || true')
+
+          nginx_rc, nginx_effective = run('sudo -n nginx -T 2>&1')
+          target_rc, target_config = run('sudo -n cat /etc/nginx/sites-enabled/llamaindex-demo 2>&1')
+          repo_config = Path('deploy/nginx/api.danielcanfly.com.conf').read_text(encoding='utf-8')
+          listen_rc, listen_output = run("sudo -n ss -ltnp 2>&1 | grep -E ':(80|443|8080|18000)\\b' || true")
+
+          local_paths = {}
+          for path in ('/v1/answers/health', '/v1/health', '/'):
+              code = status(
+                  "curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 "
+                  "--output /dev/null --write-out '%{http_code}' --max-time 10 "
+                  f"https://api.danielcanfly.com{path} || true"
+              )
+              _, headers = run(
+                  "curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 "
+                  "--output /dev/null --dump-header - --max-time 10 "
+                  f"https://api.danielcanfly.com{path} || true"
+              )
+              build_header = ''
+              for line in headers.splitlines():
+                  if line.lower().startswith('x-m26-build-sha:'):
+                      build_header = line.split(':', 1)[1].strip()
+                      break
+              local_paths[path] = {
+                  'status': code,
+                  'x_m26_build_sha': build_header or None,
+              }
+
+          relevant_nginx_lines = [
+              line.strip()
+              for line in nginx_effective.splitlines()
+              if (
+                  'server_name api.danielcanfly.com' in line
+                  or '127.0.0.1:8080' in line
+                  or '127.0.0.1:18000' in line
+                  or 'X-M26-Build-SHA' in line
+              )
+          ][:80]
+
           print(json.dumps({
-              'schema_version': 'knowledge-engine-m26-pa7-oracle-deploy-probe/v1',
+              'schema_version': 'knowledge-engine-m26-pa7-oracle-deploy-probe/v2',
               'expected_head_sha': os.environ.get('EXPECTED_HEAD_SHA'),
               'repo_head_sha': current_sha,
               'repo_head_matches_expected': current_sha == os.environ.get('EXPECTED_HEAD_SHA'),
               'health_http_status': health,
               'compose_ps_present': bool(compose_ps),
               'recent_processes_present': bool(processes.strip()),
-              'recent_processes_sha256': __import__('hashlib').sha256(processes.encode()).hexdigest(),
+              'recent_processes_sha256': hashlib.sha256(processes.encode()).hexdigest(),
+              'nginx_dump_rc': nginx_rc,
+              'nginx_target_read_rc': target_rc,
+              'nginx_listen_rc': listen_rc,
+              'nginx_target_matches_repo': target_config == repo_config,
+              'nginx_effective_has_18000': '127.0.0.1:18000' in nginx_effective,
+              'nginx_effective_has_static_build_header': 'X-M26-Build-SHA' in nginx_effective,
+              'nginx_effective_relevant_lines': relevant_nginx_lines,
+              'nginx_target_sha256': hashlib.sha256(target_config.encode()).hexdigest(),
+              'nginx_repo_sha256': hashlib.sha256(repo_config.encode()).hexdigest(),
+              'listening_has_8080': ':8080' in listen_output,
+              'listening_has_18000': ':18000' in listen_output,
+              'local_nginx_paths': local_paths,
               'protected_knowledge_mutations': 0,
               'raw_token_recorded': False,
           }, indent=2, sort_keys=True))
@@ -105,6 +173,14 @@ jobs:
               f"- health HTTP status: `{probe.get('health_http_status')}`",
               f"- compose ps present: `{probe.get('compose_ps_present')}`",
               f"- recent deploy/docker processes present: `{probe.get('recent_processes_present')}`",
+              f"- nginx target matches repo: `{probe.get('nginx_target_matches_repo')}`",
+              f"- nginx effective has :18000: `{probe.get('nginx_effective_has_18000')}`",
+              f"- nginx effective has static build header: `{probe.get('nginx_effective_has_static_build_header')}`",
+              f"- listener :8080 present: `{probe.get('listening_has_8080')}`",
+              f"- listener :18000 present: `{probe.get('listening_has_18000')}`",
+              f"- local nginx /v1/answers/health: `{probe.get('local_nginx_paths', {}).get('/v1/answers/health')}`",
+              f"- local nginx /v1/health: `{probe.get('local_nginx_paths', {}).get('/v1/health')}`",
+              f"- local nginx /: `{probe.get('local_nginx_paths', {}).get('/')}`",
               f"- artifact ID: `{os.environ.get('ARTIFACT_ID', '')}`",
               f"- artifact URL: {os.environ.get('ARTIFACT_URL', '')}",
               "- protected knowledge mutations: `0`",
