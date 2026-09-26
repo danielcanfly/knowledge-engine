@@ -8,6 +8,8 @@ target_config="/etc/nginx/sites-enabled/llamaindex-demo"
 backup_dir="/etc/nginx/backups"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 backup="$backup_dir/llamaindex-demo.pre-$stamp"
+changed=0
+had_target=0
 
 test -f "$source_config"
 grep -q 'server_name api.danielcanfly.com;' "$source_config"
@@ -22,25 +24,48 @@ fi
 
 sudo -n install -d -m 0755 "$backup_dir"
 if sudo -n test -f "$target_config"; then
-  sudo -n cp -p "$target_config" "$backup"
+  had_target=1
+  if ! sudo -n cmp -s "$source_config" "$target_config"; then
+    sudo -n cp -p "$target_config" "$backup"
+    sudo -n install -m 0644 "$source_config" "$target_config"
+    changed=1
+  fi
+else
+  sudo -n install -m 0644 "$source_config" "$target_config"
+  changed=1
 fi
-sudo -n install -m 0644 "$source_config" "$target_config"
 
 rollback() {
-  if sudo -n test -f "$backup"; then
-    sudo -n cp -p "$backup" "$target_config"
-    sudo -n nginx -t >/dev/null 2>&1 || true
-    sudo -n systemctl reload nginx >/dev/null 2>&1 || true
+  if [[ "$changed" != "1" ]]; then
+    return
   fi
+  if [[ "$had_target" == "1" ]] && sudo -n test -f "$backup"; then
+    sudo -n cp -p "$backup" "$target_config"
+  else
+    sudo -n rm -f "$target_config"
+  fi
+  sudo -n nginx -t >/dev/null 2>&1 || true
+  sudo -n systemctl reload nginx >/dev/null 2>&1 || true
 }
 trap rollback ERR
 
 sudo -n nginx -t
-sudo -n systemctl reload nginx
+if [[ "$changed" == "1" ]]; then
+  sudo -n systemctl reload nginx
+fi
+
+sudo -n cmp -s "$source_config" "$target_config" || {
+  echo "NGINX_RECONCILE_TARGET_MISMATCH" >&2
+  false
+}
 
 effective="$(sudo -n nginx -T 2>&1)"
 if grep -q '127\.0\.0\.1:18000' <<<"$effective"; then
   echo "NGINX_RECONCILE_RETIRED_UPSTREAM_STILL_EFFECTIVE" >&2
+  false
+fi
+if grep -q 'X-M26-Build-SHA' <<<"$effective"; then
+  echo "NGINX_RECONCILE_STATIC_BUILD_HEADER_STILL_EFFECTIVE" >&2
   false
 fi
 
@@ -62,6 +87,15 @@ test "$root_code" = "404" || {
 }
 
 trap - ERR
-sudo -n find "$backup_dir" -maxdepth 1 -type f -name 'llamaindex-demo.pre-*' -print0   | sudo -n xargs -0 ls -1t 2>/dev/null   | tail -n +11   | sudo -n xargs -r rm -f
+sudo -n find "$backup_dir" -maxdepth 1 -type f -name 'llamaindex-demo.pre-*' -print0 \
+  | sudo -n xargs -0 -r ls -1t 2>/dev/null \
+  | tail -n +11 \
+  | sudo -n xargs -r rm -f
+
 echo "NGINX_API_RECONCILE=PASS"
-echo "NGINX_API_BACKUP=$backup"
+echo "NGINX_API_CHANGED=$changed"
+if [[ "$changed" == "1" && "$had_target" == "1" ]]; then
+  echo "NGINX_API_BACKUP=$backup"
+else
+  echo "NGINX_API_BACKUP=none"
+fi

@@ -42,3 +42,11 @@ def test_standard_compose_uses_canonical_console_runtime_contract() -> None:
     assert "m26-daily-ip-rate-limit-data" in compose
     assert "knowledge_engine.m26_console_api:app" in dockerfile
     assert "/v1/answers/health" in dockerfile
+
+def test_deploy_bootstraps_runner_from_requested_revision_not_previous_vm_checkout() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert 'remote_runner="/tmp/knowledge-engine-deploy-$RELEASE_SHA.sh"' in text
+    assert 'scp deploy/deploy.sh "$ORACLE_VM_USER@$ORACLE_VM_HOST:$remote_runner"' in text
+    assert 'bash "$REMOTE_RUNNER"' in text
+    assert "bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'" not in text

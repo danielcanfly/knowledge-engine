@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "deploy" / "nginx" / "api.danielcanfly.com.conf"
 RECONCILE = ROOT / "deploy" / "reconcile-nginx-api.sh"
 DEPLOY = ROOT / "deploy" / "deploy.sh"
+WORKFLOW = ROOT / ".github" / "workflows" / "deploy-oracle.yml"
 
 
 def test_api_nginx_has_no_retired_upstream_or_stale_build_header() -> None:
@@ -22,6 +23,25 @@ def test_deploy_reconciles_nginx_with_validation_and_rollback() -> None:
     assert "sudo -n nginx -t" in reconcile
     assert "systemctl reload nginx" in reconcile
     assert "trap rollback ERR" in reconcile
+    assert "sudo -n cmp -s" in reconcile
+    assert "NGINX_RECONCILE_TARGET_MISMATCH" in reconcile
+    assert "NGINX_RECONCILE_STATIC_BUILD_HEADER_STILL_EFFECTIVE" in reconcile
     assert "/v1/answers/health /v1/health" in reconcile
     assert "tail -n +11" in reconcile
     assert "deploy/reconcile-nginx-api.sh" in deploy
+
+
+def test_oracle_deploy_has_mandatory_local_and_public_ingress_acceptance() -> None:
+    workflow = WORKFLOW.read_text()
+    gate = workflow.index("Verify canonical API ingress")
+    optional_identity = workflow.index("Optional public identity gate")
+
+    assert gate < optional_identity
+    assert "NGINX_CANONICAL_CONFIG_MISMATCH" in workflow
+    assert "NGINX_RETIRED_UPSTREAM_STILL_EFFECTIVE" in workflow
+    assert "NGINX_STATIC_BUILD_HEADER_STILL_EFFECTIVE" in workflow
+    assert "LOCAL_API_INGRESS=PASS" in workflow
+    assert "PUBLIC_API_INGRESS=PASS" in workflow
+    assert "PUBLIC_INGRESS_STATUS_MISMATCH" in workflow
+    assert "PUBLIC_STALE_BUILD_HEADER" in workflow
+    assert '"/v1/answers/health 200" "/v1/health 200" "/ 404"' in workflow
