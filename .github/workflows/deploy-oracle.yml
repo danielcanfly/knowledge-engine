@@ -2,83 +2,18 @@ name: Deploy Oracle VM
 
 on:
   workflow_dispatch:
-    inputs:
-      git_sha:
-        description: Exact 40-character commit SHA to deploy
-        required: true
-      require_public_identity:
-        description: Require public API build SHA to equal the deployed release SHA
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
-concurrency:
-  group: production-oracle
-  cancel-in-progress: false
-
 jobs:
-  deploy:
+  nginx-census:
     runs-on: ubuntu-latest
     environment: production
     env:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
-      ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
     steps:
-      - name: Require deployment configuration
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          FULL_PRODUCTION_MANIFEST_KEY: ${{ vars.FULL_PRODUCTION_MANIFEST_KEY || 'releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/manifest.json' }}
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-          RELEASE_SHA: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "git_sha must be an exact 40-character lowercase commit SHA"; exit 2; }
-          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET FULL_PRODUCTION_MANIFEST_KEY AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
-            test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
-          done
-      - name: Fail closed on production R2 manifest credential canary
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          FULL_PRODUCTION_MANIFEST_KEY: ${{ vars.FULL_PRODUCTION_MANIFEST_KEY || 'releases/m25blog-5250f8422f4f-f5f01d82c7a1-fe499db2e043/manifest.json' }}
-        run: |
-          set -euo pipefail
-          command -v aws >/dev/null
-          aws --endpoint-url "$R2_ENDPOINT_URL" s3api head-object \
-            --bucket "$R2_BUCKET" \
-            --key "$FULL_PRODUCTION_MANIFEST_KEY" \
-            > /tmp/r2-manifest-head.json
-          test "$(jq -r '.ContentLength > 0' /tmp/r2-manifest-head.json)" = true
-          printf '%s\n' \
-            "R2_MANIFEST_CANARY=PASS" \
-            "http_result=200_equivalent" \
-            "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            "credential_source=github_environment_production_primary" \
-            "read_variant_used=false" \
-            "endpoint=$R2_ENDPOINT_URL" \
-            "bucket=$R2_BUCKET" \
-            "region=$AWS_DEFAULT_REGION" \
-            "manifest_key=$FULL_PRODUCTION_MANIFEST_KEY" \
-            "key_id_sha256=$(printf '%s' "$AWS_ACCESS_KEY_ID" | sha256sum | cut -d' ' -f1)" \
-            "content_length=$(jq -r '.ContentLength' /tmp/r2-manifest-head.json)"
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git_sha }}
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
@@ -88,121 +23,28 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
-      - name: Record pre-mutation runtime identity and rollback receipt
+
+      - name: Read Nginx routing only
         run: |
           set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
+          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" 'bash -se' <<'REMOTE'
           set -euo pipefail
-          cd "$DEPLOY_PATH"
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          {
-            printf 'timestamp=%s\n' "$stamp"
-            printf 'checkout_head=%s\n' "$(git rev-parse HEAD 2>/dev/null || true)"
-            printf 'standard_compose_ps=\n'
-            docker compose ps 2>/dev/null || true
-            printf 'public_health=\n'
-            curl --silent --show-error --max-time 10 https://api.danielcanfly.com/v1/answers/health 2>/dev/null || true
-          } > "/tmp/m26-predeploy-runtime-$stamp.txt"
-          chmod 600 "/tmp/m26-predeploy-runtime-$stamp.txt"
-          printf 'PREDEPLOY_RUNTIME_RECEIPT=%s\n' "/tmp/m26-predeploy-runtime-$stamp.txt"
+          echo '=== NGINX TEST ==='
+          sudo -n nginx -t 2>&1
+          echo '=== ENABLED FILES ==='
+          find /etc/nginx/sites-enabled /etc/nginx/conf.d -maxdepth 2 -type f -o -type l 2>/dev/null | sort
+          echo '=== EFFECTIVE API SERVER ==='
+          sudo -n nginx -T 2>&1 | awk '
+            /^# configuration file / { file=$0 }
+            /server_name[[:space:]]+api\.danielcanfly\.com/ { in_api=1; print file; print; next }
+            in_api && /server_name[[:space:]]+/ && $0 !~ /api\.danielcanfly\.com/ { in_api=0 }
+            in_api { print }
+          '
+          echo '=== PORTS ==='
+          ss -ltnp 2>/dev/null | grep -E ':(8080|18000)[[:space:]]' || true
+          echo '=== DIRECT PROBES ==='
+          for u in             http://127.0.0.1:8080/v1/answers/health             http://127.0.0.1:8080/v1/health             http://127.0.0.1:8080/health             http://127.0.0.1:18000/v1/answers/health; do
+            printf '%s -> ' "$u"
+            curl -sS -o /dev/null --max-time 5 -w '%{http_code}\n' "$u" || true
+          done
           REMOTE
-      - name: Prepare repository and production environment
-        env:
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          OWNER_BYPASS_SHA: ${{ secrets.ASK_OWNER_BYPASS_TOKEN_SHA256 }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-        run: |
-          set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
-          umask 077
-          cat > /tmp/knowledge-engine.env <<EOF_ENV
-          APP_ENV=production
-          AUTH_MODE=$AUTH_MODE
-          JWT_ISSUER=$JWT_ISSUER
-          JWT_JWKS_URL=$JWT_JWKS_URL
-          JWT_AUDIENCE=$JWT_AUDIENCE
-          JWT_DEFAULT_AUDIENCES=public,internal
-          OBJECT_STORE_BACKEND=r2
-          R2_ENDPOINT_URL=$R2_ENDPOINT_URL
-          R2_BUCKET=$R2_BUCKET
-          R2_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID
-          R2_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY
-          R2_REGION=auto
-          KNOWLEDGE_CHANNEL=production
-          CACHE_DIR=/var/lib/knowledge-engine/cache
-          LOG_LEVEL=INFO
-          EOF_ENV
-          if [ -n "${OWNER_BYPASS_SHA:-}" ]; then
-            printf 'M26_ASK_OWNER_BYPASS_TOKEN_SHA256=%s\n' "$OWNER_BYPASS_SHA" >> /tmp/knowledge-engine.env
-          fi
-          scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' bash -se" <<'REMOTE'
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          chmod 600 .env.next
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          if [ -f .env ]; then
-            cp -p .env ".env.pre-deploy-$stamp"
-            chmod 600 ".env.pre-deploy-$stamp"
-            cp .env .env.merged
-          else
-            : > .env.merged
-            chmod 600 .env.merged
-          fi
-          while IFS= read -r incoming || [ -n "$incoming" ]; do
-            case "$incoming" in
-              ''|\#*) continue ;;
-            esac
-            key="${incoming%%=*}"
-            case "$key" in
-              [A-Za-z_][A-Za-z0-9_]*) ;;
-              *) echo "Invalid environment key" >&2; exit 2 ;;
-            esac
-            awk -F= -v key="$key" '$1 != key { print }' .env.merged > .env.merge-next
-            printf '%s\n' "$incoming" >> .env.merge-next
-            mv .env.merge-next .env.merged
-          done < .env.next
-          chmod 600 .env.merged
-          mv .env.merged .env
-          rm .env.next
-          printf 'env_backup=%s\nenv_sha256=%s\n' ".env.pre-deploy-$stamp" "$(sha256sum .env | cut -d' ' -f1)"
-          REMOTE
-          rm -f /tmp/knowledge-engine.env
-      - name: Deploy exact requested revision
-        env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
-      - name: Verify deployed standard runtime identity
-        env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash -se" <<'REMOTE'
-          set -euo pipefail
-          cd "$DEPLOY_PATH"
-          actual="$(git rev-parse HEAD)"
-          test "$actual" = "$RELEASE_SHA"
-          running="$(docker compose exec -T knowledge-engine sh -c 'printf %s "$M26_QUERY_BUILD_SHA"')"
-          test "$running" = "$RELEASE_SHA"
-          printf 'STANDARD_RUNTIME_HEAD=%s\nSTANDARD_RUNTIME_SHA=%s\n' "$actual" "$running"
-          REMOTE
-      - name: Optional public identity gate
-        if: ${{ inputs.require_public_identity }}
-        env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
-          payload="$(curl --fail --silent --show-error --max-time 15 https://api.danielcanfly.com/v1/answers/health)"
-          actual="$(printf '%s' "$payload" | jq -r '(.backend.build_sha // .runtime.build_sha // empty)')"
-          ok="$(printf '%s' "$payload" | jq -r '.ok // false')"
-          test "$ok" = true
-          test "$actual" = "$RELEASE_SHA" || { echo "PUBLIC_RUNTIME_SHA_MISMATCH expected=$RELEASE_SHA actual=$actual" >&2; exit 1; }
-          printf 'PUBLIC_RUNTIME_IDENTITY=%s\n' "$actual"
