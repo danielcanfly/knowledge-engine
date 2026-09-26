@@ -33,6 +33,12 @@ jobs:
           sudo -n nginx -t 2>&1
           echo '=== ENABLED FILES ==='
           find /etc/nginx/sites-enabled /etc/nginx/conf.d -maxdepth 2 -type f -o -type l 2>/dev/null | sort
+          echo '=== SOURCE FILE ==='
+          target="$(readlink -f /etc/nginx/sites-enabled/llamaindex-demo)"
+          echo "TARGET=$target"
+          sudo -n sed -n '1,260p' "$target"
+          echo '=== SUDO CHECK ==='
+          sudo -n -l 2>&1 | sed -n '1,120p'
           echo '=== EFFECTIVE API SERVER ==='
           sudo -n nginx -T 2>&1 | awk '
             /^# configuration file / { file=$0 }
