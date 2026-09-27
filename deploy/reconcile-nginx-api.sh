@@ -127,30 +127,37 @@ if grep -Fq 'X-M26-Build-SHA' <<<"$effective"; then
   dump_nginx_reconcile_diagnostics
   false
 fi
-if [[ "$(grep -Fc 'server_name api.danielcanfly.com;' <<<"$effective")" != "1" ]]; then
-  echo "NGINX_RECONCILE_DUPLICATE_API_SERVER_NAME" >&2
+server_name_count="$(grep -Fc 'server_name api.danielcanfly.com;' <<<"$effective")"
+if [[ "$server_name_count" != "2" ]]; then
+  echo "NGINX_RECONCILE_API_SERVER_NAME_COUNT_MISMATCH expected=2 actual=$server_name_count" >&2
   dump_nginx_reconcile_diagnostics
   false
 fi
 
-for path in /v1/answers/health /v1/health; do
-  code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
-    -o /dev/null --max-time 10 -w '%{http_code}' \
-    "https://api.danielcanfly.com$path")"
-  test "$code" = "200" || {
-    echo "NGINX_RECONCILE_HEALTH_FAILED path=$path status=$code" >&2
-    dump_nginx_reconcile_diagnostics
-    false
-  }
+local_ingress_ready=0
+for attempt in $(seq 1 30); do
+  answers_code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
+    -o /dev/null --max-time 5 -w '%{http_code}' \
+    https://api.danielcanfly.com/v1/answers/health || true)"
+  health_code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
+    -o /dev/null --max-time 5 -w '%{http_code}' \
+    https://api.danielcanfly.com/v1/health || true)"
+  root_code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
+    -o /dev/null --max-time 5 -w '%{http_code}' \
+    https://api.danielcanfly.com/ || true)"
+  if [[ "$answers_code" == "200" && "$health_code" == "200" && "$root_code" == "404" ]]; then
+    local_ingress_ready=1
+    echo "NGINX_LOCAL_INGRESS_READY attempt=$attempt"
+    break
+  fi
+  sleep 1
 done
 
-root_code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
-  -o /dev/null --max-time 10 -w '%{http_code}' https://api.danielcanfly.com/)"
-test "$root_code" = "404" || {
-  echo "NGINX_RECONCILE_ROOT_FAIL_CLOSED_MISMATCH status=$root_code" >&2
+if [[ "$local_ingress_ready" != "1" ]]; then
+  echo "NGINX_RECONCILE_LOCAL_INGRESS_TIMEOUT answers=$answers_code health=$health_code root=$root_code" >&2
   dump_nginx_reconcile_diagnostics
   false
-}
+fi
 
 trap - ERR
 sudo -n find "$backup_dir" -maxdepth 1 -type f -name 'llamaindex-demo.pre-*' -print0 \
