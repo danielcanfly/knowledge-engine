@@ -59,6 +59,17 @@ sudo -n cmp -s "$source_config" "$target_config" || {
   false
 }
 
+dump_nginx_reconcile_diagnostics() {
+  echo "NGINX_RECONCILE_DIAGNOSTICS_BEGIN" >&2
+  echo "direct_8080_answers_health=$(curl -sS -o /dev/null --max-time 5 -w '%{http_code}' http://127.0.0.1:8080/v1/answers/health || true)" >&2
+  echo "direct_8080_health=$(curl -sS -o /dev/null --max-time 5 -w '%{http_code}' http://127.0.0.1:8080/v1/health || true)" >&2
+  echo "local_nginx_answers_health=$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 -o /dev/null --max-time 5 -w '%{http_code}' https://api.danielcanfly.com/v1/answers/health || true)" >&2
+  echo "local_nginx_health=$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 -o /dev/null --max-time 5 -w '%{http_code}' https://api.danielcanfly.com/v1/health || true)" >&2
+  echo "nginx_error_tail:" >&2
+  sudo -n tail -n 40 /var/log/nginx/error.log >&2 || true
+  echo "NGINX_RECONCILE_DIAGNOSTICS_END" >&2
+}
+
 effective="$(sudo -n nginx -T 2>&1)"
 if grep -q '127\.0\.0\.1:18000' <<<"$effective"; then
   echo "NGINX_RECONCILE_RETIRED_UPSTREAM_STILL_EFFECTIVE" >&2
@@ -75,6 +86,7 @@ for path in /v1/answers/health /v1/health; do
     "https://api.danielcanfly.com$path")"
   test "$code" = "200" || {
     echo "NGINX_RECONCILE_HEALTH_FAILED path=$path status=$code" >&2
+    dump_nginx_reconcile_diagnostics
     false
   }
 done
@@ -83,6 +95,7 @@ root_code="$(curl -ksS --resolve api.danielcanfly.com:443:127.0.0.1 \
   -o /dev/null --max-time 10 -w '%{http_code}' https://api.danielcanfly.com/)"
 test "$root_code" = "404" || {
   echo "NGINX_RECONCILE_ROOT_FAIL_CLOSED_MISMATCH status=$root_code" >&2
+  dump_nginx_reconcile_diagnostics
   false
 }
 
