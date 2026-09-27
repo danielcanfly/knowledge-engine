@@ -61,8 +61,8 @@ def _answer_result(payload: dict[str, Any], call_class: str, response_id: str) -
             {
                 "status": "answer",
                 "answer_text": (
-                    "A router should define permission-first policy constraints and inspect "
-                    "request attributes before selecting an authorized downstream route."
+                    "A router should define permission-first controls before execution, keeping "
+                    "owner admission, public denial, and retrieval boundaries explicit."
                 ),
                 "citation_ids": [passage["evidence_id"]],
                 "abstention_reason": None,

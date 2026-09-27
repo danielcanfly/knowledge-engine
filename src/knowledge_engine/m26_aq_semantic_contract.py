@@ -3422,6 +3422,49 @@ def _question_focus_terms(question: str) -> set[str]:
     return set(tokens)
 
 
+def _fast_sentence_support_failures(
+    *, answer_text: str, evidence: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """Reject fast-answer sentences that drift beyond the passages actually cited."""
+    evidence_terms = {
+        term
+        for item in evidence
+        for term in legacy._meaningful_terms(str(item.get("passage_text", "")))
+    }
+    if not evidence_terms:
+        return ["FAST_SENTENCE_SUPPORT_MISSING_EVIDENCE"]
+
+    transfer_framing_terms = {
+        "analogy",
+        "focus",
+        "focuses",
+        "founder",
+        "founders",
+        "inference",
+        "lesson",
+        "rather",
+        "source",
+        "transferable",
+    }
+    material_sentences = [
+        item.strip()
+        for item in re.split(r"(?<=[.!?])\s+", str(answer_text or ""))
+        if item.strip()
+    ]
+    for sentence in material_sentences:
+        sentence_terms = legacy._meaningful_terms(sentence)
+        lowered = sentence.casefold()
+        if any(marker in lowered for marker in _POPULATION_TRANSFER_MARKERS):
+            sentence_terms -= transfer_framing_terms
+        if not sentence_terms:
+            continue
+        overlap = sentence_terms & evidence_terms
+        required = max(2, min(5, (len(sentence_terms) + 2) // 3))
+        if len(overlap) < required:
+            return ["FAST_SENTENCE_SUPPORT_LOW_COVERAGE"]
+    return []
+
+
 def _question_answer_alignment_failures(
     *, question: str, answer_text: str, evidence: Sequence[Mapping[str, Any]]
 ) -> list[str]:
@@ -3763,9 +3806,15 @@ def _try_fast_supported_answer(
     cited_evidence = [
         item for item in evidence if str(item.get("evidence_id", "")) in citation_ids
     ]
+    answer_text = str(publication.get("answer_text", ""))
     if _question_answer_alignment_failures(
         question=question,
-        answer_text=str(publication.get("answer_text", "")),
+        answer_text=answer_text,
+        evidence=cited_evidence or evidence,
+    ):
+        return None
+    if _fast_sentence_support_failures(
+        answer_text=answer_text,
         evidence=cited_evidence or evidence,
     ):
         return None
