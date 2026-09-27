@@ -4099,7 +4099,15 @@ def _try_fast_supported_answer(
                 publication=dict(publication),
                 rejection_reason_codes=tuple(str(item) for item in fast_failures),
             )
-            continue
+            # A structurally valid cited candidate with a semantic alignment failure
+            # is high-information input for the runtime-bound closure path.  Retrying
+            # the same whole-answer fast contract consumes a call without improving
+            # claim-local evidence binding and can starve the existing review/rewrite
+            # sequence of its two-call tail.  Preserve the candidate and route it to
+            # semantic review immediately.  The bounded fast retry remains available
+            # for low-information failures (provider abstention, malformed output, or
+            # an invalid publication), where there is no candidate to repair.
+            break
 
         accepted_publication = publication
         accepted_normalized = normalized
