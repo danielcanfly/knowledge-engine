@@ -11,8 +11,10 @@ def test_api_nginx_has_no_retired_upstream_or_stale_build_header() -> None:
     text = CONFIG.read_text()
     assert "127.0.0.1:18000" not in text
     assert "X-M26-Build-SHA" not in text
+    assert "location = /v1/answers/health" in text
+    assert "location = /v1/health" in text
     assert "location ^~ /v1/" in text
-    assert "proxy_pass http://127.0.0.1:8080;" in text
+    assert text.count("proxy_pass http://127.0.0.1:8080;") >= 5
     assert "location / {" in text
     assert "return 404;" in text
 
@@ -26,6 +28,9 @@ def test_deploy_reconciles_nginx_with_validation_and_rollback() -> None:
     assert "sudo -n cmp -s" in reconcile
     assert "NGINX_RECONCILE_TARGET_MISMATCH" in reconcile
     assert "NGINX_RECONCILE_STATIC_BUILD_HEADER_STILL_EFFECTIVE" in reconcile
+    assert "dump_nginx_reconcile_diagnostics" in reconcile
+    assert "direct_8080_health" in reconcile
+    assert "nginx_error_tail" in reconcile
     assert "/v1/answers/health /v1/health" in reconcile
     assert "tail -n +11" in reconcile
     assert "deploy/reconcile-nginx-api.sh" in deploy
