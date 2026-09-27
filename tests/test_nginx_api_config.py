@@ -28,7 +28,11 @@ def test_deploy_reconciles_nginx_with_validation_and_rollback() -> None:
     assert "sudo -n cmp -s" in reconcile
     assert "NGINX_RECONCILE_TARGET_MISMATCH" in reconcile
     assert "NGINX_RECONCILE_STATIC_BUILD_HEADER_STILL_EFFECTIVE" in reconcile
-    assert "NGINX_RECONCILE_DUPLICATE_API_SERVER_NAME" in reconcile
+    assert "NGINX_RECONCILE_API_SERVER_NAME_COUNT_MISMATCH" in reconcile
+    assert 'server_name_count"' in reconcile
+    assert '!= "2"' in reconcile
+    assert "NGINX_LOCAL_INGRESS_READY" in reconcile
+    assert "NGINX_RECONCILE_LOCAL_INGRESS_TIMEOUT" in reconcile
     assert "config_search_globs" in reconcile
     assert "api.danielcanfly.com.disabled" in reconcile
     assert "restore_disabled_duplicates" in reconcile
@@ -36,7 +40,8 @@ def test_deploy_reconciles_nginx_with_validation_and_rollback() -> None:
     assert "direct_8080_health" in reconcile
     assert "nginx_error_tail" in reconcile
     assert "api_server_name_sources" in reconcile
-    assert "/v1/answers/health /v1/health" in reconcile
+    assert "https://api.danielcanfly.com/v1/answers/health" in reconcile
+    assert "https://api.danielcanfly.com/v1/health" in reconcile
     assert "tail -n +11" in reconcile
     assert "deploy/reconcile-nginx-api.sh" in deploy
 
