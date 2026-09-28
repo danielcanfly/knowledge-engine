@@ -2444,7 +2444,7 @@ def _fast_synthesis_payload(
     intent_class: str,
     evidence: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    evidence_payload = [_fast_provider_evidence_item(item) for item in evidence]
+    evidence_payload = [_provider_evidence_item(item) for item in evidence]
     return {
         "model": MINIMAX_MODEL,
         "max_tokens": 768,
@@ -4186,22 +4186,6 @@ def _build_multi_evidence_provider_payload(
                 ],
             }
         ],
-    }
-
-
-def _fast_provider_evidence_item(item: Mapping[str, Any]) -> dict[str, Any]:
-    """Compact fast-synthesis transport without changing the evidence set.
-
-    The fast provider only needs the immutable evidence id, verbatim passage text,
-    and any strong facet marker it must cite. Locator/source/hash/channel metadata
-    remain authoritative server-side and are validated after synthesis, so sending
-    them to the provider only inflates prompt tokens and latency.
-    """
-    full = _provider_evidence_item(item)
-    return {
-        "evidence_id": full["evidence_id"],
-        "text": full["text"],
-        "strong_required_facet_id": full["strong_required_facet_id"],
     }
 
 
