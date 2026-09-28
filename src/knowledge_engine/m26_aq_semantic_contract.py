@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
@@ -94,6 +95,8 @@ class FastAttemptEnvelope:
 
     publication: Mapping[str, Any]
     rejection_reason_codes: tuple[str, ...]
+    routing_decision: str = "SEMANTIC_CLOSURE"
+    routing_trace: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,56 @@ class FastRecoverySeed:
 class _FastAttemptOutcome:
     response: dict[str, Any] | None = None
     envelope: FastAttemptEnvelope | None = None
+
+
+FAST_RETRY_ONCE = "FAST_RETRY_ONCE"
+SEMANTIC_CLOSURE = "SEMANTIC_CLOSURE"
+CLAIM_WEAKENING = "CLAIM_WEAKENING"
+EVIDENCE_SLOT_REALIGNMENT = "EVIDENCE_SLOT_REALIGNMENT"
+CONTRADICTION_TRIAGE = "CONTRADICTION_TRIAGE"
+SAFE_ABSTENTION = "SAFE_ABSTENTION"
+
+TARGET_TOTAL_MS = 15_000
+SOFT_DEADLINE_MS = 14_500
+HARD_DEADLINE_MS = 18_000
+FAST_RETRY_MIN_BUDGET_MS = 2_500
+SEMANTIC_CLOSURE_MIN_BUDGET_MS = 3_500
+CLAIM_WEAKENING_MIN_BUDGET_MS = 2_000
+FINAL_VALIDATION_MIN_BUDGET_MS = 1_000
+
+_OVERSTRONG_CLAIM_RE = re.compile(
+    r"\b(?:always|never|proves?|guarantees?|must|cannot|entirely|completely|"
+    r"definitively|the only|all|none)\b",
+    flags=re.I,
+)
+
+
+@dataclass(frozen=True)
+class SemanticRoutingDecision:
+    route: str
+    reason: str
+    deadline_remaining_ms: int
+    minimum_budget_ms: int
+    provider_attempts_remaining: int
+
+    @property
+    def affordable(self) -> bool:
+        return (
+            self.deadline_remaining_ms >= self.minimum_budget_ms
+            and self.provider_attempts_remaining > 0
+        )
+
+    def public(self) -> dict[str, Any]:
+        return {
+            "schema_version": "m26-deadline-aware-semantic-routing/v1",
+            "route": self.route,
+            "reason": self.reason,
+            "deadline_remaining_ms": self.deadline_remaining_ms,
+            "minimum_budget_ms": self.minimum_budget_ms,
+            "provider_attempts_remaining": self.provider_attempts_remaining,
+            "affordable": self.affordable,
+            "case_specific": False,
+        }
 
 
 def _state_machine_replanner_question(question: str) -> bool:
@@ -3992,6 +4045,154 @@ def _assert_canonical_answer_bundle(bundle: ProductionAnswerBundle) -> None:
         )
 
 
+def _deadline_remaining_ms(
+    started: float,
+    *,
+    now: float | None = None,
+    deadline_ms: int = SOFT_DEADLINE_MS,
+) -> int:
+    """Return a monotonic deadline budget; non-positive starts are test clocks."""
+    if started <= 0:
+        return int(deadline_ms)
+    current = time.monotonic() if now is None else float(now)
+    elapsed_ms = max(0, int((current - started) * 1000))
+    return max(0, int(deadline_ms) - elapsed_ms)
+
+
+def _distinct_evidence_source_count(evidence: Sequence[Mapping[str, Any]]) -> int:
+    sources = {
+        str(item.get("source_identity") or item.get("source_id") or "")
+        for item in evidence
+    }
+    sources.discard("")
+    return len(sources)
+
+
+def _route_minimum_budget_ms(route: str) -> int:
+    if route == FAST_RETRY_ONCE:
+        # A low-information regeneration has no reusable candidate. Reserve enough
+        # wall-clock budget for one retry *and* a subsequent runtime-bound closure;
+        # otherwise the retry can recreate the call-budget starvation this router is
+        # meant to prevent.
+        return (
+            FAST_RETRY_MIN_BUDGET_MS
+            + SEMANTIC_CLOSURE_MIN_BUDGET_MS
+            + FINAL_VALIDATION_MIN_BUDGET_MS
+        )
+    if route in {SEMANTIC_CLOSURE, EVIDENCE_SLOT_REALIGNMENT}:
+        return SEMANTIC_CLOSURE_MIN_BUDGET_MS + FINAL_VALIDATION_MIN_BUDGET_MS
+    if route in {CLAIM_WEAKENING, CONTRADICTION_TRIAGE}:
+        return CLAIM_WEAKENING_MIN_BUDGET_MS + FINAL_VALIDATION_MIN_BUDGET_MS
+    return FINAL_VALIDATION_MIN_BUDGET_MS
+
+
+def _routing_decision(
+    *,
+    route: str,
+    reason: str,
+    started: float,
+    provider: Any,
+    reserve_provider_attempts: int = 0,
+) -> SemanticRoutingDecision:
+    attempts = _provider_attempts_remaining(provider)
+    decision = SemanticRoutingDecision(
+        route=route,
+        reason=reason,
+        deadline_remaining_ms=_deadline_remaining_ms(started),
+        minimum_budget_ms=_route_minimum_budget_ms(route),
+        provider_attempts_remaining=max(0, attempts - reserve_provider_attempts),
+    )
+    if decision.affordable:
+        return decision
+    return SemanticRoutingDecision(
+        route=SAFE_ABSTENTION,
+        reason=f"deadline_or_provider_budget_blocked:{route}:{reason}",
+        deadline_remaining_ms=decision.deadline_remaining_ms,
+        minimum_budget_ms=decision.minimum_budget_ms,
+        provider_attempts_remaining=decision.provider_attempts_remaining,
+    )
+
+
+def _fast_failure_route(
+    *,
+    publication: Mapping[str, Any],
+    failure_codes: Sequence[str],
+    evidence: Sequence[Mapping[str, Any]],
+    started: float,
+    provider: Any,
+) -> SemanticRoutingDecision:
+    failures = {str(item) for item in failure_codes}
+    answer_text = str(publication.get("answer_text", ""))
+    high_coverage = len(evidence) >= 8 and _distinct_evidence_source_count(evidence) >= 3
+    if any("QUESTION_ANSWER_ALIGNMENT_MISSING_FOCUS" in item for item in failures):
+        return _routing_decision(
+            route=FAST_RETRY_ONCE,
+            reason="valid_candidate_off_topic_or_missing_question_focus",
+            started=started,
+            provider=provider,
+            reserve_provider_attempts=1,
+        )
+    if _OVERSTRONG_CLAIM_RE.search(answer_text) and high_coverage:
+        return _routing_decision(
+            route=CLAIM_WEAKENING,
+            reason="valid_candidate_contains_overstrong_claim_language",
+            started=started,
+            provider=provider,
+            reserve_provider_attempts=1,
+        )
+    if any(item.startswith("FAST_CITATION_REQUIRED_FACET_MISSING:") for item in failures):
+        return _routing_decision(
+            route=EVIDENCE_SLOT_REALIGNMENT,
+            reason=(
+                "required_facet_not_bound_to_candidate_citations"
+                if high_coverage
+                else "required_facet_missing_with_low_evidence_coverage"
+            ),
+            started=started,
+            provider=provider,
+        )
+    if any("QUESTION_ANSWER_ALIGNMENT_UNSUPPORTED_SURFACE" in item for item in failures):
+        return _routing_decision(
+            route=FAST_RETRY_ONCE,
+            reason="valid_candidate_surface_not_grounded_in_selected_evidence",
+            started=started,
+            provider=provider,
+            reserve_provider_attempts=1,
+        )
+    return _routing_decision(
+        route=SEMANTIC_CLOSURE,
+        reason="valid_candidate_requires_runtime_bound_semantic_review",
+        started=started,
+        provider=provider,
+    )
+
+
+def _low_information_retry_decision(
+    *, started: float, provider: Any, reason: str
+) -> SemanticRoutingDecision:
+    return _routing_decision(
+        route=FAST_RETRY_ONCE,
+        reason=reason,
+        started=started,
+        provider=provider,
+        reserve_provider_attempts=1,
+    )
+
+
+def _fast_repair_policy(decision: SemanticRoutingDecision) -> str:
+    if decision.route == CLAIM_WEAKENING:
+        return (
+            "Rewrite only the narrowest propositions directly entailed by the cited evidence. "
+            "Remove absolute, causal, universal, or certainty language not stated by evidence. "
+            "Drop unsupported subclaims; do not add facts."
+        )
+    return (
+        "Regenerate the answer from the same runtime-selected evidence. Address the question's "
+        "focus directly, bind every material proposition to citations, and omit unrelated or "
+        "unsupported claims. Do not add facts."
+    )
+
+
 def _try_fast_supported_answer(
     *,
     question: str,
@@ -4019,14 +4220,22 @@ def _try_fast_supported_answer(
     accepted_normalized: Mapping[str, Any] | None = None
     accepted_attempt = 0
     fast_failures: list[str] = []
+    last_routing_decision: SemanticRoutingDecision | None = None
 
     for attempt in (1, 2):
         payload = dict(base_payload)
         if attempt > 1:
+            retry_decision = last_routing_decision or _low_information_retry_decision(
+                started=started,
+                provider=provider,
+                reason="bounded_low_information_fast_retry",
+            )
             payload["bounded_repair_attempt"] = {
                 "schema_version": "m26-aq-fast-synthesis-bounded-repair/v1",
-                "policy": "Reuse the same runtime-selected evidence. Do not add facts. Return an answer only if cited evidence supports it; otherwise abstain.",
+                "policy": _fast_repair_policy(retry_decision),
                 "previous_reason_codes": list(last_attempt_reason_codes),
+                "semantic_route": retry_decision.route,
+                "deadline_budget": retry_decision.public(),
             }
         try:
             provider_result = provider.call(payload, legacy.FAST_SYNTHESIS_CALL_CLASS)
@@ -4066,11 +4275,25 @@ def _try_fast_supported_answer(
             return _FastAttemptOutcome(response=_response_with_contract(response))
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             last_attempt_reason_codes = (type(exc).__name__, "FAST_PROVIDER_RESULT_INVALID")
-            continue
+            last_routing_decision = _low_information_retry_decision(
+                started=started,
+                provider=provider,
+                reason="fast_provider_result_invalid",
+            )
+            if attempt == 1 and last_routing_decision.route == FAST_RETRY_ONCE:
+                continue
+            break
 
         if legacy._fast_public_abstention_publication(normalized) is not None:
             last_attempt_reason_codes = ("FAST_PROVIDER_ABSTAINED",)
-            continue
+            last_routing_decision = _low_information_retry_decision(
+                started=started,
+                provider=provider,
+                reason="fast_provider_abstained",
+            )
+            if attempt == 1 and last_routing_decision.route == FAST_RETRY_ONCE:
+                continue
+            break
 
         publication = legacy._validate_fast_provider_candidate(
             question=question,
@@ -4079,7 +4302,14 @@ def _try_fast_supported_answer(
         )
         if publication is None:
             last_attempt_reason_codes = ("FAST_PROVIDER_CANDIDATE_INVALID",)
-            continue
+            last_routing_decision = _low_information_retry_decision(
+                started=started,
+                provider=provider,
+                reason="fast_provider_candidate_invalid",
+            )
+            if attempt == 1 and last_routing_decision.route == FAST_RETRY_ONCE:
+                continue
+            break
 
         alignment_failures = _question_answer_alignment_failures(
             question=question,
@@ -4095,18 +4325,24 @@ def _try_fast_supported_answer(
         fast_failures = [*alignment_failures, *facet_citation_failures]
         if fast_failures:
             last_attempt_reason_codes = tuple(str(item) for item in fast_failures)
+            last_routing_decision = _fast_failure_route(
+                publication=publication,
+                failure_codes=fast_failures,
+                evidence=evidence,
+                started=started,
+                provider=provider,
+            )
             last_envelope = FastAttemptEnvelope(
                 publication=dict(publication),
                 rejection_reason_codes=tuple(str(item) for item in fast_failures),
+                routing_decision=last_routing_decision.route,
+                routing_trace=last_routing_decision.public(),
             )
-            # A structurally valid cited candidate with a semantic alignment failure
-            # is high-information input for the runtime-bound closure path.  Retrying
-            # the same whole-answer fast contract consumes a call without improving
-            # claim-local evidence binding and can starve the existing review/rewrite
-            # sequence of its two-call tail.  Preserve the candidate and route it to
-            # semantic review immediately.  The bounded fast retry remains available
-            # for low-information failures (provider abstention, malformed output, or
-            # an invalid publication), where there is no candidate to repair.
+            if (
+                attempt == 1
+                and last_routing_decision.route in {FAST_RETRY_ONCE, CLAIM_WEAKENING}
+            ):
+                continue
             break
 
         accepted_publication = publication
@@ -4151,6 +4387,15 @@ def _try_fast_supported_answer(
             "semantic_repair_invoked": False,
             "bounded_fast_repair_attempted": accepted_attempt > 1,
             "fast_attempts": accepted_attempt,
+            "semantic_routing": (
+                last_routing_decision.public()
+                if last_routing_decision is not None
+                else {
+                    "schema_version": "m26-deadline-aware-semantic-routing/v1",
+                    "route": "FAST_ACCEPT",
+                    "case_specific": False,
+                }
+            ),
         },
         "semantic_contract": _semantic_contract_public(),
     }
@@ -4274,7 +4519,9 @@ def _provider_attempts_remaining(provider_client: Any) -> int:
     budget = getattr(provider_client, "attempt_budget", None)
     if budget is not None and callable(getattr(budget, "snapshot", None)):
         return int(budget.snapshot().get("remaining_physical_attempts", 0))
-    return max(0, 4 - int(getattr(provider_client, "calls", 0)))
+    calls = getattr(provider_client, "calls", 0)
+    used = len(calls) if isinstance(calls, (list, tuple)) else int(calls or 0)
+    return max(0, 4 - used)
 
 
 def _fast_seed_review(
@@ -4418,6 +4665,159 @@ def _fast_seed_review(
         }
 
 
+def _semantic_failure_route(
+    *,
+    failures: Sequence[str],
+    evidence: Sequence[Mapping[str, Any]],
+    started: float,
+    provider: Any,
+) -> SemanticRoutingDecision:
+    codes = [str(item) for item in failures]
+    high_coverage = len(evidence) >= 8 and _distinct_evidence_source_count(evidence) >= 3
+    if any(item.endswith(":CONTRADICTED") for item in codes):
+        route = CONTRADICTION_TRIAGE if high_coverage else SAFE_ABSTENTION
+        reason = (
+            "contradiction_requires_polarity_and_perspective_triage"
+            if high_coverage
+            else "contradiction_without_sufficient_diverse_evidence"
+        )
+    elif any(item == "NO_SUPPORTED_REQUIRED_FACETS" for item in codes):
+        route = EVIDENCE_SLOT_REALIGNMENT if high_coverage else SEMANTIC_CLOSURE
+        reason = (
+            "selected_evidence_is_abundant_but_required_facets_bound_nothing"
+            if high_coverage
+            else "preserve_strict_no_support_fail_closed_path"
+        )
+    elif any(item.endswith(":INSUFFICIENT") for item in codes):
+        route = CLAIM_WEAKENING if high_coverage else SEMANTIC_CLOSURE
+        reason = (
+            "semantic_review_insufficient_with_high_evidence_coverage"
+            if high_coverage
+            else "semantic_review_insufficient_without_weakening_eligibility"
+        )
+    else:
+        route = SEMANTIC_CLOSURE
+        reason = "semantic_failure_requires_runtime_bound_closure"
+    if route == SAFE_ABSTENTION:
+        return SemanticRoutingDecision(
+            route=route,
+            reason=reason,
+            deadline_remaining_ms=_deadline_remaining_ms(started),
+            minimum_budget_ms=FINAL_VALIDATION_MIN_BUDGET_MS,
+            provider_attempts_remaining=_provider_attempts_remaining(provider),
+        )
+    return _routing_decision(
+        route=route,
+        reason=reason,
+        started=started,
+        provider=provider,
+        reserve_provider_attempts=1,
+    )
+
+
+def _requirements_for_repair_route(
+    requirements: Sequence[Any], route: str
+) -> list[Any]:
+    if route not in {
+        CLAIM_WEAKENING,
+        EVIDENCE_SLOT_REALIGNMENT,
+        CONTRADICTION_TRIAGE,
+    }:
+        return list(requirements)
+    suffix = {
+        CLAIM_WEAKENING: (
+            " State only the narrowest proposition directly entailed by local evidence; "
+            "drop unsupported subclaims and avoid stronger certainty or causality."
+        ),
+        EVIDENCE_SLOT_REALIGNMENT: (
+            " Express the evidence-supported relation in natural paraphrase and bind it only "
+            "to local evidence that directly supports this slot; generic topic overlap is not support."
+        ),
+        CONTRADICTION_TRIAGE: (
+            " Preserve polarity, direction, identity, quantity, time, and perspective. If local "
+            "sources truly conflict, state only the supported conflict; otherwise remove the "
+            "over-strong or perspective-mismatched proposition."
+        ),
+    }[route]
+    repaired: list[Any] = []
+    for item in requirements:
+        if not isinstance(item, SemanticRequirement):
+            repaired.append(item)
+            continue
+        repaired.append(
+            SemanticRequirement(
+                requirement_id=item.requirement_id,
+                instruction=(item.instruction + suffix).strip(),
+                evidence_terms=tuple(item.evidence_terms),
+                visible_patterns=tuple(item.visible_patterns),
+                exact_phrase=item.exact_phrase,
+            )
+        )
+    return repaired
+
+
+def _evidence_slot_alignment_trace(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    claim_text: str = "",
+) -> list[dict[str, Any]]:
+    runtime_requirements = runtime._material_requirements_for_query(
+        question,
+        intent_class,
+        _runtime_semantic_requirements(requirements),
+    )
+    classification = runtime._facet_support_classification(
+        requirements=runtime_requirements,
+        evidence=evidence,
+    )
+    return [
+        {
+            "slot_id": f"slot_{index}",
+            "facet_id": str(item.get("facet_id", "")),
+            "claim_text": claim_text,
+            "candidate_evidence_ids": list(item.get("selected_evidence_ids_considered", [])),
+            "selected_support_evidence_ids": list(item.get("supporting_evidence_ids", [])),
+            "support_relation": (
+                "runtime_semantic_or_paraphrase_candidate"
+                if item.get("support_state") == "SUPPORTED"
+                else "no_direct_support_found"
+            ),
+            "support_strength": float(item.get("best_support_score", 0.0) or 0.0),
+            "decision": (
+                "accepted_for_slot_local_synthesis"
+                if item.get("support_state") == "SUPPORTED"
+                else "rejected_generic_or_insufficient_support"
+            ),
+        }
+        for index, item in enumerate(classification, start=1)
+    ]
+
+
+def _deadline_safe_abstention(
+    *, requirements: Sequence[Any], endpoint_proof: Mapping[str, Any], decision: SemanticRoutingDecision
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    verification = legacy._verified_abstention(
+        reason_codes=["SEMANTIC_DEADLINE_BUDGET_EXHAUSTED"],
+        calls=[],
+        repair_attempted=False,
+    )
+    verification["answer_source"] = "safe_abstention"
+    return verification, {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [
+            runtime._requirement_public(item)
+            for item in _runtime_semantic_requirements(requirements)
+        ],
+        "support_proof": [],
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": ["SEMANTIC_DEADLINE_BUDGET_EXHAUSTED"],
+        "semantic_routing": decision.public(),
+    }
+
+
 def _consolidated_semantic_recovery(
     *,
     question: str,
@@ -4428,8 +4828,20 @@ def _consolidated_semantic_recovery(
     requirements: Sequence[Any],
     endpoint_proof: Mapping[str, Any],
     fast_envelope: FastAttemptEnvelope | None = None,
+    started: float = 0.0,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     runtime_requirements = _runtime_semantic_requirements(requirements)
+    alignment_trace = _evidence_slot_alignment_trace(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+        claim_text=(
+            str(fast_envelope.publication.get("answer_text", ""))
+            if fast_envelope is not None
+            else ""
+        ),
+    )
     seed = _fast_recovery_seed(
         envelope=fast_envelope,
         question=question,
@@ -4437,46 +4849,137 @@ def _consolidated_semantic_recovery(
         evidence=evidence,
         requirements=requirements,
     )
+    route_trace: dict[str, Any]
     if seed is not None:
-        verification, closure = _fast_seed_review(
-            seed=seed,
-            question=question,
-            trace_id=trace_id,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_client=provider_client,
-            requirements=requirements,
-            endpoint_proof=endpoint_proof,
+        initial_decision = SemanticRoutingDecision(
+            route=(fast_envelope.routing_decision if fast_envelope else SEMANTIC_CLOSURE),
+            reason="review_structurally_valid_fast_candidate",
+            deadline_remaining_ms=_deadline_remaining_ms(started),
+            minimum_budget_ms=FINAL_VALIDATION_MIN_BUDGET_MS,
+            provider_attempts_remaining=_provider_attempts_remaining(provider_client),
         )
-        failures = [str(item) for item in closure.get("failures", ())]
-        semantic_block = any(item.startswith("SEMANTIC_REVIEW_BLOCKED:") for item in failures)
-        if semantic_block and _provider_attempts_remaining(provider_client) >= 2:
+        if initial_decision.deadline_remaining_ms < FINAL_VALIDATION_MIN_BUDGET_MS:
+            verification, closure = _deadline_safe_abstention(
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                decision=initial_decision,
+            )
+            route_trace = initial_decision.public()
+        else:
+            verification, closure = _fast_seed_review(
+                seed=seed,
+                question=question,
+                trace_id=trace_id,
+                intent_class=intent_class,
+                evidence=evidence,
+                provider_client=provider_client,
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+            )
+            failures = [str(item) for item in closure.get("failures", ())]
+            repairable_semantic_failure = any(
+                item.endswith(":INSUFFICIENT")
+                or item.endswith(":CONTRADICTED")
+                or item == "NO_SUPPORTED_REQUIRED_FACETS"
+                for item in failures
+            )
+            if failures and repairable_semantic_failure:
+                repair_decision = _semantic_failure_route(
+                    failures=failures,
+                    evidence=evidence,
+                    started=started,
+                    provider=provider_client,
+                )
+                route_trace = repair_decision.public()
+                if repair_decision.route in {
+                    CLAIM_WEAKENING,
+                    EVIDENCE_SLOT_REALIGNMENT,
+                    CONTRADICTION_TRIAGE,
+                    SEMANTIC_CLOSURE,
+                }:
+                    repair_requirements = _requirements_for_repair_route(
+                        runtime_requirements,
+                        repair_decision.route,
+                    )
+                    verification, closure = runtime._synthesize_and_verify(
+                        question=question,
+                        trace_id=trace_id,
+                        intent_class=intent_class,
+                        evidence=evidence,
+                        provider_client=provider_client,
+                        requirements=repair_requirements,
+                        endpoint_proof=endpoint_proof,
+                        max_attempts=1,
+                    )
+                    closure = {
+                        **dict(closure),
+                        "fast_seed_used": True,
+                        "fast_seed_semantic_rewrite": True,
+                        "repair_route": repair_decision.route,
+                    }
+            elif failures:
+                route_trace = {
+                    **initial_decision.public(),
+                    "route": SAFE_ABSTENTION,
+                    "reason": "non_semantic_contract_failure_fails_closed",
+                }
+            else:
+                route_trace = initial_decision.public()
+    else:
+        support_classification = runtime._facet_support_classification(
+            requirements=runtime._material_requirements_for_query(
+                question,
+                intent_class,
+                runtime_requirements,
+            ),
+            evidence=evidence,
+        )
+        no_supported_facets = bool(support_classification) and not any(
+            item.get("support_state") == "SUPPORTED" for item in support_classification
+        )
+        synthetic_failures = (
+            ["NO_SUPPORTED_REQUIRED_FACETS"] if no_supported_facets else []
+        )
+        decision = _semantic_failure_route(
+            failures=synthetic_failures,
+            evidence=evidence,
+            started=started,
+            provider=provider_client,
+        )
+        route_trace = decision.public()
+        if decision.route == SAFE_ABSTENTION:
+            verification, closure = _deadline_safe_abstention(
+                requirements=requirements,
+                endpoint_proof=endpoint_proof,
+                decision=decision,
+            )
+        else:
+            # When abundant selected evidence exists but literal facet classification binds
+            # nothing, use a no-material answer slot. The provider still receives only the
+            # selected evidence and the unchanged semantic entailment verifier still decides
+            # publication. This relaxes construction/alignment, not verification.
+            synthesis_requirements = (
+                []
+                if decision.route == EVIDENCE_SLOT_REALIGNMENT and no_supported_facets
+                else _requirements_for_repair_route(runtime_requirements, decision.route)
+            )
             verification, closure = runtime._synthesize_and_verify(
                 question=question,
                 trace_id=trace_id,
                 intent_class=intent_class,
                 evidence=evidence,
                 provider_client=provider_client,
-                requirements=runtime_requirements,
+                requirements=synthesis_requirements,
                 endpoint_proof=endpoint_proof,
-                max_attempts=1,
+                max_attempts=(2 if decision.route == SEMANTIC_CLOSURE else 1),
             )
             closure = {
                 **dict(closure),
-                "fast_seed_used": True,
-                "fast_seed_semantic_rewrite": True,
+                "repair_route": decision.route,
+                "facet_relaxation_used": bool(
+                    decision.route == EVIDENCE_SLOT_REALIGNMENT and no_supported_facets
+                ),
             }
-    else:
-        verification, closure = runtime._synthesize_and_verify(
-            question=question,
-            trace_id=trace_id,
-            intent_class=intent_class,
-            evidence=evidence,
-            provider_client=provider_client,
-            requirements=runtime_requirements,
-            endpoint_proof=endpoint_proof,
-            max_attempts=2,
-        )
     fingerprint = semantic_contract_fingerprint()
     return (
         {
@@ -4486,6 +4989,8 @@ def _consolidated_semantic_recovery(
         {
             **dict(closure),
             "bp5c_r2_recovery": True,
+            "semantic_routing": route_trace,
+            "evidence_slot_alignment_trace": alignment_trace,
             "semantic_contract": {
                 "schema_version": CONTRACT_SCHEMA_VERSION,
                 "entrypoint": CANONICAL_RUNTIME_ENTRYPOINT,
@@ -4735,6 +5240,7 @@ def run_owner_arbitrary_query(
         requirements=requirements,
         endpoint_proof=endpoint_proof,
         fast_envelope=fast_outcome.envelope,
+        started=started,
     )
     closure = {
         **closure,
@@ -4742,6 +5248,11 @@ def run_owner_arbitrary_query(
             "attempted": True,
             "accepted": False,
             "semantic_repair_invoked": True,
+            **(
+                {"semantic_routing": dict(fast_outcome.envelope.routing_trace or {})}
+                if fast_outcome.envelope is not None
+                else {}
+            ),
         },
     }
     verification, closure = _publish_support_proof_recovered_answer(
