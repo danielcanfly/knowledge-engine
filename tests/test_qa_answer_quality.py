@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from knowledge_engine.qa_answer_quality import QaRepository, _resolve_range, evaluate_answer_quality
 from knowledge_engine.qa_answer_quality_evaluator import (
+    ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,
     ANSWER_QUALITY_CRITERION_MAX,
     AnswerQualityEvaluation,
     AnswerQualityEvaluationError,
@@ -194,6 +195,29 @@ def test_24h_summary_series_uses_hourly_buckets(tmp_path) -> None:
     assert summary["latency_series"][0]["p95_ms"] == 290
 
 
+
+
+def _criteria_for_total(score: int) -> dict[str, int]:
+    criteria = dict(ANSWER_QUALITY_CRITERION_MAX)
+    deficit = sum(criteria.values()) - score
+    for key in (
+        "abstention_appropriateness",
+        "hallucination_control",
+        "directness_intent",
+        "evidence_coverage",
+        "completeness_facets",
+        "citation_support",
+        "correctness_grounding",
+    ):
+        if deficit <= 0:
+            break
+        take = min(criteria[key], deficit)
+        criteria[key] -= take
+        deficit -= take
+    assert deficit == 0
+    return criteria
+
+
 def _static_evaluator(
     result: str = "pass", score: int = 100, hard_fail_codes: tuple[str, ...] = ()
 ):
@@ -369,6 +393,103 @@ def test_semantic_adapter_computes_total_and_preserves_hard_fail_score() -> None
     assert evaluation.score == 99
     assert evaluation.result == "fail"
     assert evaluation.hard_fail_codes == ("UNSUPPORTED_ACCEPTED_CLAIMS",)
+
+
+def test_semantic_adapter_fails_closed_on_near_threshold_wobble_scores() -> None:
+    import json
+
+    for score in (83, 87):
+        evaluator = ProviderAnswerQualityEvaluator(
+            _FakeProvider(
+                json.dumps(
+                    {
+                        "criterion_scores": _criteria_for_total(score),
+                        "hard_fail_codes": [],
+                        "question_intent": {
+                            "task": "explain",
+                            "subjects": ["answer quality"],
+                            "qualifiers": ["boundary score"],
+                        },
+                    }
+                )
+            ),
+            provider_name="fake",
+            model="model",
+        )
+        evaluation = evaluator.evaluate(
+            question="Why does this answer pass?",
+            answer_payload=good_response(f"boundary-{score}"),
+            forensic_trace=None,
+        )
+        assert evaluation.score == score
+        assert evaluation.result == "fail"
+        assert evaluation.hard_fail_codes == (ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,)
+        assert evaluation.failure_stage == "answer_quality"
+        assert evaluation.failure_class == "semantic_score_boundary"
+
+
+def test_semantic_adapter_allows_clear_above_threshold_scores() -> None:
+    import json
+
+    evaluator = ProviderAnswerQualityEvaluator(
+        _FakeProvider(
+            json.dumps(
+                {
+                    "criterion_scores": _criteria_for_total(88),
+                    "hard_fail_codes": [],
+                    "question_intent": {
+                        "task": "explain",
+                        "subjects": ["answer quality"],
+                        "qualifiers": ["clear pass"],
+                    },
+                }
+            )
+        ),
+        provider_name="fake",
+        model="model",
+    )
+    evaluation = evaluator.evaluate(
+        question="Why does this answer pass?",
+        answer_payload=good_response("clear-88"),
+        forensic_trace=None,
+    )
+    assert evaluation.score == 88
+    assert evaluation.result == "pass"
+    assert evaluation.hard_fail_codes == ()
+
+
+def test_boundary_code_does_not_mask_runtime_owned_hard_failures() -> None:
+    import json
+
+    evaluator = ProviderAnswerQualityEvaluator(
+        _FakeProvider(
+            json.dumps(
+                {
+                    "criterion_scores": _criteria_for_total(87),
+                    "hard_fail_codes": [],
+                    "question_intent": {
+                        "task": "explain",
+                        "subjects": ["grounding"],
+                        "qualifiers": ["unsupported claim"],
+                    },
+                }
+            )
+        ),
+        provider_name="fake",
+        model="model",
+    )
+    payload = good_response("runtime-hard-fail")
+    payload["integrity"] = {"unsupported_accepted_claims": 1}
+    evaluation = evaluator.evaluate(
+        question="Why does this answer pass?",
+        answer_payload=payload,
+        forensic_trace=None,
+    )
+    assert evaluation.score == 87
+    assert evaluation.result == "fail"
+    assert evaluation.hard_fail_codes == ("UNSUPPORTED_ACCEPTED_CLAIMS",)
+    assert evaluation.failure_stage == "validation"
+    assert evaluation.failure_class == "grounding_integrity"
 
 
 def test_semantic_validator_rejects_forbidden_or_missing_dimensions() -> None:

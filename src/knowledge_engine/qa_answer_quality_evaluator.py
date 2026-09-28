@@ -13,6 +13,8 @@ from .qa_failure_clustering import FailureIntentFamily, normalize_failure_intent
 
 ANSWER_QUALITY_RUBRIC_VERSION = "ANSWER_QUALITY_RUBRIC_v1"
 ANSWER_QUALITY_PASS_THRESHOLD = 85
+ANSWER_QUALITY_BOUNDARY_MARGIN = 2
+ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE = "BORDERLINE_SEMANTIC_SCORE"
 ANSWER_QUALITY_CRITERION_MAX: dict[str, int] = {
     "directness_intent": 15,
     "correctness_grounding": 25,
@@ -92,7 +94,7 @@ class AnswerQualityProvider(Protocol):
     def call(self, payload: Mapping[str, Any], call_class: str) -> Mapping[str, Any]: ...
 
 
-SEMANTIC_EVALUATOR_VERSION = "aq-semantic-evaluator/v2"
+SEMANTIC_EVALUATOR_VERSION = "aq-semantic-evaluator/v3"
 SEMANTIC_EVALUATION_CALL_CLASS = "answer_quality_evaluation"
 MAX_EVALUATION_QUESTION_CHARS = 4000
 MAX_EVALUATION_STRING_CHARS = 4000
@@ -111,11 +113,28 @@ _SERVER_OWNED_HARD_FAIL_CODES = frozenset(
         "EMPTY_ANSWER",
         "ANSWER_WITHOUT_MEANINGFUL_EVIDENCE",
         "UNEXPLAINED_ABSTENTION",
+        ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,
     }
 )
 _SAFE_ABSTENTION_STATUSES = frozenset(
     {"not_found", "abstain", "safe_abstain", "safe_abstention"}
 )
+
+
+def is_answer_quality_boundary_score(score: int, hard_fail_codes: tuple[str, ...] = ()) -> bool:
+    """Fail closed for provider-only scores inside the unstable threshold band."""
+    return (
+        not hard_fail_codes
+        and ANSWER_QUALITY_PASS_THRESHOLD - ANSWER_QUALITY_BOUNDARY_MARGIN
+        <= score
+        <= ANSWER_QUALITY_PASS_THRESHOLD + ANSWER_QUALITY_BOUNDARY_MARGIN
+    )
+
+
+def answer_quality_boundary_codes(score: int, hard_fail_codes: tuple[str, ...]) -> tuple[str, ...]:
+    if not is_answer_quality_boundary_score(score, hard_fail_codes):
+        return hard_fail_codes
+    return tuple(sorted({*hard_fail_codes, ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE}))
 
 
 def is_safe_abstention(answer_payload: Mapping[str, Any]) -> bool:
@@ -178,6 +197,8 @@ def canonical_failure_provenance(
         stage, failure_class = "abstention", "inappropriate_abstention"
     elif safe_abstention:
         stage, failure_class = "abstention", "safe_abstention_below_quality_threshold"
+    elif ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE in codes:
+        stage, failure_class = "answer_quality", "semantic_score_boundary"
     elif "EMPTY_ANSWER" in codes:
         stage, failure_class = "synthesis", "empty_answer"
     else:
@@ -545,6 +566,7 @@ class ProviderAnswerQualityEvaluator:
             and isinstance(value, int)
             and not isinstance(value, bool)
         )
+        codes = answer_quality_boundary_codes(score, codes)
         result = "pass" if score >= ANSWER_QUALITY_PASS_THRESHOLD and not codes else "fail"
         failure_intent = normalize_failure_intent(output.get("question_intent"))
         failure_class = None
@@ -645,6 +667,7 @@ def validate_answer_quality_evaluation(
     hard_fail_codes = tuple(
         sorted({str(code).strip() for code in evaluation.hard_fail_codes if str(code).strip()})
     )
+    hard_fail_codes = answer_quality_boundary_codes(evaluation.score, hard_fail_codes)
     expected_result = (
         "pass"
         if evaluation.score >= ANSWER_QUALITY_PASS_THRESHOLD and not hard_fail_codes
@@ -678,6 +701,8 @@ def validate_answer_quality_evaluation(
 
 
 __all__ = [
+    "ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE",
+    "ANSWER_QUALITY_BOUNDARY_MARGIN",
     "ANSWER_QUALITY_CRITERION_MAX",
     "ANSWER_QUALITY_FORBIDDEN_DIMENSIONS",
     "ANSWER_QUALITY_PASS_THRESHOLD",
@@ -690,10 +715,12 @@ __all__ = [
     "ProviderAnswerQualityEvaluator",
     "SEMANTIC_EVALUATOR_VERSION",
     "SEMANTIC_EVALUATION_CALL_CLASS",
+    "answer_quality_boundary_codes",
     "answer_quality_evaluation_from_payload",
     "build_semantic_evaluation_input",
     "canonical_failure_provenance",
     "deterministic_hard_fail_codes",
+    "is_answer_quality_boundary_score",
     "StaticAnswerQualityEvaluator",
     "UnavailableAnswerQualityEvaluator",
     "validate_answer_quality_evaluation",
