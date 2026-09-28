@@ -3764,7 +3764,12 @@ def _deterministic_answer_text(
                     normalized_question,
                 )
             ):
-                prefix = "In contrast, "
+                prefix = "By contrast, "
+            elif re.search(
+                r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b",
+                normalized_question,
+            ):
+                prefix = "Under the relevant decision criteria, "
             elif "process_boundary" in facet_ids or re.search(
                 r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b",
                 normalized_question,

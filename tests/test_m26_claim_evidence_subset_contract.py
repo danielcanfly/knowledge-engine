@@ -245,6 +245,25 @@ def test_deterministic_surface_uses_question_shape_without_facet_metadata() -> N
     assert "explanatory answer" not in answer.casefold()
 
 
+def test_deterministic_surface_uses_contract_recognized_comparison_cue() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "facet_ids": ["comparison_or_distinction"],
+            "surface_text": "The two tools use different invocation paths.",
+            "support_refs": [],
+        }
+    ]
+
+    answer = runtime.legacy._deterministic_answer_text(
+        claims,
+        question="How do the two tools differ?",
+    )
+
+    assert answer.startswith("By contrast, ")
+    assert "comparison or distinction" not in answer.casefold()
+
+
 def test_strict_evidence_preflight_keeps_all_publication_gates() -> None:
     source = inspect.getsource(semantic_contract._try_strict_evidence_bound_answer)
 
