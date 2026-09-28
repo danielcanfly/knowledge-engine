@@ -2019,10 +2019,20 @@ def _synthesize_facet_local_and_verify(
     for attempt in range(1, max_attempts + 1):
         post_parse_stage = binding_stage
         deadline_before_subset_generation = _subset_deadline_remaining_ms(started)
-        if deadline_before_subset_generation < SUBSET_GENERATION_MIN_BUDGET_MS:
-            failures.append("CLAIM_SUBSET_DEADLINE_BEFORE_GENERATION")
+        deadline_pressure = (
+            deadline_before_subset_generation < SUBSET_GENERATION_MIN_BUDGET_MS
+        )
+        if deadline_pressure:
+            # The query is already over the preferred budget, usually because
+            # retrieval consumed the deadline before semantic closure. Do not
+            # turn that into an automatic safe abstention: that creates rows
+            # that are both slow and unanswered. Instead, mark pressure in
+            # telemetry and allow one verified subset attempt, while disabling
+            # additional repair loops below.
+            failures.append("CLAIM_SUBSET_DEADLINE_PRESSURE_BEFORE_GENERATION")
             subset_telemetry.update(
                 {
+                    "deadline_pressure": True,
                     "deadline_remaining_ms_before_subset_generation": (
                         deadline_before_subset_generation
                     ),
@@ -2033,7 +2043,6 @@ def _synthesize_facet_local_and_verify(
                     "claim_count_verification_skipped_due_deadline": 0,
                 }
             )
-            break
         payload, facet_ledger, label_map, snippet_map, slots = _facet_local_provider_payload(
             question=question,
             intent_class=intent_class,
@@ -2076,7 +2085,7 @@ def _synthesize_facet_local_and_verify(
                 )
                 if exc.code == FACET_LOCAL_SLOT_MISSING:
                     failures.append("ANSWER_REQUIREMENT_COVERAGE_MISSING")
-                if not repair_consumed and attempt < max_attempts:
+                if not deadline_pressure and not repair_consumed and attempt < max_attempts:
                     repair_attempted = True
                     repair_consumed = True
                     repair_kind = REPAIR_KIND_SYNTHESIS_CONTRACT
@@ -2105,9 +2114,10 @@ def _synthesize_facet_local_and_verify(
                     deadline_before_claim_verification
                     < CLAIM_VERIFICATION_MIN_BUDGET_MS
                 ):
-                    failures.append("CLAIM_SUBSET_DEADLINE_BEFORE_VERIFICATION")
+                    failures.append("CLAIM_SUBSET_DEADLINE_PRESSURE_BEFORE_VERIFICATION")
                     subset_telemetry.update(
                         {
+                            "deadline_pressure": True,
                             "deadline_remaining_ms_before_subset_generation": (
                                 deadline_before_subset_generation
                             ),
@@ -2115,12 +2125,9 @@ def _synthesize_facet_local_and_verify(
                                 deadline_before_claim_verification
                             ),
                             "claim_count_verification_attempted": 0,
-                            "claim_count_verification_skipped_due_deadline": len(
-                                candidate.get("claims", [])
-                            ),
+                            "claim_count_verification_skipped_due_deadline": 0,
                         }
                     )
-                    break
                 try:
                     semantic_review, review_raw = (
                         _call_runtime_bound_semantic_entailment_review(
@@ -2134,7 +2141,7 @@ def _synthesize_facet_local_and_verify(
                     calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
                 except NativeSemanticReviewContractError as exc:
                     calls.append(_compact_call_telemetry(exc.raw, parse_ok=False))
-                    if repair_consumed or attempt >= max_attempts:
+                    if deadline_pressure or repair_consumed or attempt >= max_attempts:
                         repair_exhausted = repair_consumed
                         failures.append(exc.code)
                         break
@@ -2197,7 +2204,7 @@ def _synthesize_facet_local_and_verify(
             review_failures = _semantic_review_blocking_failures(semantic_review)
             if review_failures:
                 failures.extend(review_failures)
-                if not repair_consumed and attempt < max_attempts:
+                if not deadline_pressure and not repair_consumed and attempt < max_attempts:
                     claim_by_id = _candidate_claim_by_id(candidate)
                     blocking_claim_ids = {
                         str(item.get("claim_id", ""))
@@ -2323,7 +2330,7 @@ def _synthesize_facet_local_and_verify(
                 else _post_parse_exception_leaf(exc, stage=post_parse_stage)
             )
             failures.append(str(code))
-            if not repair_consumed and attempt < max_attempts:
+            if not deadline_pressure and not repair_consumed and attempt < max_attempts:
                 repair_attempted = True
                 repair_consumed = True
                 repair_kind = REPAIR_KIND_SYNTHESIS_CONTRACT
