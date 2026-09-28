@@ -8225,12 +8225,10 @@ def _bounded_augmentation_documents(
     lexical_results: Sequence[Any],
     limit: int,
 ) -> list[Mapping[str, Any]] | None:
-    """Return a bounded augmentation pool instead of scanning every release doc.
+    """Return the legacy bounded augmentation pool with cached document lookup.
 
-    Query/facet augmentation only needs a small, source-diverse candidate surface:
-    the already selected evidence, lexical seeds/backfills, and nearby sections from
-    sources/concepts already selected.  Scanning the full release on every direct
-    question is a latency tax and can also amplify generic terms.
+    The ordering and admission algorithm intentionally match the a41740b7
+    implementation exactly. The cache only removes request-time index building.
     """
     index = _augmentation_document_index(documents)
     if index is None:
@@ -8246,10 +8244,8 @@ def _bounded_augmentation_documents(
         if isinstance(item, Mapping) and str(item.get("section_id", ""))
     ]
     ordered_ids: list[str] = []
-    ordered_seen: set[str] = set()
     for section_id in [*selected_sections, *lexical_sections[: max(limit * 4, 32)]]:
-        if section_id and section_id not in ordered_seen:
-            ordered_seen.add(section_id)
+        if section_id and section_id not in ordered_ids:
             ordered_ids.append(section_id)
     selected_sources = {
         str(item.get("source_id", ""))
@@ -8261,19 +8257,15 @@ def _bounded_augmentation_documents(
         for item in evidence
         if str(item.get("concept_id", ""))
     }
-    nearby_ids: set[str] = set()
-    for source_id in selected_sources:
-        nearby_ids.update(index.sections_by_source.get(source_id, ()))
-    for concept_id in selected_concepts:
-        nearby_ids.update(index.sections_by_concept.get(concept_id, ()))
-    for section_id in sorted(
-        nearby_ids,
-        key=lambda value: index.positions_by_section.get(value, 1 << 60),
-    ):
-        if section_id in ordered_seen:
+    for item in index.documents:
+        section_id = str(item.get("section_id", ""))
+        if not section_id or section_id in ordered_ids:
             continue
-        ordered_seen.add(section_id)
-        ordered_ids.append(section_id)
+        if (
+            str(item.get("source_id", "")) in selected_sources
+            or str(item.get("concept_id", "")) in selected_concepts
+        ):
+            ordered_ids.append(section_id)
         if len(ordered_ids) >= max(limit * 8, 96):
             break
     if not ordered_ids and len(index.documents) <= max(limit * 8, 96):
