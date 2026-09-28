@@ -688,55 +688,6 @@ class RemoteDenseConfig:
     timeout_seconds: float = 30.0
 
 
-@dataclass(frozen=True)
-class _LocalDenseProjectionIndex:
-    documents_and_vectors: tuple[tuple[Mapping[str, Any], tuple[float, ...]], ...]
-
-
-_LOCAL_DENSE_PROJECTION_INDEX_CACHE: dict[
-    int, tuple[ProductionAnswerBundle, _LocalDenseProjectionIndex]
-] = {}
-_LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER: list[int] = []
-_LOCAL_DENSE_PROJECTION_INDEX_CACHE_MAX = 4
-_LOCAL_DENSE_PROJECTION_INDEX_LOCK = threading.Lock()
-
-
-def _build_local_dense_projection_index(
-    bundle: ProductionAnswerBundle,
-) -> _LocalDenseProjectionIndex:
-    rows: list[tuple[Mapping[str, Any], tuple[float, ...]]] = []
-    for document in _release_documents(bundle):
-        text = " ".join(
-            str(document.get(key, ""))
-            for key in ("title", "section_title", "description", "body", "excerpt")
-        )
-        rows.append((document, tuple(_hashed_vector(text))))
-    return _LocalDenseProjectionIndex(documents_and_vectors=tuple(rows))
-
-
-def _local_dense_projection_index(
-    bundle: ProductionAnswerBundle,
-) -> _LocalDenseProjectionIndex:
-    cache_key = id(bundle)
-    with _LOCAL_DENSE_PROJECTION_INDEX_LOCK:
-        cached = _LOCAL_DENSE_PROJECTION_INDEX_CACHE.get(cache_key)
-        if cached is not None and cached[0] is bundle:
-            return cached[1]
-    built = _build_local_dense_projection_index(bundle)
-    with _LOCAL_DENSE_PROJECTION_INDEX_LOCK:
-        _LOCAL_DENSE_PROJECTION_INDEX_CACHE[cache_key] = (bundle, built)
-        if cache_key in _LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER:
-            _LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER.remove(cache_key)
-        _LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER.append(cache_key)
-        while (
-            len(_LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER)
-            > _LOCAL_DENSE_PROJECTION_INDEX_CACHE_MAX
-        ):
-            oldest = _LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER.pop(0)
-            _LOCAL_DENSE_PROJECTION_INDEX_CACHE.pop(oldest, None)
-    return built
-
-
 class LocalDenseProjectionChannel:
     """Ephemeral dense projection over the accepted local production release."""
 
@@ -749,9 +700,12 @@ class LocalDenseProjectionChannel:
     ) -> dict[str, Any]:
         query_vector = _hashed_vector(question)
         candidates: list[dict[str, Any]] = []
-        projection_index = _local_dense_projection_index(bundle)
-        for document, document_vector in projection_index.documents_and_vectors:
-            score = _cosine(query_vector, document_vector)
+        for document in _release_documents(bundle):
+            text = " ".join(
+                str(document.get(key, ""))
+                for key in ("title", "section_title", "description", "body", "excerpt")
+            )
+            score = _cosine(query_vector, _hashed_vector(text))
             if score <= 0:
                 continue
             section_id = str(document["section_id"])
