@@ -147,3 +147,85 @@ def test_source_coverage_cache_preserves_cold_and_warm_results() -> None:
     )
 
     assert cold == warm
+
+
+
+def _legacy_local_dense_search(
+    *,
+    question: str,
+    bundle: Any,
+    top_k: int,
+) -> dict[str, Any]:
+    query_vector = runtime._hashed_vector(question)
+    candidates: list[dict[str, Any]] = []
+    for document in runtime._release_documents(bundle):
+        text = " ".join(
+            str(document.get(key, ""))
+            for key in ("title", "section_title", "description", "body", "excerpt")
+        )
+        score = runtime._cosine(query_vector, runtime._hashed_vector(text))
+        if score <= 0:
+            continue
+        section_id = str(document["section_id"])
+        candidates.append(
+            {
+                "channel": "dense",
+                "section_id": section_id,
+                "concept_id": str(document["concept_id"]),
+                "score": round(score, 6),
+                "point_id_sha256": runtime.canonical_sha256(
+                    {
+                        "backend": "local_release_dense_projection_v1",
+                        "release_id": bundle.release_id,
+                        "section_id": section_id,
+                    }
+                ),
+            }
+        )
+    candidates.sort(key=lambda item: (-float(item["score"]), item["section_id"]))
+    return {
+        "backend_identity": {
+            "backend": "local_release_dense_projection_v1",
+            "release_id": bundle.release_id,
+            "manifest_sha256": bundle.manifest_sha256,
+            "vector_dimension": runtime.LOCAL_DENSE_DIMENSION,
+            "remote": False,
+            "vectors_persisted": False,
+        },
+        "candidates": candidates[:top_k],
+    }
+
+
+def test_local_dense_projection_cache_preserves_legacy_results() -> None:
+    bundle = synthetic_full_production_answer_bundle()
+    question = "What should a router define for permission-first controls?"
+    runtime._LOCAL_DENSE_PROJECTION_INDEX_CACHE.clear()
+    runtime._LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER.clear()
+
+    expected = _legacy_local_dense_search(
+        question=question,
+        bundle=bundle,
+        top_k=8,
+    )
+    channel = runtime.LocalDenseProjectionChannel()
+    cold = channel.search(question=question, bundle=bundle, top_k=8)
+    warm = channel.search(question=question, bundle=bundle, top_k=8)
+
+    assert cold == expected
+    assert warm == expected
+
+
+def test_local_dense_projection_index_reuses_same_bundle() -> None:
+    bundle = synthetic_full_production_answer_bundle()
+    runtime._LOCAL_DENSE_PROJECTION_INDEX_CACHE.clear()
+    runtime._LOCAL_DENSE_PROJECTION_INDEX_CACHE_ORDER.clear()
+
+    first = runtime._local_dense_projection_index(bundle)
+    second = runtime._local_dense_projection_index(bundle)
+
+    assert second is first
+    assert len(first.documents_and_vectors) == len(runtime._release_documents(bundle))
+    assert all(
+        len(vector) == runtime.LOCAL_DENSE_DIMENSION
+        for _, vector in first.documents_and_vectors
+    )
