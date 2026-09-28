@@ -4104,6 +4104,28 @@ def _routing_decision(
     )
     if decision.affordable:
         return decision
+    if (
+        route in {
+            SEMANTIC_CLOSURE,
+            EVIDENCE_SLOT_REALIGNMENT,
+            CLAIM_WEAKENING,
+            CONTRADICTION_TRIAGE,
+        }
+        and decision.provider_attempts_remaining > 0
+    ):
+        # Once retrieval and evidence selection have already consumed the preferred
+        # wall-clock budget, failing closed here creates rows that are both slow
+        # and unanswered. Allow exactly one late verified semantic attempt for
+        # non-fast-retry routes; the strict verifier still decides publication and
+        # downstream telemetry records deadline pressure. Keep FAST_RETRY_ONCE
+        # blocked because retry can recreate provider-call starvation.
+        return SemanticRoutingDecision(
+            route=route,
+            reason=f"deadline_pressure_allowed:{route}:{reason}",
+            deadline_remaining_ms=decision.deadline_remaining_ms,
+            minimum_budget_ms=decision.minimum_budget_ms,
+            provider_attempts_remaining=decision.provider_attempts_remaining,
+        )
     return SemanticRoutingDecision(
         route=SAFE_ABSTENTION,
         reason=f"deadline_or_provider_budget_blocked:{route}:{reason}",
@@ -4858,7 +4880,10 @@ def _consolidated_semantic_recovery(
             minimum_budget_ms=FINAL_VALIDATION_MIN_BUDGET_MS,
             provider_attempts_remaining=_provider_attempts_remaining(provider_client),
         )
-        if initial_decision.deadline_remaining_ms < FINAL_VALIDATION_MIN_BUDGET_MS:
+        if (
+            initial_decision.deadline_remaining_ms < FINAL_VALIDATION_MIN_BUDGET_MS
+            and initial_decision.provider_attempts_remaining <= 0
+        ):
             verification, closure = _deadline_safe_abstention(
                 requirements=requirements,
                 endpoint_proof=endpoint_proof,
