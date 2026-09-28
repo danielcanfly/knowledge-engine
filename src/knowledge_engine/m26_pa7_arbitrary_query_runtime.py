@@ -128,8 +128,8 @@ STOP_TERMS = {
     "which",
     "with",
 }
-_RELEASE_DOCUMENTS_CACHE: dict[int, list[dict[str, Any]]] = {}
-_RELEASE_CONCEPTS_CACHE: dict[int, set[str]] = {}
+_RELEASE_DOCUMENTS_CACHE: dict[tuple[int, int, int], list[dict[str, Any]]] = {}
+_RELEASE_CONCEPTS_CACHE: dict[tuple[int, int, int], set[str]] = {}
 STRUCTURAL_RELATION_TYPES = {"contains", "part_of", "precedes"}
 ORDER_QUERY_TERMS = {
     "after",
@@ -7854,9 +7854,27 @@ def _rerank_candidates(
     ]
     if not answer_bearing_ranked:
         return []
-    if focus.relation == "need" and focus.subject_phrases:
-        return answer_bearing_ranked
     kept_ids = {str(kept.get("section_id", "")) for kept in answer_bearing_ranked}
+    if focus.relation == "need" and focus.subject_phrases:
+        def _need_subject_context(item: Mapping[str, Any]) -> bool:
+            relevance = item.get("answer_bearing_relevance")
+            if not isinstance(relevance, Mapping):
+                return False
+            # Keep a non-answer contextual candidate only when it preserves the
+            # full requested role/entity phrase.  This lets downstream evidence
+            # selection compare the answer-bearing passage with its immediate
+            # subject context, while still excluding facet-only distractors that
+            # merely mention skills/capabilities without the requested subject.
+            return bool(relevance.get("subject_phrase_hits")) and float(
+                relevance.get("subject_anchor_score", 0.0)
+            ) >= 1.0
+
+        return answer_bearing_ranked + [
+            item
+            for item in ranked
+            if str(item.get("section_id", "")) not in kept_ids
+            and _need_subject_context(item)
+        ]
     return answer_bearing_ranked + [
         item
         for item in ranked
@@ -8163,6 +8181,12 @@ def _bounded_augmentation_documents(
             ordered_ids.append(section_id)
         if len(ordered_ids) >= max(limit * 8, 96):
             break
+    if not ordered_ids and len(docs) <= max(limit * 8, 96):
+        # Small caller-supplied document surfaces are already bounded.  Preserve
+        # required-facet recovery when no lexical/evidence seed exists instead
+        # of returning an empty augmentation pool and forcing later stages to
+        # rediscover passages without facet metadata.
+        return docs
     return [by_section[section_id] for section_id in ordered_ids if section_id in by_section]
 
 
@@ -8446,6 +8470,11 @@ def _ensure_required_facet_coverage_passages(
         intent_class=intent_class,
     )
     documents = list(documents) if documents is not None else _release_documents(bundle)
+    documents_by_section = {
+        str(document.get("section_id", "")): document
+        for document in documents
+        if isinstance(document, Mapping) and str(document.get("section_id", ""))
+    }
     lexical_section_ids = {
         str(item.get("section_id", ""))
         for item in (lexical_results or [])
@@ -8500,12 +8529,29 @@ def _ensure_required_facet_coverage_passages(
         item: Mapping[str, Any],
         facet: Mapping[str, Any],
     ) -> str:
-        if str(facet.get("facet_id", "")).startswith("entity_"):
-            return " ".join(
+        section_id = str(item.get("section_id", ""))
+        document = documents_by_section.get(section_id)
+        evidence_text = (
+            " ".join(
                 str(item.get(key, ""))
                 for key in ("section_title", "passage_text", "body", "excerpt")
             )
-        return _cached_text(item)
+            if str(facet.get("facet_id", "")).startswith("entity_")
+            else _cached_text(item)
+        )
+        if _direct_facet_text_matches(facet, evidence_text):
+            return evidence_text
+        if document is None:
+            return evidence_text
+        # Query-coverage may already have selected the right section using a
+        # bounded passage excerpt.  Required-facet recovery must still be able
+        # to validate that selected section against the original document text;
+        # otherwise a correct section is neither marked as covering the facet nor
+        # re-added, because selected_sections has already claimed it.
+        document_text = _document_text(document)
+        if _direct_facet_text_matches(facet, document_text):
+            return document_text
+        return evidence_text
 
     for facet in question_contract["required_facets"]:
         facet_terms = _facet_terms(facet)
@@ -9581,13 +9627,13 @@ def _provenance_record_for_evidence(
 
 
 def _release_documents(bundle: ProductionAnswerBundle) -> list[dict[str, Any]]:
-    cache_key = id(bundle)
-    cached = _RELEASE_DOCUMENTS_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
     documents = bundle.lexical_index.get("documents")
     if not isinstance(documents, list):
         raise PA7ArbitraryQueryError("PA7_LEXICAL_INDEX_INVALID", "documents missing")
+    cache_key = (id(bundle), id(bundle.lexical_index), id(documents))
+    cached = _RELEASE_DOCUMENTS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     loaded = [dict(document) for document in documents if isinstance(document, Mapping)]
     _RELEASE_DOCUMENTS_CACHE[cache_key] = loaded
     return loaded
@@ -9603,7 +9649,10 @@ def _documents_by_concept(
 
 
 def _release_concepts(bundle: ProductionAnswerBundle) -> set[str]:
-    cache_key = id(bundle)
+    documents = bundle.lexical_index.get("documents")
+    if not isinstance(documents, list):
+        raise PA7ArbitraryQueryError("PA7_LEXICAL_INDEX_INVALID", "documents missing")
+    cache_key = (id(bundle), id(bundle.lexical_index), id(documents))
     cached = _RELEASE_CONCEPTS_CACHE.get(cache_key)
     if cached is not None:
         return cached
