@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from knowledge_engine import m26_pa7_semantic_closure_runtime as runtime
+from knowledge_engine import m26_aq_semantic_contract as semantic_contract
 
 
 def _slots() -> list[dict[str, Any]]:
@@ -223,6 +224,35 @@ def test_no_case_id_or_question_text_branching_in_subset_helpers() -> None:
     assert "F085" not in source
     assert "F106" not in source
     assert "F181" not in source
+
+
+def test_deterministic_surface_uses_question_shape_without_facet_metadata() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "facet_ids": ["explanatory_answer"],
+            "surface_text": "Isolation preserves user control.",
+            "support_refs": [],
+        }
+    ]
+
+    answer = runtime.legacy._deterministic_answer_text(
+        claims,
+        question="Why does isolation preserve user control?",
+    )
+
+    assert answer.startswith("Because Isolation preserves user control")
+    assert "explanatory answer" not in answer.casefold()
+
+
+def test_strict_evidence_preflight_keeps_all_publication_gates() -> None:
+    source = inspect.getsource(semantic_contract._try_strict_evidence_bound_answer)
+
+    assert "_verify_multi_evidence_provider_output" in source
+    assert "evaluate_visible_semantics" in source
+    assert "_question_answer_alignment_failures" in source
+    assert "_endpoint_aware_requirement_support_failures" in source
+    assert "case_id" not in source
 
 
 def test_diverse_selection_protects_rare_source_title_anchor() -> None:

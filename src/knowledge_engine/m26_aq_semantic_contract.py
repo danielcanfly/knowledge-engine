@@ -4424,6 +4424,114 @@ def _try_fast_supported_answer(
     return _FastAttemptOutcome(response=_response_with_contract(response))
 
 
+def _try_strict_evidence_bound_answer(
+    *,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    gate: Mapping[str, Any],
+    bundle: ProductionAnswerBundle,
+    lexical_result: Mapping[str, Any],
+    dense_result: Mapping[str, Any],
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+    question_sha: str,
+    started: float,
+) -> dict[str, Any] | None:
+    """Publish an exact-evidence answer only after every existing public gate passes."""
+    try:
+        candidate = legacy._deterministic_provider_candidate(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+        )
+        if not isinstance(candidate, Mapping):
+            return None
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                runtime._verification_candidate(candidate),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=[],
+            repair_attempted=False,
+        )
+        _use_verified_natural_surface(
+            answer,
+            _public_candidate_surface(candidate, answer),
+        )
+    except Exception:
+        return None
+    if answer.get("status") != "owner_only_cited_answer":
+        return None
+    answer_text = str(answer.get("answer_text", ""))
+    if evaluate_visible_semantics(answer_text, requirements, question):
+        return None
+    if _internal_reference_leaks(answer_text, question):
+        return None
+    if _question_answer_alignment_failures(
+        question=question,
+        answer_text=answer_text,
+        evidence=evidence,
+    ):
+        return None
+    support_failures, support_proof = _endpoint_aware_requirement_support_failures(
+        runtime=_RUNTIME_FACADE,
+        requirements=requirements,
+        evidence=_candidate_evidence(candidate, evidence),
+        endpoint_proof=endpoint_proof,
+    )
+    if support_failures:
+        return None
+    answer["answer_source"] = "deterministic_verified_evidence_preflight"
+    answer["multi_evidence_verification"] = {
+        **dict(answer.get("multi_evidence_verification", {})),
+        "deterministic_evidence_synthesis_used": True,
+        "provider_contract": "strict_runtime_bound_evidence_preflight/v1",
+        "served_answer_surface": "verified_exact_evidence_surface",
+        "verification_failure_codes_by_attempt": [],
+    }
+    return _response_with_contract(
+        runtime._response_from_verification(
+            gate=gate,
+            bundle=bundle,
+            dense_result=dense_result,
+            lexical_result=lexical_result,
+            evidence=evidence,
+            verification=answer,
+            trace_id=trace_id,
+            question_sha=question_sha,
+            started=started,
+            intent_class=intent_class,
+            semantic_closure={
+                "requirements": [
+                    runtime._requirement_public(item) for item in requirements
+                ],
+                "support_proof": support_proof,
+                "endpoint_proof": dict(endpoint_proof),
+                "failures": [],
+                "strict_evidence_preflight": {
+                    "attempted": True,
+                    "accepted": True,
+                    "case_specific": False,
+                    "provider_calls_avoided": 1,
+                },
+                "semantic_contract": _semantic_contract_public(),
+            },
+        )
+    )
+
+
 def _fast_recovery_seed(
     *,
     envelope: FastAttemptEnvelope | None,
@@ -5230,6 +5338,29 @@ def run_owner_arbitrary_query(
             status=response.get("status", ""),
         )
         return response
+
+    strict_preflight = _try_strict_evidence_bound_answer(
+        question=normalized_question,
+        trace_id=trace_id,
+        intent_class=intent_class,
+        gate=validated_gate,
+        bundle=bundle,
+        lexical_result=lexical,
+        dense_result=dense,
+        evidence=evidence,
+        requirements=requirements,
+        endpoint_proof=endpoint_proof,
+        question_sha=question_sha,
+        started=started,
+    )
+    if strict_preflight is not None:
+        legacy._emit_runtime_event(
+            event_sink,
+            "stage.completed",
+            stage="publication",
+            status=strict_preflight.get("status", ""),
+        )
+        return strict_preflight
 
     fast_outcome = _try_fast_supported_answer(
         question=normalized_question,

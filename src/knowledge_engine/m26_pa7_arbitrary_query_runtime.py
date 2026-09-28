@@ -3313,7 +3313,7 @@ def _deterministic_provider_candidate(
         "status": "answer_candidate",
         "relation": relation,
         "selected_evidence_ids": [str(item["evidence_id"]) for item in selected],
-        "answer_text": _deterministic_answer_text(claims),
+        "answer_text": _deterministic_answer_text(claims, question=question),
         "claims": claims,
         "missing_facets": [],
         "abstention_reason": None,
@@ -3373,7 +3373,7 @@ def _deterministic_direct_provider_candidate(
             "status": "answer_candidate",
             "relation": None,
             "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
-            "answer_text": _deterministic_answer_text(claims),
+            "answer_text": _deterministic_answer_text(claims, question=question),
             "claims": claims,
             "missing_facets": [],
             "abstention_reason": None,
@@ -3421,7 +3421,7 @@ def _deterministic_direct_provider_candidate(
         "status": "answer_candidate",
         "relation": None,
         "selected_evidence_ids": list(dict.fromkeys(selected_ids)),
-        "answer_text": _deterministic_answer_text(claims),
+        "answer_text": _deterministic_answer_text(claims, question=question),
         "claims": claims,
         "missing_facets": [],
         "abstention_reason": None,
@@ -3690,7 +3690,11 @@ def _deterministic_relation_surface_text(
     return joined
 
 
-def _deterministic_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
+def _deterministic_answer_text(
+    claims: Sequence[Mapping[str, Any]],
+    *,
+    question: str = "",
+) -> str:
     sentences = []
     for claim in claims:
         claim_id = str(claim.get("claim_id", "claim_1"))
@@ -3734,8 +3738,44 @@ def _deterministic_answer_text(claims: Sequence[Mapping[str, Any]]) -> str:
                 ):
                     surface = full_surface
         if surface:
-            label = _deterministic_claim_label(claim.get("facet_ids", []))
-            prefix = f"{label}: " if label else ""
+            facet_ids = {
+                str(item)
+                for item in (
+                    claim.get("facet_ids", [])
+                    if isinstance(claim.get("facet_ids", []), Sequence)
+                    and not isinstance(claim.get("facet_ids", []), (str, bytes))
+                    else []
+                )
+                if str(item)
+            }
+            # Facet identifiers are runtime metadata, not answer prose.  Render only
+            # question-shape connectives; all material text remains the exact,
+            # verifier-bound evidence surface below.
+            normalized_question = str(question).casefold()
+            if (
+                "comparison_or_distinction" in facet_ids
+                or {
+                    "compare_left",
+                    "compare_right",
+                }
+                & facet_ids
+                or re.search(
+                    r"\b(?:compare|contrast|differ|different|distinguish|versus|vs)\b",
+                    normalized_question,
+                )
+            ):
+                prefix = "In contrast, "
+            elif "process_boundary" in facet_ids or re.search(
+                r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b",
+                normalized_question,
+            ):
+                prefix = "At the relevant process boundary, "
+            elif "explanatory_answer" in facet_ids or re.search(
+                r"\b(?:why|explain|how)\b", normalized_question
+            ):
+                prefix = "Because "
+            else:
+                prefix = ""
             sentences.append(f"{prefix}{surface} [[{claim_id}]].")
     return " ".join(sentences)
 
