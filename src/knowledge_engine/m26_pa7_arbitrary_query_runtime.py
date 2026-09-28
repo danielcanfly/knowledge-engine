@@ -1422,6 +1422,9 @@ def _augment_source_coverage_candidates(
     documents = lexical_index.get("documents")
     if not isinstance(documents, list):
         return dict(lexical_result)
+    document_index = _augmentation_document_index(documents)
+    if document_index is None:
+        return dict(lexical_result)
     # Filter conversational/query-function terms before source backfill. This
     # keeps generic words from making unrelated sources look equivalent.
     query_terms = {
@@ -1432,40 +1435,24 @@ def _augment_source_coverage_candidates(
     if not query_terms:
         return dict(lexical_result)
 
-    def overlap(term_set: set[str], text: str) -> set[str]:
-        return term_set & _meaningful_terms(text)
-
-    by_source: dict[str, list[Mapping[str, Any]]] = {}
-    for raw in documents:
-        if not isinstance(raw, Mapping):
-            continue
-        source_id = str(raw.get("source_id", ""))
-        section_id = str(raw.get("section_id", ""))
-        if not source_id or not section_id:
-            continue
-        by_source.setdefault(source_id, []).append(raw)
     for item in existing:
         section_id = str(item.get("section_id", ""))
-        raw = next(
-            (doc for doc in documents if isinstance(doc, Mapping) and str(doc.get("section_id", "")) == section_id),
-            None,
-        )
-        if raw is not None:
-            existing_sources.add(str(raw.get("source_id", "")))
+        source_id = document_index.source_by_section.get(section_id, "")
+        if source_id:
+            existing_sources.add(source_id)
 
     ranked_sources: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
-    for source_id, source_documents in by_source.items():
+    for source_id, source_documents in document_index.by_source.items():
         if source_id in existing_sources:
             continue
         scored: list[tuple[float, str, Mapping[str, Any], dict[str, Any]]] = []
         for document in source_documents:
-            title_hits = overlap(
-                query_terms,
-                " ".join(str(document.get(key, "")) for key in ("title", "section_title")),
+            section_id = str(document.get("section_id", ""))
+            title_hits = query_terms & set(
+                document_index.title_terms_by_section.get(section_id, frozenset())
             )
-            body_hits = overlap(
-                query_terms,
-                " ".join(str(document.get(key, "")) for key in ("body", "excerpt", "description")),
+            body_hits = query_terms & set(
+                document_index.body_terms_by_section.get(section_id, frozenset())
             )
             total_hits = title_hits | body_hits
             if len(total_hits) < 2 and len(title_hits) < 1:
@@ -8132,6 +8119,105 @@ def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> floa
     return 0.15
 
 
+@dataclass(frozen=True)
+class _AugmentationDocumentIndex:
+    documents: tuple[Mapping[str, Any], ...]
+    by_section: Mapping[str, Mapping[str, Any]]
+    by_source: Mapping[str, tuple[Mapping[str, Any], ...]]
+    source_by_section: Mapping[str, str]
+    positions_by_section: Mapping[str, int]
+    sections_by_source: Mapping[str, tuple[str, ...]]
+    sections_by_concept: Mapping[str, tuple[str, ...]]
+    title_terms_by_section: Mapping[str, frozenset[str]]
+    body_terms_by_section: Mapping[str, frozenset[str]]
+
+
+_AUGMENTATION_DOCUMENT_INDEX_CACHE: dict[int, tuple[object, _AugmentationDocumentIndex]] = {}
+_AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER: list[int] = []
+_AUGMENTATION_DOCUMENT_INDEX_CACHE_MAX = 4
+_AUGMENTATION_DOCUMENT_INDEX_LOCK = threading.Lock()
+
+
+def _build_augmentation_document_index(
+    documents: Sequence[Mapping[str, Any]],
+) -> _AugmentationDocumentIndex:
+    docs = tuple(item for item in documents if isinstance(item, Mapping))
+    by_section: dict[str, Mapping[str, Any]] = {}
+    by_source_lists: dict[str, list[Mapping[str, Any]]] = {}
+    source_by_section: dict[str, str] = {}
+    positions_by_section: dict[str, int] = {}
+    sections_by_source_lists: dict[str, list[str]] = {}
+    sections_by_concept_lists: dict[str, list[str]] = {}
+    title_terms_by_section: dict[str, frozenset[str]] = {}
+    body_terms_by_section: dict[str, frozenset[str]] = {}
+
+    for position, item in enumerate(docs):
+        section_id = str(item.get("section_id", ""))
+        source_id = str(item.get("source_id", ""))
+        concept_id = str(item.get("concept_id", ""))
+        if not section_id:
+            continue
+        by_section[section_id] = item
+        positions_by_section[section_id] = position
+        source_by_section[section_id] = source_id
+        if source_id:
+            by_source_lists.setdefault(source_id, []).append(item)
+            sections_by_source_lists.setdefault(source_id, []).append(section_id)
+        if concept_id:
+            sections_by_concept_lists.setdefault(concept_id, []).append(section_id)
+        title_terms_by_section[section_id] = frozenset(
+            _meaningful_terms(
+                " ".join(str(item.get(key, "")) for key in ("title", "section_title"))
+            )
+        )
+        body_terms_by_section[section_id] = frozenset(
+            _meaningful_terms(
+                " ".join(
+                    str(item.get(key, ""))
+                    for key in ("body", "excerpt", "description")
+                )
+            )
+        )
+
+    return _AugmentationDocumentIndex(
+        documents=docs,
+        by_section=by_section,
+        by_source={key: tuple(value) for key, value in by_source_lists.items()},
+        source_by_section=source_by_section,
+        positions_by_section=positions_by_section,
+        sections_by_source={
+            key: tuple(value) for key, value in sections_by_source_lists.items()
+        },
+        sections_by_concept={
+            key: tuple(value) for key, value in sections_by_concept_lists.items()
+        },
+        title_terms_by_section=title_terms_by_section,
+        body_terms_by_section=body_terms_by_section,
+    )
+
+
+def _augmentation_document_index(
+    documents: Sequence[Mapping[str, Any]] | None,
+) -> _AugmentationDocumentIndex | None:
+    if documents is None:
+        return None
+    cache_key = id(documents)
+    with _AUGMENTATION_DOCUMENT_INDEX_LOCK:
+        cached = _AUGMENTATION_DOCUMENT_INDEX_CACHE.get(cache_key)
+        if cached is not None and cached[0] is documents:
+            return cached[1]
+    built = _build_augmentation_document_index(documents)
+    with _AUGMENTATION_DOCUMENT_INDEX_LOCK:
+        _AUGMENTATION_DOCUMENT_INDEX_CACHE[cache_key] = (documents, built)
+        if cache_key in _AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER:
+            _AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER.remove(cache_key)
+        _AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER.append(cache_key)
+        while len(_AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER) > _AUGMENTATION_DOCUMENT_INDEX_CACHE_MAX:
+            oldest = _AUGMENTATION_DOCUMENT_INDEX_CACHE_ORDER.pop(0)
+            _AUGMENTATION_DOCUMENT_INDEX_CACHE.pop(oldest, None)
+    return built
+
+
 def _bounded_augmentation_documents(
     *,
     documents: Sequence[Mapping[str, Any]] | None,
@@ -8146,19 +8232,24 @@ def _bounded_augmentation_documents(
     sources/concepts already selected.  Scanning the full release on every direct
     question is a latency tax and can also amplify generic terms.
     """
-    if documents is None:
+    index = _augmentation_document_index(documents)
+    if index is None:
         return None
-    docs = [item for item in documents if isinstance(item, Mapping)]
-    by_section = {str(item.get("section_id", "")): item for item in docs}
-    selected_sections = {str(item.get("section_id", "")) for item in evidence if str(item.get("section_id", ""))}
+    selected_sections = {
+        str(item.get("section_id", ""))
+        for item in evidence
+        if str(item.get("section_id", ""))
+    }
     lexical_sections = [
         str(item.get("section_id", ""))
         for item in lexical_results
         if isinstance(item, Mapping) and str(item.get("section_id", ""))
     ]
     ordered_ids: list[str] = []
+    ordered_seen: set[str] = set()
     for section_id in [*selected_sections, *lexical_sections[: max(limit * 4, 32)]]:
-        if section_id and section_id not in ordered_ids:
+        if section_id and section_id not in ordered_seen:
+            ordered_seen.add(section_id)
             ordered_ids.append(section_id)
     selected_sources = {
         str(item.get("source_id", ""))
@@ -8170,24 +8261,32 @@ def _bounded_augmentation_documents(
         for item in evidence
         if str(item.get("concept_id", ""))
     }
-    for item in docs:
-        section_id = str(item.get("section_id", ""))
-        if not section_id or section_id in ordered_ids:
+    nearby_ids: set[str] = set()
+    for source_id in selected_sources:
+        nearby_ids.update(index.sections_by_source.get(source_id, ()))
+    for concept_id in selected_concepts:
+        nearby_ids.update(index.sections_by_concept.get(concept_id, ()))
+    for section_id in sorted(
+        nearby_ids,
+        key=lambda value: index.positions_by_section.get(value, 1 << 60),
+    ):
+        if section_id in ordered_seen:
             continue
-        if (
-            str(item.get("source_id", "")) in selected_sources
-            or str(item.get("concept_id", "")) in selected_concepts
-        ):
-            ordered_ids.append(section_id)
+        ordered_seen.add(section_id)
+        ordered_ids.append(section_id)
         if len(ordered_ids) >= max(limit * 8, 96):
             break
-    if not ordered_ids and len(docs) <= max(limit * 8, 96):
-        # Small caller-supplied document surfaces are already bounded.  Preserve
+    if not ordered_ids and len(index.documents) <= max(limit * 8, 96):
+        # Small caller-supplied document surfaces are already bounded. Preserve
         # required-facet recovery when no lexical/evidence seed exists instead
         # of returning an empty augmentation pool and forcing later stages to
         # rediscover passages without facet metadata.
-        return docs
-    return [by_section[section_id] for section_id in ordered_ids if section_id in by_section]
+        return list(index.documents)
+    return [
+        index.by_section[section_id]
+        for section_id in ordered_ids
+        if section_id in index.by_section
+    ]
 
 
 def _augment_evidence_for_intent(
