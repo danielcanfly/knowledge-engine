@@ -14,7 +14,22 @@ from .qa_failure_clustering import FailureIntentFamily, normalize_failure_intent
 ANSWER_QUALITY_RUBRIC_VERSION = "ANSWER_QUALITY_RUBRIC_v1"
 ANSWER_QUALITY_PASS_THRESHOLD = 85
 ANSWER_QUALITY_BOUNDARY_MARGIN = 2
+ANSWER_QUALITY_BOUNDARY_MIN_SCORE = ANSWER_QUALITY_PASS_THRESHOLD - ANSWER_QUALITY_BOUNDARY_MARGIN
+ANSWER_QUALITY_BOUNDARY_MAX_SCORE = ANSWER_QUALITY_PASS_THRESHOLD + ANSWER_QUALITY_BOUNDARY_MARGIN
+ANSWER_QUALITY_CLEAR_PASS_MIN_SCORE = ANSWER_QUALITY_BOUNDARY_MAX_SCORE + 1
 ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE = "BORDERLINE_SEMANTIC_SCORE"
+ANSWER_QUALITY_DECISION_POLICY_VERSION = "aq-decision-policy/v1"
+
+
+def semantic_score_band(score: int) -> str:
+    """Classify provider score for observability; publication remains server-owned."""
+    if score < ANSWER_QUALITY_BOUNDARY_MIN_SCORE:
+        return "clear_fail"
+    if score <= ANSWER_QUALITY_BOUNDARY_MAX_SCORE:
+        return "borderline"
+    return "clear_pass"
+
+
 ANSWER_QUALITY_CRITERION_MAX: dict[str, int] = {
     "directness_intent": 15,
     "correctness_grounding": 25,
@@ -75,6 +90,11 @@ class AnswerQualityEvaluation:
             "evaluator_version": self.evaluator_version,
             "rubric_version": self.rubric_version,
             "threshold": ANSWER_QUALITY_PASS_THRESHOLD,
+            "decision_policy_version": ANSWER_QUALITY_DECISION_POLICY_VERSION,
+            "semantic_score_band": semantic_score_band(self.score),
+            "boundary_score_min": ANSWER_QUALITY_BOUNDARY_MIN_SCORE,
+            "boundary_score_max": ANSWER_QUALITY_BOUNDARY_MAX_SCORE,
+            "clear_pass_min_score": ANSWER_QUALITY_CLEAR_PASS_MIN_SCORE,
         }
 
 
@@ -125,9 +145,9 @@ def is_answer_quality_boundary_score(score: int, hard_fail_codes: tuple[str, ...
     """Fail closed for provider-only scores inside the unstable threshold band."""
     return (
         not hard_fail_codes
-        and ANSWER_QUALITY_PASS_THRESHOLD - ANSWER_QUALITY_BOUNDARY_MARGIN
+        and ANSWER_QUALITY_BOUNDARY_MIN_SCORE
         <= score
-        <= ANSWER_QUALITY_PASS_THRESHOLD + ANSWER_QUALITY_BOUNDARY_MARGIN
+        <= ANSWER_QUALITY_BOUNDARY_MAX_SCORE
     )
 
 

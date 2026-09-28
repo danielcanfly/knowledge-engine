@@ -3,12 +3,17 @@ from __future__ import annotations
 from knowledge_engine.qa_answer_quality import QaRepository, _resolve_range, evaluate_answer_quality
 from knowledge_engine.qa_answer_quality_evaluator import (
     ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,
+    ANSWER_QUALITY_BOUNDARY_MAX_SCORE,
+    ANSWER_QUALITY_BOUNDARY_MIN_SCORE,
+    ANSWER_QUALITY_CLEAR_PASS_MIN_SCORE,
     ANSWER_QUALITY_CRITERION_MAX,
+    ANSWER_QUALITY_DECISION_POLICY_VERSION,
     AnswerQualityEvaluation,
     AnswerQualityEvaluationError,
     ProviderAnswerQualityEvaluator,
     StaticAnswerQualityEvaluator,
     UnavailableAnswerQualityEvaluator,
+    canonical_failure_provenance,
     validate_answer_quality_evaluation,
 )
 from knowledge_engine.qa_answer_quality_sqlite import SqliteQaRepository
@@ -426,6 +431,39 @@ def test_semantic_adapter_fails_closed_on_near_threshold_wobble_scores() -> None
         assert evaluation.hard_fail_codes == (ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,)
         assert evaluation.failure_stage == "answer_quality"
         assert evaluation.failure_class == "semantic_score_boundary"
+
+
+def test_boundary_wobble_has_one_deterministic_server_decision_contract() -> None:
+    signatures = set()
+    for score in range(ANSWER_QUALITY_BOUNDARY_MIN_SCORE, ANSWER_QUALITY_BOUNDARY_MAX_SCORE + 1):
+        stage, failure_class, signature = canonical_failure_provenance(
+            hard_fail_codes=(ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,),
+            criterion_scores=_criteria_for_total(score),
+        )
+        signatures.add(signature)
+        assert stage == "answer_quality"
+        assert failure_class == "semantic_score_boundary"
+
+        evaluation = AnswerQualityEvaluation(
+            score=score,
+            result="fail",
+            criterion_scores=_criteria_for_total(score),
+            hard_fail_codes=(ANSWER_QUALITY_BOUNDARY_HARD_FAIL_CODE,),
+            failure_class=failure_class,
+            failure_stage=stage,
+            failure_signature=signature,
+            evaluator_provider="fake",
+            evaluator_model="model",
+            evaluator_version="aq-semantic-evaluator/v3",
+        )
+        payload = evaluation.to_payload()
+        assert payload["decision_policy_version"] == ANSWER_QUALITY_DECISION_POLICY_VERSION
+        assert payload["semantic_score_band"] == "borderline"
+        assert payload["boundary_score_min"] == ANSWER_QUALITY_BOUNDARY_MIN_SCORE
+        assert payload["boundary_score_max"] == ANSWER_QUALITY_BOUNDARY_MAX_SCORE
+        assert payload["clear_pass_min_score"] == ANSWER_QUALITY_CLEAR_PASS_MIN_SCORE
+
+    assert len(signatures) == 1
 
 
 def test_semantic_adapter_allows_clear_above_threshold_scores() -> None:
