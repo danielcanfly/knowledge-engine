@@ -3937,3 +3937,57 @@ def test_deterministic_answer_surface_does_not_truncate_strong_facet_contract() 
 
     assert runtime_module._direct_facet_text_matches(facet, answer)
     assert "codex supports parallel subagent workflows" in answer.casefold()
+
+
+
+def test_fast_synthesis_payload_compacts_metadata_without_dropping_evidence() -> None:
+    evidence = [
+        {
+            "evidence_id": "ev-1",
+            "evidence_type": "passage",
+            "locator_id": "loc-1",
+            "source_id": "source-1",
+            "source_identity": "source-identity-1",
+            "section_id": "section-1",
+            "concept_id": "concept-1",
+            "passage_text": "The router defines permission-first controls before execution.",
+            "passage_text_sha256": "a" * 64,
+            "channels": ["lexical", "dense"],
+            "retrieval_metadata": {},
+        },
+        {
+            "evidence_id": "ev-2",
+            "evidence_type": "passage",
+            "locator_id": "loc-2",
+            "source_id": "source-2",
+            "source_identity": "source-identity-2",
+            "section_id": "section-2",
+            "concept_id": "concept-2",
+            "passage_text": "Owner admission and retrieval boundaries remain explicit.",
+            "passage_text_sha256": "b" * 64,
+            "channels": ["lexical"],
+            "retrieval_metadata": {},
+        },
+    ]
+    payload = runtime_module._fast_synthesis_payload(
+        question="What should a router define for permission-first controls?",
+        trace_id="trace-fast-compact",
+        intent_class="direct_grounded_knowledge",
+        evidence=evidence,
+    )
+    task = json.loads(payload["messages"][0]["content"][0]["text"])
+    compact = task["evidence_bundle"]
+
+    assert len(compact) == len(evidence)
+    assert [item["evidence_id"] for item in compact] == ["ev-1", "ev-2"]
+    assert [item["text"] for item in compact] == [
+        evidence[0]["passage_text"],
+        evidence[1]["passage_text"],
+    ]
+    assert all(
+        set(item) == {"evidence_id", "text", "strong_required_facet_id"}
+        for item in compact
+    )
+
+    full = [runtime_module._provider_evidence_item(item) for item in evidence]
+    assert len(json.dumps(compact, sort_keys=True)) < len(json.dumps(full, sort_keys=True))
