@@ -11,6 +11,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 
 from .config import Settings
 from .m26_aq_semantic_contract import (
@@ -42,6 +43,10 @@ from .m26_production_answer_bundle import (
 from .m26_production_promotion_closure import load_json
 from .m26_retrieval_envelope import sha256_value
 from .m26_verified_answer_citation_gate import canonical_sha256
+from .m26_verified_streaming import (
+    VERIFIED_STREAM_PATH,
+    verified_query_event_stream,
+)
 from .runtime import Runtime
 from .storage import create_object_store
 
@@ -354,6 +359,7 @@ def build_health_dto(*, root: Path, gate_path: Path) -> dict[str, Any]:
             "ask_url": "https://m24-internal.danielcanfly.com/ask",
             "full_graph_url": "https://m24-internal.danielcanfly.com/full-graph",
             "api_query_path": "/api/m26/query",
+            "api_query_stream_path": VERIFIED_STREAM_PATH,
             "api_health_path": "/api/m26/health",
             "api_graph_path": "/api/m26/graph",
             "owner_only_route": identities.get("owner_only_route"),
@@ -560,6 +566,44 @@ def register_m26_ask_routes(
                 status.HTTP_503_SERVICE_UNAVAILABLE,
                 "M26_ASK_RUNTIME_FAILED",
             ) from exc
+
+    @app.post(VERIFIED_STREAM_PATH, response_class=StreamingResponse)
+    async def query_stream(request: Request) -> StreamingResponse:
+        owner_subject_hash = _authorize_backend_request(request)
+        body = await request.body()
+        if len(body) > MAX_BODY_BYTES:
+            raise _http_error(
+                status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                "M26_ASK_BODY_TOO_LARGE",
+            )
+        try:
+            payload = await request.json()
+            question = validate_query_request(payload)
+        except M26AskApiError as exc:
+            raise _http_error(status.HTTP_400_BAD_REQUEST, exc.reason_code) from exc
+        except Exception as exc:
+            raise _http_error(status.HTTP_400_BAD_REQUEST, "M26_ASK_INVALID_JSON") from exc
+
+        _rate_limit(owner_subject_hash, question)
+        return StreamingResponse(
+            verified_query_event_stream(
+                request=request,
+                root=app_root,
+                gate_path=resolved_gate_path,
+                question=question,
+                question_sha256=canonical_sha256(question),
+                owner_subject_hash=owner_subject_hash,
+                require_remote_dense=remote_dense_required,
+                authoritative_runtime=RUNTIME_ENTRYPOINT,
+                run_query=run_owner_query_for_web,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     return app
 
