@@ -8114,6 +8114,58 @@ def _candidate_structural_relation_penalty(candidate: Mapping[str, Any]) -> floa
     return 0.15
 
 
+def _bounded_augmentation_documents(
+    *,
+    documents: Sequence[Mapping[str, Any]] | None,
+    evidence: Sequence[Mapping[str, Any]],
+    lexical_results: Sequence[Any],
+    limit: int,
+) -> list[Mapping[str, Any]] | None:
+    """Return a bounded augmentation pool instead of scanning every release doc.
+
+    Query/facet augmentation only needs a small, source-diverse candidate surface:
+    the already selected evidence, lexical seeds/backfills, and nearby sections from
+    sources/concepts already selected.  Scanning the full release on every direct
+    question is a latency tax and can also amplify generic terms.
+    """
+    if documents is None:
+        return None
+    docs = [item for item in documents if isinstance(item, Mapping)]
+    by_section = {str(item.get("section_id", "")): item for item in docs}
+    selected_sections = {str(item.get("section_id", "")) for item in evidence if str(item.get("section_id", ""))}
+    lexical_sections = [
+        str(item.get("section_id", ""))
+        for item in lexical_results
+        if isinstance(item, Mapping) and str(item.get("section_id", ""))
+    ]
+    ordered_ids: list[str] = []
+    for section_id in [*selected_sections, *lexical_sections[: max(limit * 4, 32)]]:
+        if section_id and section_id not in ordered_ids:
+            ordered_ids.append(section_id)
+    selected_sources = {
+        str(item.get("source_id", ""))
+        for item in evidence
+        if str(item.get("source_id", ""))
+    }
+    selected_concepts = {
+        str(item.get("concept_id", ""))
+        for item in evidence
+        if str(item.get("concept_id", ""))
+    }
+    for item in docs:
+        section_id = str(item.get("section_id", ""))
+        if not section_id or section_id in ordered_ids:
+            continue
+        if (
+            str(item.get("source_id", "")) in selected_sources
+            or str(item.get("concept_id", "")) in selected_concepts
+        ):
+            ordered_ids.append(section_id)
+        if len(ordered_ids) >= max(limit * 8, 96):
+            break
+    return [by_section[section_id] for section_id in ordered_ids if section_id in by_section]
+
+
 def _augment_evidence_for_intent(
     *,
     bundle: ProductionAnswerBundle,
@@ -8129,6 +8181,12 @@ def _augment_evidence_for_intent(
     question_contract: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     evidence = [dict(item) for item in base_evidence]
+    augmentation_documents = _bounded_augmentation_documents(
+        documents=documents,
+        evidence=evidence,
+        lexical_results=lexical_results,
+        limit=budget,
+    )
     if intent_class in {
         "cross_document_comparison",
         "complementary_synthesis",
@@ -8141,7 +8199,7 @@ def _augment_evidence_for_intent(
             trace_id=trace_id,
             question=question,
             limit=budget,
-            documents=documents,
+            documents=augmentation_documents,
             focus=focus,
             query_terms=query_terms,
         )
@@ -8157,7 +8215,7 @@ def _augment_evidence_for_intent(
             question=question,
             intent_class=intent_class,
             limit=budget,
-            documents=documents,
+            documents=augmentation_documents,
             focus=focus,
             question_contract=question_contract,
             lexical_results=lexical_results,
