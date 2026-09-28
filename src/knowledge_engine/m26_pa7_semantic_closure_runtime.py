@@ -50,6 +50,20 @@ RUNTIME_BOUND_REVIEW_SCHEMA_VERSION = "m26-aqv2-runtime-bound-review/v1"
 SEMANTIC_REVIEW_CALL_CLASS = "aq_claim_semantic_entailment"
 COMPACT_CLOSURE_SCHEMA_VERSION = "m26-fas-synthesis/segments/v1"
 FACET_LOCAL_CLAIM_SCHEMA_VERSION = "m26-aqv2-facet-local-claims/v1"
+CLAIM_EVIDENCE_SUBSET_SCHEMA_VERSION = "m26-aqv2-claim-evidence-subset/v1"
+CLAIM_EVIDENCE_SUBSET_PROVIDER_CONTRACT = (
+    "claim_evidence_subset_semantic_closure/v1"
+)
+CLAIM_SUBSET_SUPPORT_TYPES = {"direct", "paraphrase", "synthesis", "contrast", "limitation"}
+CLAIM_SUBSET_STRENGTHS = {"narrow", "moderate", "qualified"}
+CLAIM_SUBSET_ANSWER_ROLES = {"core", "qualifier", "limitation", "contrast", "example"}
+MAX_CLAIM_SUBSET_EVIDENCE_IDS = 4
+MAX_EXPLAINED_CLAIM_SUBSET_EVIDENCE_IDS = 6
+SUBSET_GENERATION_MIN_BUDGET_MS = 2_500
+CLAIM_VERIFICATION_MIN_BUDGET_MS = 1_000
+LOCAL_WEAKENING_MIN_BUDGET_MS = 1_500
+FINAL_ASSEMBLY_MIN_BUDGET_MS = 500
+SUBSET_SOFT_DEADLINE_MS = 14_500
 SEMANTIC_SEGMENT_ROLES = {"material_claim", "model_explanation"}
 PARTIAL_SEMANTIC_CLOSURE_SOURCE = (
     "provider_verified_runtime_bound_partial_semantic_closure"
@@ -260,9 +274,16 @@ class SemanticRequirement:
 
 
 class ClaimDraftContractError(ValueError):
-    def __init__(self, code: str, message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        telemetry: Mapping[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.telemetry = dict(telemetry or {})
 
 
 class NativeSemanticReviewContractError(ValueError):
@@ -781,6 +802,7 @@ def _facet_local_provider_slots(
             local_evidence.append(
                 {
                     "context_index": len(local_evidence) + 1,
+                    "evidence_id": evidence_id,
                     "evidence_type": str(item.get("evidence_type", "passage")),
                     "title": str(item.get("title", ""))[:120],
                     "section": str(item.get("section_title", ""))[:120],
@@ -1190,7 +1212,19 @@ def _facet_local_provider_payload(
         "repair_output_contract": (
             {
                 "required_slot_ids": [str(slot["slot_id"]) for slot in slots],
-                "allowed_claim_keys": ["slot_id", "text", "claim_type"],
+                "allowed_claim_keys": [
+                    "slot_id",
+                    "claim_id",
+                    "claim_text",
+                    "evidence_ids",
+                    "support_type",
+                    "claim_strength",
+                    "answer_role",
+                    "source_span_hint",
+                    "dropped",
+                    "weakened",
+                    "why",
+                ],
                 "forbidden_legacy_keys": [
                     "status",
                     "segments",
@@ -1201,6 +1235,33 @@ def _facet_local_provider_payload(
             if repair
             else None
         ),
+        "claim_evidence_subset_output": {
+            "schema_version": CLAIM_EVIDENCE_SUBSET_SCHEMA_VERSION,
+            "claims": [
+                {
+                    "slot_id": str(slot["slot_id"]),
+                    "claim_id": f"{slot['slot_id']}_claim",
+                    "claim_text": "One narrow proposition supported by the selected subset.",
+                    "evidence_ids": [
+                        str(slot["allowed_evidence_ids"][0])
+                    ],
+                    "support_type": "direct|paraphrase|synthesis|contrast|limitation",
+                    "claim_strength": "narrow|moderate|qualified",
+                    "answer_role": "core|qualifier|limitation|contrast|example",
+                    "source_span_hint": "Optional short description of the supporting span.",
+                    "dropped": False,
+                    "weakened": False,
+                    "why": "Why this is the smallest sufficient subset.",
+                }
+                for slot in slots
+            ],
+            "dropped_claims": [],
+            "answer_plan": {
+            "style": "concise",
+            "can_answer": True,
+            "limits": "Lead with verified core claims; use qualifiers only when useful.",
+        },
+        },
         "facet_local_output": {
             "schema_version": FACET_LOCAL_CLAIM_SCHEMA_VERSION,
             "claims": [
@@ -1228,22 +1289,22 @@ def _facet_local_provider_payload(
     }
     system = (
         "Answer only from the supplied claim-slot evidence. Return exactly one JSON "
-        "object with keys schema_version, claims, and model_explanations. Return one "
-        "claim for every supplied claim slot, using its exact slot_id. Each claim may "
-        "contain only slot_id, text, and claim_type; do not return evidence IDs, labels, "
-        "facet IDs, covers, citations, sources, status, or unanswered dimensions. The "
-        "runtime owns all facet and evidence identity and will bind your prose to the "
-        "slot's local evidence. claim_type must be EVIDENCE_FACT or EVIDENCE_SYNTHESIS. "
-        "model_explanations is an optional array of short generic prose strings and may "
-        "not satisfy a material claim slot. Do not decide whether any runtime-supported "
-        "slot is unresolved. Use model_explanation only for genuinely generic connective "
-        "prose whose truth does not depend on supplied KB evidence; use claim_type "
-        "MODEL_EXPLANATION and evidence_labels [] only in the deprecated compatibility "
-        "shape. For numbered or versioned entities, supplied graph relations, and what "
-        "supplied evidence entails or does not entail, treat supported negation, "
-        "limitation, boundary, comparison, or non-inference as material. If uncertain "
-        "between material_claim and model_explanation, choose material_claim and bind "
-        "evidence."
+        "object matching claim_evidence_subset_output, with keys schema_version, claims, "
+        "dropped_claims, and answer_plan. Draft small verified claims, not a broad fluent "
+        "answer. For every retained claim, select the smallest explicit evidence_ids "
+        "subset from that same slot that directly supports the complete proposition. "
+        "Generic topic overlap is not support. Prefer narrow support over impressive "
+        "synthesis and drop weak claims rather than making them answerable by assertion. "
+        "Use the exact slot_id and evidence_id strings supplied in that slot. A claim may "
+        "not borrow evidence from another slot. Set answer_role=core only when the claim "
+        "directly answers the user's main question; otherwise use qualifier. Set "
+        "support_type=direct unless more than one selected passage is genuinely required "
+        "for synthesis. Use claim_strength=narrow or qualified. If a supported slot cannot "
+        "produce a safe narrow proposition, omit it from claims and explain it in "
+        "dropped_claims. source_span_hint and why are explanatory metadata only and may "
+        "not add facts. Do not return facets, citations, sources, status, labels, covers, "
+        "or unanswered dimensions. For numbered or versioned entities and graph facts, "
+        "preserve identity, polarity, direction, quantity, time, and boundary exactly."
     )
     max_tokens = _compact_provider_output_tokens(
         question=question,
@@ -1274,6 +1335,249 @@ def _facet_local_provider_payload(
     )
 
 
+def _empty_claim_subset_telemetry(*, parse_ok: bool) -> dict[str, Any]:
+    return {
+        "attempted": True,
+        "provider_contract": CLAIM_EVIDENCE_SUBSET_PROVIDER_CONTRACT,
+        "parse_ok": parse_ok,
+        "claim_count": 0,
+        "dropped_claim_count": 0,
+        "validated_claim_count": 0,
+        "rejected_claim_count": 0,
+        "rejection_reasons": [],
+        "claim_traces": [],
+    }
+
+
+def _claim_subset_boilerplate(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(text).casefold()).strip(" .")
+    if normalized in {
+        "provider-authored prose for this slot",
+        "one narrow proposition supported by the selected subset",
+        "evidence-backed prose",
+        "the evidence supports the claim",
+        "the evidence supports a narrow answer",
+    }:
+        return True
+    return len(legacy._meaningful_terms(normalized)) < 3
+
+
+def _validate_claim_evidence_subset_output(
+    value: Mapping[str, Any],
+    *,
+    slots: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    telemetry = _empty_claim_subset_telemetry(parse_ok=True)
+    allowed_top_keys = {
+        "schema_version",
+        "claims",
+        "dropped_claims",
+        "answer_plan",
+    }
+    if set(value) - allowed_top_keys:
+        telemetry["parse_ok"] = False
+        telemetry["rejection_reasons"] = ["unexpected_top_level_keys"]
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED,
+            "claim-evidence subset output contains unexpected top-level keys",
+            telemetry=telemetry,
+        )
+    raw_claims = value.get("claims")
+    if not isinstance(raw_claims, list):
+        telemetry["parse_ok"] = False
+        telemetry["rejection_reasons"] = ["claims_missing_or_not_list"]
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED,
+            "claim-evidence subset claims must be a list",
+            telemetry=telemetry,
+        )
+    raw_dropped = value.get("dropped_claims", [])
+    if not isinstance(raw_dropped, list):
+        telemetry["parse_ok"] = False
+        telemetry["rejection_reasons"] = ["dropped_claims_not_list"]
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED,
+            "claim-evidence subset dropped_claims must be a list",
+            telemetry=telemetry,
+        )
+    answer_plan = value.get("answer_plan", "")
+    if not isinstance(answer_plan, (str, Mapping)):
+        telemetry["parse_ok"] = False
+        telemetry["rejection_reasons"] = ["answer_plan_invalid"]
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MALFORMED,
+            "claim-evidence subset answer_plan must be a string or object",
+            telemetry=telemetry,
+        )
+
+    slot_by_id = {str(slot.get("slot_id", "")): slot for slot in slots}
+    allowed_claim_keys = {
+        "slot_id", "claim_id", "claim_text", "evidence_ids", "support_type",
+        "claim_strength", "answer_role", "source_span_hint", "dropped",
+        "weakened", "why",
+    }
+    telemetry["claim_count"] = len(raw_claims)
+    telemetry["dropped_claim_count"] = len(raw_dropped)
+    accepted: list[dict[str, Any]] = []
+    seen_slots: set[str] = set()
+    seen_claim_ids: set[str] = set()
+    seen_texts: set[str] = set()
+
+    def reject(trace: dict[str, Any], reason: str) -> None:
+        trace["validator_status"] = "rejected"
+        trace["semantic_verifier_status"] = "NOT_RUN"
+        trace["rejection_reason"] = reason
+        telemetry["claim_traces"].append(trace)
+        telemetry["rejection_reasons"].append(reason)
+
+    for index, raw_claim in enumerate(raw_claims, start=1):
+        trace: dict[str, Any] = {
+            "claim_id": "",
+            "evidence_ids": [],
+            "support_type": "",
+            "claim_strength": "",
+            "answer_role": "",
+        }
+        if not isinstance(raw_claim, Mapping) or set(raw_claim) - allowed_claim_keys:
+            reject(trace, "invalid_claim_shape")
+            continue
+        slot_id = str(raw_claim.get("slot_id", "")).strip()
+        claim_id = str(raw_claim.get("claim_id", "")).strip()
+        claim_text = re.sub(
+            r"\s+", " ", str(raw_claim.get("claim_text", ""))
+        ).strip()
+        evidence_ids_raw = raw_claim.get("evidence_ids")
+        support_type = str(raw_claim.get("support_type", "")).strip()
+        claim_strength = str(raw_claim.get("claim_strength", "")).strip()
+        answer_role = str(raw_claim.get("answer_role", "")).strip()
+        why = str(raw_claim.get("why", "")).strip()
+        trace.update(
+            {
+                "claim_id": claim_id or f"claim_{index}",
+                "evidence_ids": (
+                    [str(item) for item in evidence_ids_raw]
+                    if isinstance(evidence_ids_raw, list)
+                    else []
+                ),
+                "support_type": support_type,
+                "claim_strength": claim_strength,
+                "answer_role": answer_role,
+            }
+        )
+        reason = ""
+        if slot_id not in slot_by_id:
+            reason = "unknown_slot_id"
+        elif slot_id in seen_slots:
+            reason = "duplicate_slot_id"
+        elif not claim_id or claim_id in seen_claim_ids:
+            reason = "missing_or_duplicate_claim_id"
+        elif not claim_text or _claim_subset_boilerplate(claim_text):
+            reason = "empty_or_boilerplate_claim_text"
+        elif not isinstance(evidence_ids_raw, list) or not evidence_ids_raw:
+            reason = "missing_evidence_ids"
+        elif any(
+            not isinstance(item, str) or not item.strip()
+            for item in evidence_ids_raw
+        ):
+            reason = "invalid_evidence_ids"
+        else:
+            evidence_ids = list(
+                dict.fromkeys(str(item).strip() for item in evidence_ids_raw)
+            )
+            allowed_ids = {
+                str(item)
+                for item in slot_by_id[slot_id].get("allowed_evidence_ids", [])
+                if str(item)
+            }
+            trace["evidence_ids"] = evidence_ids
+            if set(evidence_ids) - allowed_ids:
+                reason = "unknown_evidence_ids"
+            elif len(evidence_ids) > MAX_EXPLAINED_CLAIM_SUBSET_EVIDENCE_IDS:
+                reason = "evidence_subset_exceeds_hard_limit"
+            elif len(evidence_ids) > MAX_CLAIM_SUBSET_EVIDENCE_IDS and not why:
+                reason = "too_many_evidence_ids_without_explanation"
+            elif support_type not in CLAIM_SUBSET_SUPPORT_TYPES:
+                reason = "invalid_support_type"
+            elif claim_strength not in CLAIM_SUBSET_STRENGTHS:
+                reason = "invalid_claim_strength"
+            elif answer_role not in CLAIM_SUBSET_ANSWER_ROLES:
+                reason = "invalid_answer_role"
+            elif raw_claim.get("dropped") is not False:
+                reason = "retained_claim_marked_dropped"
+            elif not isinstance(raw_claim.get("weakened", False), bool):
+                reason = "invalid_weakened_flag"
+            elif claim_text.casefold() in seen_texts:
+                reason = "duplicate_claim_text"
+        if reason:
+            reject(trace, reason)
+            continue
+        seen_slots.add(slot_id)
+        seen_claim_ids.add(claim_id)
+        seen_texts.add(claim_text.casefold())
+        trace["validator_status"] = "accepted"
+        trace["semantic_verifier_status"] = "NOT_RUN"
+        telemetry["claim_traces"].append(trace)
+        accepted.append(
+            {
+                "slot_id": slot_id,
+                "claim_id": claim_id,
+                "text": claim_text,
+                "claim_type": (
+                    "EVIDENCE_FACT"
+                    if support_type in {"direct", "paraphrase", "limitation"}
+                    else "EVIDENCE_SYNTHESIS"
+                ),
+                "evidence_ids": list(trace["evidence_ids"]),
+                "support_type": support_type,
+                "claim_strength": claim_strength,
+                "answer_role": answer_role,
+                "source_span_hint": str(
+                    raw_claim.get("source_span_hint", "")
+                ).strip(),
+                "weakened": bool(raw_claim.get("weakened", False)),
+                "why": why,
+            }
+        )
+
+    dropped_slot_ids = {
+        str(item.get("slot_id", ""))
+        for item in raw_dropped
+        if isinstance(item, Mapping)
+        and str(item.get("slot_id", "")) in slot_by_id
+    }
+    missing_slots = set(slot_by_id) - seen_slots - dropped_slot_ids
+    if missing_slots:
+        telemetry["rejection_reasons"].append("unaccounted_supported_slots")
+    telemetry["validated_claim_count"] = len(accepted)
+    telemetry["rejected_claim_count"] = sum(
+        trace.get("validator_status") == "rejected"
+        for trace in telemetry["claim_traces"]
+    )
+    telemetry["rejection_reasons"] = list(
+        dict.fromkeys(str(item) for item in telemetry["rejection_reasons"])
+    )
+    if not accepted:
+        raise ClaimDraftContractError(
+            FACET_LOCAL_SLOT_MISSING,
+            "claim-evidence subset output contains no validated claims",
+            telemetry=telemetry,
+        )
+    return {
+        "claims": accepted,
+        "model_explanations": [],
+        "native_facet_local_shape": True,
+        "provider_selected_subset": True,
+        "dropped_claims": [
+            dict(item) if isinstance(item, Mapping) else {"why": str(item)}
+            for item in raw_dropped
+        ],
+        "answer_plan": (
+            answer_plan.strip() if isinstance(answer_plan, str) else dict(answer_plan)
+        ),
+        "claim_evidence_subset_contract": telemetry,
+    }
+
+
 def _parse_facet_local_provider_result(
     text: str,
     *,
@@ -1296,6 +1600,8 @@ def _parse_facet_local_provider_result(
         raise ClaimDraftContractError(
             FACET_LOCAL_SLOT_MALFORMED, "facet-local output must be one JSON object"
         )
+    if value.get("schema_version") == CLAIM_EVIDENCE_SUBSET_SCHEMA_VERSION:
+        return _validate_claim_evidence_subset_output(value, slots=slots)
     if value.get("schema_version") != FACET_LOCAL_CLAIM_SCHEMA_VERSION:
         if not allow_legacy_compatibility:
             raise ClaimDraftContractError(
@@ -1346,6 +1652,7 @@ def _parse_facet_local_provider_result(
         "claims": claims,
         "model_explanations": [str(item).strip() for item in raw_explanations],
         "native_facet_local_shape": True,
+        "provider_selected_subset": False,
     }
 
 
@@ -1496,6 +1803,17 @@ def _runtime_bound_facet_local_candidate(
         allowed_pairs = list(zip(
             slot["allowed_evidence_labels"], slot["allowed_evidence_ids"], strict=False
         ))
+        provider_subset_ids = {
+            str(item)
+            for item in draft.get("evidence_ids", [])
+            if str(item)
+        }
+        if drafts.get("provider_selected_subset"):
+            allowed_pairs = [
+                (label, evidence_id)
+                for label, evidence_id in allowed_pairs
+                if str(evidence_id) in provider_subset_ids
+            ]
         if intent_class == "graph_relationship" and any(
             str(label_map[label].get("evidence_type", "")) == "graph_edge"
             for label, _evidence_id in allowed_pairs
@@ -1527,7 +1845,9 @@ def _runtime_bound_facet_local_candidate(
             )
             if evidence_id not in selected_ids:
                 selected_ids.append(evidence_id)
-        legacy_claim_id = str(draft.get("legacy_claim_id", "")).strip()
+        legacy_claim_id = str(
+            draft.get("claim_id") or draft.get("legacy_claim_id", "")
+        ).strip()
         if legacy_claim_id and legacy_claim_id in claim_by_legacy_id:
             existing = claim_by_legacy_id[legacy_claim_id]
             merged_facet_ids = [
@@ -1579,11 +1899,16 @@ def _runtime_bound_facet_local_candidate(
                 "surface_text": str(draft["text"]),
                 "facet_ids": claim_facet_ids,
                 "support_mode": "exact_quote",
-                "evidence_labels": list(slot["allowed_evidence_labels"]),
+                "evidence_labels": [label for label, _evidence_id in allowed_pairs],
                 "covers": list(claim_facet_ids),
                 "unanswered_dimensions": [],
-                "support_refs": refs,
-            }
+            "support_refs": refs,
+            "support_type": str(draft.get("support_type", "direct")),
+            "claim_strength": str(draft.get("claim_strength", "narrow")),
+            "answer_role": str(draft.get("answer_role", "core")),
+            "source_span_hint": str(draft.get("source_span_hint", "")),
+            "weakened": bool(draft.get("weakened", False)),
+        }
         claims.append(claim)
         if legacy_claim_id:
             claim_by_legacy_id[legacy_claim_id] = claim
@@ -1603,7 +1928,7 @@ def _runtime_bound_facet_local_candidate(
             }
         )
     answer_text = " ".join(str(claim["surface_text"]) for claim in claims).strip()
-    return {
+    candidate = {
         "schema_version": "aq3-provider-candidate/v3",
         "status": "partial_candidate" if unresolved_required_ids else "answer_candidate",
         "relation": (
@@ -1618,6 +1943,20 @@ def _runtime_bound_facet_local_candidate(
         "abstention_reason": None,
         "unanswered_dimensions": list(unresolved_required_ids),
     }
+    if drafts.get("provider_selected_subset"):
+        candidate["claim_evidence_subset_contract"] = dict(
+            drafts.get("claim_evidence_subset_contract", {})
+        )
+        candidate["dropped_claims"] = list(drafts.get("dropped_claims", []))
+        candidate["answer_plan"] = drafts.get("answer_plan", "")
+    return candidate
+
+
+def _subset_deadline_remaining_ms(started: float) -> int:
+    if started <= 0:
+        return SUBSET_SOFT_DEADLINE_MS
+    elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
+    return max(0, SUBSET_SOFT_DEADLINE_MS - elapsed_ms)
 
 
 def _synthesize_facet_local_and_verify(
@@ -1633,8 +1972,9 @@ def _synthesize_facet_local_and_verify(
     supported_requirements: Sequence[SemanticRequirement],
     unresolved_required_ids: set[str],
     max_attempts: int,
-    provider_contract: str = "facet_local_runtime_bound_semantic_closure/v1",
+    provider_contract: str = CLAIM_EVIDENCE_SUBSET_PROVIDER_CONTRACT,
     binding_stage: str = "facet_local_binding",
+    started: float = 0.0,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     del supported_requirements
     failures: list[str] = []
@@ -1650,6 +1990,11 @@ def _synthesize_facet_local_and_verify(
     last_candidate: dict[str, Any] | None = None
     final_support_proof: list[dict[str, Any]] = []
     review_rejected_facet_ids: set[str] = set()
+    subset_telemetry: dict[str, Any] = _empty_claim_subset_telemetry(
+        parse_ok=False
+    )
+    deadline_before_subset_generation = _subset_deadline_remaining_ms(started)
+    deadline_before_claim_verification = deadline_before_subset_generation
 
     def apply_repair_state(
         answer: dict[str, Any],
@@ -1673,6 +2018,22 @@ def _synthesize_facet_local_and_verify(
 
     for attempt in range(1, max_attempts + 1):
         post_parse_stage = binding_stage
+        deadline_before_subset_generation = _subset_deadline_remaining_ms(started)
+        if deadline_before_subset_generation < SUBSET_GENERATION_MIN_BUDGET_MS:
+            failures.append("CLAIM_SUBSET_DEADLINE_BEFORE_GENERATION")
+            subset_telemetry.update(
+                {
+                    "deadline_remaining_ms_before_subset_generation": (
+                        deadline_before_subset_generation
+                    ),
+                    "deadline_remaining_ms_before_claim_verification": (
+                        deadline_before_subset_generation
+                    ),
+                    "claim_count_verification_attempted": 0,
+                    "claim_count_verification_skipped_due_deadline": 0,
+                }
+            )
+            break
         payload, facet_ledger, label_map, snippet_map, slots = _facet_local_provider_payload(
             question=question,
             intent_class=intent_class,
@@ -1694,8 +2055,16 @@ def _synthesize_facet_local_and_verify(
                     allowed_legacy_missing_facet_ids=review_rejected_facet_ids,
                     allow_legacy_compatibility=attempt == 1,
                 )
+                subset_telemetry = dict(
+                    drafts.get(
+                        "claim_evidence_subset_contract",
+                        _empty_claim_subset_telemetry(parse_ok=True),
+                    )
+                )
                 calls.append(_compact_call_telemetry(raw, parse_ok=True))
             except ClaimDraftContractError as exc:
+                if exc.telemetry:
+                    subset_telemetry = dict(exc.telemetry)
                 calls.append(_compact_call_telemetry(raw, parse_ok=False))
                 stop_reason = str(
                     raw.get("stop_reason") or raw.get("finish_reason") or ""
@@ -1729,6 +2098,29 @@ def _synthesize_facet_local_and_verify(
             native_draft = bool(drafts.get("native_facet_local_shape"))
             if native_draft:
                 post_parse_stage = "native_semantic_review_binding"
+                deadline_before_claim_verification = _subset_deadline_remaining_ms(
+                    started
+                )
+                if (
+                    deadline_before_claim_verification
+                    < CLAIM_VERIFICATION_MIN_BUDGET_MS
+                ):
+                    failures.append("CLAIM_SUBSET_DEADLINE_BEFORE_VERIFICATION")
+                    subset_telemetry.update(
+                        {
+                            "deadline_remaining_ms_before_subset_generation": (
+                                deadline_before_subset_generation
+                            ),
+                            "deadline_remaining_ms_before_claim_verification": (
+                                deadline_before_claim_verification
+                            ),
+                            "claim_count_verification_attempted": 0,
+                            "claim_count_verification_skipped_due_deadline": len(
+                                candidate.get("claims", [])
+                            ),
+                        }
+                    )
+                    break
                 try:
                     semantic_review, review_raw = (
                         _call_runtime_bound_semantic_entailment_review(
@@ -1786,6 +2178,18 @@ def _synthesize_facet_local_and_verify(
                     _candidate_claim_by_id(candidate),
                 )
                 calls.append(_compact_call_telemetry(review_raw, parse_ok=True))
+            if candidate.get("claim_evidence_subset_contract"):
+                subset_telemetry = _claim_subset_telemetry_with_review(
+                    candidate,
+                    semantic_review,
+                    deadline_remaining_ms_before_subset_generation=(
+                        deadline_before_subset_generation
+                    ),
+                    deadline_remaining_ms_before_claim_verification=(
+                        deadline_before_claim_verification
+                    ),
+                )
+                candidate["claim_evidence_subset_contract"] = subset_telemetry
             if _semantic_review_has_out_of_local_evidence(
                 semantic_review, _candidate_claim_by_id(candidate)
             ):
@@ -1878,6 +2282,11 @@ def _synthesize_facet_local_and_verify(
                     unresolved_required_ids | review_rejected_facet_ids
                 ),
                 "partial_answer": partial_answer,
+                **(
+                    {"claim_evidence_subset_contract": dict(subset_telemetry)}
+                    if subset_telemetry
+                    else {}
+                ),
             }
             closure = {
                 "schema_version": "m26-aq-semantic-closure/v1",
@@ -1887,6 +2296,11 @@ def _synthesize_facet_local_and_verify(
                 "failures": [],
                 "provider_contract": provider_contract,
                 "semantic_review": dict(verified.get("semantic_review", {})),
+                **(
+                    {"claim_evidence_subset_contract": dict(subset_telemetry)}
+                    if subset_telemetry
+                    else {}
+                ),
                 "facet_closure": {
                     "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
                     **_facet_closure_trace(classification=support_classification, candidate=candidate),
@@ -1941,6 +2355,11 @@ def _synthesize_facet_local_and_verify(
     abstention["multi_evidence_verification"] = {
         **dict(abstention.get("multi_evidence_verification", {})),
         "provider_contract": provider_contract,
+        **(
+            {"claim_evidence_subset_contract": dict(subset_telemetry)}
+            if subset_telemetry
+            else {}
+        ),
     }
     closure = {
         "schema_version": "m26-aq-semantic-closure/v1",
@@ -1949,6 +2368,11 @@ def _synthesize_facet_local_and_verify(
         "endpoint_proof": dict(endpoint_proof),
         "failures": final_failures,
         "provider_contract": provider_contract,
+        **(
+            {"claim_evidence_subset_contract": dict(subset_telemetry)}
+            if subset_telemetry
+            else {}
+        ),
         "facet_closure": {
             "schema_version": FACET_CLOSURE_SCHEMA_VERSION,
             **_facet_closure_trace(classification=support_classification, candidate=last_candidate),
@@ -2630,6 +3054,15 @@ def _verified_supported_review_partial(
         "partial_answer": True,
         "dropped_claim_count": len(dropped_claim_ids),
         "dropped_claim_ids": dropped_claim_ids,
+        **(
+            {
+                "claim_evidence_subset_contract": dict(
+                    partial_candidate.get("claim_evidence_subset_contract", {})
+                )
+            }
+            if partial_candidate.get("claim_evidence_subset_contract")
+            else {}
+        ),
     }
     closure = {
         "schema_version": "m26-aq-semantic-closure/v1",
@@ -3331,6 +3764,12 @@ def _supported_review_partial_candidate(
     supported_claims = [claim_by_id[claim_id] for claim_id in supported_ids]
     if not any(claim.get("support_refs") for claim in supported_claims):
         return None, {}, dropped_ids
+    if candidate.get("claim_evidence_subset_contract") and not any(
+        str(claim.get("answer_role", "")) == "core"
+        for claim in supported_claims
+        if str(claim.get("claim_type", "")) != "MODEL_EXPLANATION"
+    ):
+        return None, {}, dropped_ids
 
     compact_claims = [_compact_partial_claim(claim) for claim in supported_claims]
     answer_text = _partial_answer_text(compact_claims)
@@ -3362,6 +3801,17 @@ def _supported_review_partial_candidate(
             "missing_facets": [],
             "abstention_reason": None,
             "unanswered_dimensions": dropped_ids,
+            **(
+                {
+                    "claim_evidence_subset_contract": dict(
+                        candidate.get("claim_evidence_subset_contract", {})
+                    ),
+                    "dropped_claims": list(candidate.get("dropped_claims", [])),
+                    "answer_plan": candidate.get("answer_plan", ""),
+                }
+                if candidate.get("claim_evidence_subset_contract")
+                else {}
+            ),
         },
         partial_review,
         dropped_ids,
@@ -3374,6 +3824,77 @@ def _candidate_claim_by_id(candidate: Mapping[str, Any]) -> dict[str, Mapping[st
         for claim in legacy._list(candidate.get("claims"), "candidate claims")
         if isinstance(claim, Mapping) and str(claim.get("claim_id", ""))
     }
+
+
+def _verified_core_claim_count(
+    candidate: Mapping[str, Any],
+    semantic_review: Mapping[str, Any],
+) -> int:
+    verdict_by_id = {
+        str(item.get("claim_id", "")): str(item.get("verdict", ""))
+        for item in semantic_review.get("claim_judgments", [])
+        if isinstance(item, Mapping)
+    }
+    count = 0
+    for claim in _candidate_claim_by_id(candidate).values():
+        if str(claim.get("claim_type", "")) == "MODEL_EXPLANATION":
+            continue
+        # Legacy v1 claims did not carry answer_role. Treat them as core to retain
+        # backwards compatibility; subset-contract claims must opt in explicitly.
+        role = str(claim.get("answer_role", "core"))
+        if role == "core" and verdict_by_id.get(str(claim.get("claim_id", ""))) == (
+            legacy.SEMANTIC_REVIEW_ENTAILED
+        ):
+            count += 1
+    return count
+
+
+def _claim_subset_telemetry_with_review(
+    candidate: Mapping[str, Any],
+    semantic_review: Mapping[str, Any],
+    *,
+    deadline_remaining_ms_before_subset_generation: int,
+    deadline_remaining_ms_before_claim_verification: int,
+    claim_count_verification_skipped_due_deadline: int = 0,
+    local_weakening_count: int = 0,
+) -> dict[str, Any]:
+    telemetry = dict(candidate.get("claim_evidence_subset_contract", {}))
+    if not telemetry:
+        return {}
+    verdict_by_id = {
+        str(item.get("claim_id", "")): str(item.get("verdict", ""))
+        for item in semantic_review.get("claim_judgments", [])
+        if isinstance(item, Mapping)
+    }
+    traces = []
+    for raw_trace in telemetry.get("claim_traces", []):
+        trace = dict(raw_trace) if isinstance(raw_trace, Mapping) else {}
+        claim_id = str(trace.get("claim_id", ""))
+        if trace.get("validator_status") == "accepted":
+            trace["semantic_verifier_status"] = verdict_by_id.get(
+                claim_id, "NOT_RUN"
+            )
+        traces.append(trace)
+    telemetry.update(
+        {
+            "claim_traces": traces,
+            "deadline_remaining_ms_before_subset_generation": int(
+                deadline_remaining_ms_before_subset_generation
+            ),
+            "deadline_remaining_ms_before_claim_verification": int(
+                deadline_remaining_ms_before_claim_verification
+            ),
+            "claim_count_verification_attempted": len(verdict_by_id),
+            "claim_count_verification_skipped_due_deadline": int(
+                claim_count_verification_skipped_due_deadline
+            ),
+            "local_weakening_count": int(local_weakening_count),
+            "verified_core_claim_count": _verified_core_claim_count(
+                candidate, semantic_review
+            ),
+        }
+    )
+    return telemetry
 
 
 def _semantic_review_has_out_of_local_evidence(
