@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from typing import Any
+import threading
 
 import httpx
 import pytest
@@ -202,6 +203,37 @@ def test_cloudflare_success_does_not_call_gemini() -> None:
     assert fallback.calls == 0
     assert identity["retrieval_mode"] == "hybrid_bge"
     assert identity["fallback_attempted"] is False
+
+
+def test_remote_dense_starts_before_lexical_retrieval_finishes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dense_started = threading.Event()
+    original_retrieve = runtime.retrieve_wiki_first
+
+    class _ObservedRemoteDense(_DenseSuccess):
+        def search(self, *, question: str, bundle: Any, top_k: int) -> dict[str, Any]:
+            dense_started.set()
+            return super().search(question=question, bundle=bundle, top_k=top_k)
+
+    def retrieve_after_dense_start(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        assert dense_started.wait(1.0)
+        return original_retrieve(*args, **kwargs)
+
+    monkeypatch.setattr(runtime, "retrieve_wiki_first", retrieve_after_dense_start)
+
+    _, dense = runtime._run_lexical_primary_retrieval(
+        question="What should a router define for permission-first controls?",
+        bundle=_candidate_bundle(),
+        dense_channel=_ObservedRemoteDense(),
+        dense_fallback_channel=None,
+        require_remote_dense=False,
+        top_k=8,
+        event_sink=None,
+    )
+
+    assert dense_started.is_set()
+    assert dense["backend_identity"]["retrieval_mode"] == "hybrid_bge"
 
 
 @pytest.mark.parametrize("status", [408, 429, 500, 502, 503, 504])

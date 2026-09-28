@@ -1260,53 +1260,31 @@ def _primary_failure_is_gemini_eligible(result: Mapping[str, Any]) -> bool:
     )
 
 
-def _run_lexical_primary_retrieval(
+def _dense_parallel_retrieval_enabled() -> bool:
+    raw = os.environ.get("M26_DENSE_PARALLEL_RETRIEVAL", "1").strip().lower()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def _should_parallelize_dense_retrieval(dense_backend: DenseChannel, *, force_gemini: bool) -> bool:
+    if force_gemini or not _dense_parallel_retrieval_enabled():
+        return False
+    # LocalDenseProjectionChannel is CPU-bound and deterministic in tests; running
+    # it in a companion thread can add scheduler/GIL overhead. Remote dense
+    # channels are I/O-bound, so overlapping them with lexical retrieval preserves
+    # candidate semantics while removing request-time wall-clock wait.
+    return not isinstance(dense_backend, LocalDenseProjectionChannel)
+
+
+def _run_dense_primary_with_optional_fallback(
     *,
     question: str,
     bundle: ProductionAnswerBundle,
-    dense_channel: DenseChannel | None,
-    dense_fallback_channel: DenseChannel | None = None,
-    require_remote_dense: bool,
+    primary: DenseChannel,
+    fallback: DenseChannel | None,
+    force_gemini: bool,
     top_k: int,
     event_sink: RuntimeEventSink | None,
-    relation_aware_expansion: bool = True,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    lexical = retrieve_wiki_first(
-        query=question,
-        allowed_audiences={"public", "internal"},
-        lexical_index=bundle.lexical_index,
-        graph=bundle.graph,
-        relation_graph=bundle.graph_v2,
-        relation_aware_expansion=relation_aware_expansion,
-        provenance=bundle.provenance,
-        semantic_index=bundle.semantic_inputs,
-        limit=8,
-    )
-    lexical = _augment_source_coverage_candidates(
-        lexical_result=lexical,
-        lexical_index=bundle.lexical_index,
-        question=question,
-    )
-    primary = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
-    fallback = dense_fallback_channel
-    if fallback is not None and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
-        raise PA7ArbitraryQueryError(
-            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
-            "Gemini dense fallback is candidate-release only",
-        )
-    force_gemini = _env_enabled("M26_GEMINI_DENSE_FORCE")
-    if force_gemini and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
-        raise PA7ArbitraryQueryError(
-            "PA7_GEMINI_FORCE_RELEASE_MISMATCH",
-            "forced Gemini qualification is candidate-release only",
-        )
-    if fallback is None and (
-        force_gemini or _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED")
-    ):
-        fallback = gemini_dense_channel_from_env(
-            bundle=bundle,
-            primary_dense_backend=primary,
-        )
+) -> dict[str, Any]:
     if force_gemini:
         if fallback is None:
             raise PA7ArbitraryQueryError(
@@ -1332,12 +1310,12 @@ def _run_lexical_primary_retrieval(
         )
 
     if not _primary_failure_is_gemini_eligible(dense):
-        return lexical, _annotate_primary_dense_result(dense)
+        return _annotate_primary_dense_result(dense)
 
     primary_identity = _dense_degraded_identity(dense)
     primary_reason = str(primary_identity.get("reason_code") or _DENSE_TRANSIENT_REASON_CODE)
     if fallback is None:
-        return lexical, _annotate_lexical_only_result(
+        return _annotate_lexical_only_result(
             dense,
             fallback_reason=primary_reason,
             fallback_attempted=False,
@@ -1374,7 +1352,7 @@ def _run_lexical_primary_retrieval(
             dense_model=GEMINI_MODEL,
             fallback_succeeded=True,
         )
-        return lexical, _annotate_gemini_fallback_success(
+        return _annotate_gemini_fallback_success(
             gemini_result, primary_result=dense, fallback_reason=primary_reason
         )
 
@@ -1389,7 +1367,7 @@ def _run_lexical_primary_retrieval(
         reason_code=str(gemini_identity.get("reason_code", "")),
         http_status=gemini_identity.get("http_status"),
     )
-    return lexical, _annotate_lexical_only_result(
+    return _annotate_lexical_only_result(
         dense,
         fallback_reason=primary_reason,
         fallback_attempted=True,
@@ -1397,6 +1375,106 @@ def _run_lexical_primary_retrieval(
         fallback_identity=gemini_identity,
     )
 
+
+def _run_lexical_primary_retrieval(
+    *,
+    question: str,
+    bundle: ProductionAnswerBundle,
+    dense_channel: DenseChannel | None,
+    dense_fallback_channel: DenseChannel | None = None,
+    require_remote_dense: bool,
+    top_k: int,
+    event_sink: RuntimeEventSink | None,
+    relation_aware_expansion: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    primary = dense_channel or dense_channel_from_env(require_remote=require_remote_dense)
+    fallback = dense_fallback_channel
+    if fallback is not None and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FALLBACK_RELEASE_MISMATCH",
+            "Gemini dense fallback is candidate-release only",
+        )
+    force_gemini = _env_enabled("M26_GEMINI_DENSE_FORCE")
+    if force_gemini and bundle.release_id != M26_GEMINI_CANDIDATE_RELEASE_ID:
+        raise PA7ArbitraryQueryError(
+            "PA7_GEMINI_FORCE_RELEASE_MISMATCH",
+            "forced Gemini qualification is candidate-release only",
+        )
+    if fallback is None and (
+        force_gemini or _env_enabled("M26_GEMINI_DENSE_FALLBACK_ENABLED")
+    ):
+        fallback = gemini_dense_channel_from_env(
+            bundle=bundle,
+            primary_dense_backend=primary,
+        )
+
+    parallel_dense = _should_parallelize_dense_retrieval(primary, force_gemini=force_gemini)
+    dense_queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+    dense_thread: threading.Thread | None = None
+
+    def run_dense() -> None:
+        try:
+            dense_queue.put(
+                (
+                    "ok",
+                    _run_dense_primary_with_optional_fallback(
+                        question=question,
+                        bundle=bundle,
+                        primary=primary,
+                        fallback=fallback,
+                        force_gemini=force_gemini,
+                        top_k=top_k,
+                        event_sink=event_sink,
+                    ),
+                ),
+                block=False,
+            )
+        except BaseException as exc:
+            dense_queue.put(("error", exc), block=False)
+
+    if parallel_dense:
+        dense_thread = threading.Thread(
+            target=run_dense,
+            name="m26-pa7-remote-dense-retrieval",
+            daemon=True,
+        )
+        dense_thread.start()
+
+    lexical = retrieve_wiki_first(
+        query=question,
+        allowed_audiences={"public", "internal"},
+        lexical_index=bundle.lexical_index,
+        graph=bundle.graph,
+        relation_graph=bundle.graph_v2,
+        relation_aware_expansion=relation_aware_expansion,
+        provenance=bundle.provenance,
+        semantic_index=bundle.semantic_inputs,
+        limit=8,
+    )
+    lexical = _augment_source_coverage_candidates(
+        lexical_result=lexical,
+        lexical_index=bundle.lexical_index,
+        question=question,
+    )
+
+    if dense_thread is None:
+        dense = _run_dense_primary_with_optional_fallback(
+            question=question,
+            bundle=bundle,
+            primary=primary,
+            fallback=fallback,
+            force_gemini=force_gemini,
+            top_k=top_k,
+            event_sink=event_sink,
+        )
+    else:
+        dense_thread.join()
+        status, payload = dense_queue.get_nowait()
+        if status == "error":
+            raise payload
+        dense = payload
+
+    return lexical, dense
 
 def _augment_source_coverage_candidates(
     *,
