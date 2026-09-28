@@ -223,3 +223,62 @@ def test_no_case_id_or_question_text_branching_in_subset_helpers() -> None:
     assert "F085" not in source
     assert "F106" not in source
     assert "F181" not in source
+
+
+def test_diverse_selection_protects_rare_source_title_anchor() -> None:
+    candidates = []
+    for seed in range(1, 6):
+        candidates.append(
+            {
+                "section_id": f"generic_{seed}",
+                "source_id": f"generic_source_{seed}",
+                "concept_id": f"generic_concept_{seed}",
+                "channels": {"lexical"},
+                "seed_rank": seed,
+                "rerank_score": 100.0 - seed,
+                "source_coverage": {
+                    "title_overlap_terms": ["problem"],
+                    "body_overlap_terms": ["problem", "stop"],
+                    "coverage_score": 20.0,
+                },
+            }
+        )
+    # This candidate is outside the hard seed-1..5 preservation band but has a
+    # rare domain/title anchor. It should not be erased by rank anchors like
+    # 8/9/14/20/33 or by generic stop/problem overlap.
+    candidates.append(
+        {
+            "section_id": "rare_anchor",
+            "source_id": "rare_source",
+            "concept_id": "rare_concept",
+            "channels": {"lexical"},
+            "seed_rank": 11,
+            "rerank_score": 40.0,
+            "source_coverage": {
+                "title_overlap_terms": ["networking", "room"],
+                "body_overlap_terms": ["networking", "room"],
+                "coverage_score": 20.0,
+            },
+        }
+    )
+    for seed in (8, 9, 14, 20, 33):
+        candidates.append(
+            {
+                "section_id": f"anchor_{seed}",
+                "source_id": f"anchor_source_{seed}",
+                "concept_id": f"anchor_concept_{seed}",
+                "channels": {"lexical"},
+                "seed_rank": seed,
+                "rerank_score": 50.0 - seed,
+                "source_coverage": {
+                    "title_overlap_terms": ["problem"],
+                    "body_overlap_terms": ["problem", "stop"],
+                    "coverage_score": 18.0,
+                },
+            }
+        )
+
+    selected = runtime.legacy._select_diverse_candidates(candidates, budget=6)
+
+    assert [item["section_id"] for item in selected][:1] == ["rare_anchor"]
+    assert selected[0]["rare_source_title_anchor_terms"] == ["networking"]

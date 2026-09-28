@@ -7890,6 +7890,71 @@ def _select_diverse_candidates(
         )
         priority.append(protected_definition)
         priority_ids.add(str(protected_definition.get("section_id", "")))
+    # Protect one or two lexical candidates whose source title carries a rare,
+    # high-signal query anchor. The ordinary long-tail anchors are rank based
+    # (7/8/9/14/20/33); that can still drop the actual source when generic
+    # terms like stop/problem/room/size outrank a domain term. This protection
+    # is corpus-local and signal-based: it never names a case, question, or
+    # expected source, and it only promotes terms that are rare within the
+    # current candidate pool's title-overlap metadata.
+    title_term_frequency: Counter[str] = Counter()
+    for item in ranked:
+        coverage = item.get("source_coverage")
+        if not isinstance(coverage, Mapping):
+            continue
+        for term in coverage.get("title_overlap_terms", []):
+            term_text = str(term).casefold().strip()
+            if term_text:
+                title_term_frequency[term_text] += 1
+    generic_anchor_terms = (
+        STOP_TERMS
+        | GENERIC_RELATIONAL_TERMS
+        | SOURCE_COVERAGE_IGNORED_TERMS
+        | {
+            "because",
+            "daniel",
+            "mechanism",
+            "problem",
+            "reason",
+            "room",
+            "size",
+            "stop",
+            "stopped",
+            "treat",
+            "treating",
+            "why",
+        }
+    )
+    rare_anchor_candidates = []
+    for item in ranked:
+        coverage = item.get("source_coverage")
+        if not isinstance(coverage, Mapping):
+            continue
+        rare_terms = [
+            str(term).casefold().strip()
+            for term in coverage.get("title_overlap_terms", [])
+            if str(term).casefold().strip()
+            and str(term).casefold().strip() not in generic_anchor_terms
+            and len(str(term).strip()) >= 5
+            and title_term_frequency[str(term).casefold().strip()] <= 2
+        ]
+        if not rare_terms:
+            continue
+        enriched = dict(item)
+        enriched["rare_source_title_anchor_terms"] = sorted(set(rare_terms))
+        rare_anchor_candidates.append(enriched)
+    for anchored in sorted(
+        rare_anchor_candidates,
+        key=lambda item: (
+            int(item.get("seed_rank", 999)),
+            -float(item.get("source_coverage", {}).get("coverage_score", 0.0)),
+            str(item.get("section_id", "")),
+        ),
+    )[:2]:
+        anchored_id = str(anchored.get("section_id", ""))
+        if anchored_id and anchored_id not in priority_ids:
+            priority.append(anchored)
+            priority_ids.add(anchored_id)
     seed_candidates = sorted(
         [
             item
