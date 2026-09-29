@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -97,10 +98,24 @@ def load_production_answer_bundle(
     return _load_production_answer_bundle_from_store(store)
 
 
+@dataclass(frozen=True)
+class PointerlessDirectReleaseReadOnlyStore:
+    store: ReadOnlyObjectGetter
+
+    def get(self, key: str) -> bytes:
+        if key in {FULL_PRODUCTION_POINTER_KEY, FULL_PRODUCTION_PROMOTION_MANIFEST_KEY}:
+            raise FileNotFoundError(key)
+        return self.store.get(key)
+
+
 @lru_cache(maxsize=1)
 def _load_production_answer_bundle_from_env() -> ProductionAnswerBundle:
     settings = Settings.from_env()
-    return _load_production_answer_bundle_from_store(create_object_store(settings))
+    store: ReadOnlyObjectGetter = create_object_store(settings)
+    mode = os.environ.get("M26_ANSWER_BUNDLE_MODE", "").strip().casefold()
+    if mode in {"pointerless_direct_release_readonly", "pointerless-direct-release-readonly"}:
+        store = PointerlessDirectReleaseReadOnlyStore(store)
+    return _load_production_answer_bundle_from_store(store)
 
 
 def build_production_answer_compatibility_report(
