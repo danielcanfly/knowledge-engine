@@ -245,6 +245,44 @@ def test_deterministic_surface_uses_question_shape_without_facet_metadata() -> N
     assert "explanatory answer" not in answer.casefold()
 
 
+def test_deterministic_surface_preserves_explanatory_shape_when_other_cues_overlap() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "facet_ids": ["process_boundary"],
+            "surface_text": "Inspection prevents premature judgment.",
+            "support_refs": [],
+        }
+    ]
+
+    answer = runtime.legacy._deterministic_answer_text(
+        claims,
+        question="Why should a system inspect the path before teams choose an answer?",
+    )
+
+    assert answer.startswith("Because, under the relevant decision criteria")
+    assert "at the relevant process boundary" in answer
+    assert answer.endswith("Inspection prevents premature judgment [[claim_1]].")
+
+
+def test_deterministic_surface_renders_multi_dimension_question_shape() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "facet_ids": [],
+            "surface_text": "State belongs in distinct durability domains.",
+            "support_refs": [],
+        }
+    ]
+
+    answer = runtime.legacy._deterministic_answer_text(
+        claims,
+        question="What kinds of state should an MCP architecture separate?",
+    )
+
+    assert answer.startswith("Across the relevant parts")
+
+
 def test_deterministic_surface_uses_contract_recognized_comparison_cue() -> None:
     claims = [
         {

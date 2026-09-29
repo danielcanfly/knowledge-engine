@@ -3752,7 +3752,7 @@ def _deterministic_answer_text(
             # question-shape connectives; all material text remains the exact,
             # verifier-bound evidence surface below.
             normalized_question = str(question).casefold()
-            if (
+            comparison_cue = bool(
                 "comparison_or_distinction" in facet_ids
                 or {
                     "compare_left",
@@ -3763,22 +3763,53 @@ def _deterministic_answer_text(
                     r"\b(?:compare|contrast|differ|different|distinguish|versus|vs)\b",
                     normalized_question,
                 )
-            ):
-                prefix = "By contrast, "
-            elif re.search(
-                r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b",
-                normalized_question,
-            ):
-                prefix = "Under the relevant decision criteria, "
-            elif "process_boundary" in facet_ids or re.search(
-                r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b",
-                normalized_question,
-            ):
-                prefix = "At the relevant process boundary, "
-            elif "explanatory_answer" in facet_ids or re.search(
-                r"\b(?:why|explain|how)\b", normalized_question
-            ):
+            )
+            explanatory_cue = bool(
+                "explanatory_answer" in facet_ids
+                or re.search(
+                    r"\b(?:why|explain|how)\b",
+                    normalized_question,
+                )
+            )
+            decision_cue = bool(
+                re.search(
+                    r"\b(?:decide|decision|evaluate|whether|criteria|choose)\b",
+                    normalized_question,
+                )
+            )
+            process_boundary_cue = bool(
+                "process_boundary" in facet_ids
+                or re.search(
+                    r"\b(?:avoid|stop|until|boundary|complete|finish|before|after)\b",
+                    normalized_question,
+                )
+            )
+            multi_dimension_cue = bool(
+                "multi_dimension_structure" in facet_ids
+                or re.search(
+                    r"\b(?:list|each|all|several|members?|mechanisms?|parts|cases?|"
+                    r"tradeoffs?|architecture|describe)\b",
+                    normalized_question,
+                )
+            )
+            connectives = []
+            if comparison_cue:
+                connectives.append("by contrast")
+            if explanatory_cue:
+                connectives.append("because")
+            if multi_dimension_cue:
+                connectives.append("across the relevant parts")
+            if decision_cue:
+                connectives.append("under the relevant decision criteria")
+            if process_boundary_cue:
+                connectives.append("at the relevant process boundary")
+            if connectives == ["because"]:
                 prefix = "Because "
+            elif connectives == ["by contrast"]:
+                prefix = "By contrast, "
+            elif connectives:
+                prefix = ", ".join(connectives)
+                prefix = prefix[0].upper() + prefix[1:] + ", "
             else:
                 prefix = ""
             sentences.append(f"{prefix}{surface} [[{claim_id}]].")
