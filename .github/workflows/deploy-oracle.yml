@@ -6,6 +6,9 @@ on:
       git_sha:
         description: Exact commit SHA to deploy to /test/answers staging API
         required: true
+  push:
+    branches:
+      - staging/f746-pointerless-api-20260929
 
 permissions:
   contents: read
@@ -48,7 +51,7 @@ jobs:
 
       - name: Deploy f746 test runtime on isolated port
         env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
+          RELEASE_SHA: ${{ inputs.git_sha || github.sha }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "PROD_DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash -se" <<'REMOTE'
@@ -285,7 +288,7 @@ REMOTE
 
       - name: Verify test path from public hostname
         env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
+          RELEASE_SHA: ${{ inputs.git_sha || github.sha }}
         run: |
           set -euo pipefail
           payload="$(curl --fail --silent --show-error --max-time 20 https://api.danielcanfly.com/test/answers/health)"
