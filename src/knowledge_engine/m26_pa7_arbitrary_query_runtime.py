@@ -3784,6 +3784,7 @@ def _deterministic_answer_text(
                     normalized_question,
                 )
             )
+            process_sequence_cue = "process_sequence" in facet_ids
             multi_dimension_cue = bool(
                 "multi_dimension_structure" in facet_ids
                 or re.search(
@@ -3803,6 +3804,8 @@ def _deterministic_answer_text(
                 connectives.append("under the relevant decision criteria")
             if process_boundary_cue:
                 connectives.append("at the relevant process boundary")
+            if process_sequence_cue:
+                connectives.append("in sequence")
             if connectives == ["because"]:
                 prefix = "Because "
             elif connectives == ["by contrast"]:

@@ -302,15 +302,46 @@ def test_deterministic_surface_uses_contract_recognized_comparison_cue() -> None
     assert "comparison or distinction" not in answer.casefold()
 
 
+def test_deterministic_surface_renders_process_sequence_cue() -> None:
+    claims = [
+        {
+            "claim_id": "claim_1",
+            "facet_ids": ["process_sequence"],
+            "surface_text": "The verified workflow moves between bounded tools.",
+            "support_refs": [],
+        }
+    ]
+
+    answer = runtime.legacy._deterministic_answer_text(
+        claims,
+        question="How does the daily workflow change?",
+    )
+
+    assert "in sequence" in answer.casefold()
+
+
 def test_strict_evidence_preflight_keeps_all_publication_gates() -> None:
     source = inspect.getsource(semantic_contract._try_strict_evidence_bound_answer)
 
     assert "_supported_semantic_recovery_candidate" in source
+    assert "_deterministic_facet_local_preflight_candidates" in source
     assert "_verify_multi_evidence_provider_output" in source
     assert "evaluate_visible_semantics" in source
     assert "_question_answer_alignment_failures" in source
     assert "_endpoint_aware_requirement_support_failures" in source
     assert "case_id" not in source
+
+
+def test_facet_local_preflight_is_bounded_and_case_agnostic() -> None:
+    source = inspect.getsource(
+        semantic_contract._deterministic_facet_local_preflight_candidates
+    )
+
+    assert "_facet_local_provider_payload" in source
+    assert "_runtime_bound_facet_local_candidate" in source
+    assert "_deterministic_answer_text" in source
+    assert "case_id" not in source
+    assert "F007" not in source
 
 
 def test_local_fast_seed_recovery_keeps_all_publication_gates() -> None:

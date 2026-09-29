@@ -4465,6 +4465,15 @@ def _try_strict_evidence_bound_answer(
         recovery_fingerprint = canonical_sha256(recovery_candidate)
         if all(canonical_sha256(item) != recovery_fingerprint for item in candidates):
             candidates.append(recovery_candidate)
+    for facet_candidate in _deterministic_facet_local_preflight_candidates(
+        question=question,
+        intent_class=intent_class,
+        evidence=evidence,
+        requirements=requirements,
+    ):
+        facet_fingerprint = canonical_sha256(facet_candidate)
+        if all(canonical_sha256(item) != facet_fingerprint for item in candidates):
+            candidates.append(facet_candidate)
 
     for candidate in candidates:
         try:
@@ -4551,6 +4560,111 @@ def _try_strict_evidence_bound_answer(
             )
         )
     return None
+
+
+def _deterministic_facet_local_preflight_candidates(
+    *,
+    question: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+) -> list[dict[str, Any]]:
+    """Build a bounded set of exact-evidence facet candidates without a provider call."""
+    try:
+        runtime_requirements = runtime._material_requirements_for_query(
+            question,
+            intent_class,
+            _runtime_semantic_requirements(requirements),
+        )
+        classification = runtime._facet_support_classification(
+            requirements=runtime_requirements,
+            evidence=evidence,
+        )
+        if not classification or any(
+            item.get("support_state") != "SUPPORTED" for item in classification
+        ):
+            return []
+        _, _, label_map, snippet_map, slots = runtime._facet_local_provider_payload(
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            requirements=_runtime_semantic_requirements(requirements),
+            support_classification=classification,
+            repair=False,
+            previous_failures=(),
+        )
+    except Exception:
+        return []
+
+    evidence_by_id = {
+        str(item.get("evidence_id", "")): item
+        for item in label_map.values()
+        if str(item.get("evidence_id", ""))
+    }
+    candidates: list[dict[str, Any]] = []
+    # The first span is normally the strongest local support.  The third span
+    # provides bounded diversity when the first two slots share a generic lead.
+    for evidence_rank, surface_mode in (
+        (0, "snippet"),
+        (0, "exact_quote"),
+        (2, "snippet"),
+    ):
+        claim_id_by_evidence_id: dict[str, str] = {}
+        drafts: list[dict[str, Any]] = []
+        for slot in slots:
+            allowed_ids = [
+                str(item) for item in slot.get("allowed_evidence_ids", ()) if str(item)
+            ]
+            if not allowed_ids:
+                continue
+            evidence_id = allowed_ids[min(evidence_rank, len(allowed_ids) - 1)]
+            if evidence_id not in evidence_by_id or evidence_id not in snippet_map:
+                continue
+            claim_id = claim_id_by_evidence_id.setdefault(
+                evidence_id,
+                f"claim_{len(claim_id_by_evidence_id) + 1}",
+            )
+            surface = str(snippet_map[evidence_id])
+            if surface_mode == "exact_quote":
+                surface = legacy._first_exact_evidence_quote(
+                    str(evidence_by_id[evidence_id].get("passage_text", "")),
+                    max_chars=360,
+                )
+            if not surface:
+                continue
+            drafts.append(
+                {
+                    "slot_id": str(slot["slot_id"]),
+                    "claim_id": claim_id,
+                    "text": surface,
+                    "claim_type": "EVIDENCE_FACT",
+                    "evidence_ids": [evidence_id],
+                }
+            )
+        if not drafts:
+            continue
+        try:
+            candidate = runtime._runtime_bound_facet_local_candidate(
+                drafts={
+                    "provider_selected_subset": True,
+                    "claims": drafts,
+                    "model_explanations": [],
+                },
+                slots=slots,
+                label_map=label_map,
+                snippet_map=snippet_map,
+                question=question,
+                intent_class=intent_class,
+                unresolved_required_ids=(),
+            )
+            candidate["answer_text"] = legacy._deterministic_answer_text(
+                candidate.get("claims", ()),
+                question=question,
+            )
+            candidates.append(candidate)
+        except Exception:
+            continue
+    return candidates
 
 
 def _fast_recovery_seed(
