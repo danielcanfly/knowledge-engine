@@ -23,26 +23,39 @@ jobs:
       ORACLE_VM_HOST: ${{ vars.ORACLE_VM_HOST || secrets.ORACLE_VM_HOST }}
       ORACLE_VM_USER: ${{ vars.ORACLE_VM_USER || secrets.ORACLE_VM_USER }}
       ORACLE_VM_DEPLOY_PATH: ${{ vars.ORACLE_VM_DEPLOY_PATH || secrets.ORACLE_VM_DEPLOY_PATH }}
+      AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
+      JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
+      JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
+      JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
+      R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_READ || secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_READ || secrets.R2_SECRET_ACCESS_KEY }}
+      MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      QDRANT_URL: ${{ secrets.QDRANT_URL }}
+      QDRANT_API_KEY_READ: ${{ secrets.QDRANT_API_KEY_READ }}
+      QDRANT_READ_ONLY_API_KEY: ${{ secrets.QDRANT_READ_ONLY_API_KEY }}
+      M26_PA7_DENSE_COLLECTION: ${{ vars.M26_PA7_DENSE_COLLECTION || 'm25_blog_m25blog_5250f8422f4f_f5f01d82c7a1_fe499db2e043_fe499db2e043' }}
+      KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH: 93c8aaae82e498dc2e6bfdcaa48b8823fe21a5ceef44ca2cf9cf35cf6350e05b
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.git_sha }}
-      - name: Require deployment configuration
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Require complete M26 deployment configuration
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
         run: |
           set -euo pipefail
-          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE; do
+          for name in SSH_PRIVATE_KEY ORACLE_VM_HOST ORACLE_VM_USER ORACLE_VM_DEPLOY_PATH AUTH_MODE JWT_ISSUER JWT_JWKS_URL JWT_AUDIENCE R2_ENDPOINT_URL R2_BUCKET R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY MINIMAX_API_KEY CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN QDRANT_URL KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH; do
             test -n "${!name:-}" || { echo "Missing $name"; exit 2; }
           done
+
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.ORACLE_VM_SSH_PRIVATE_KEY }}
@@ -52,19 +65,17 @@ jobs:
           printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$ORACLE_VM_HOST" >> ~/.ssh/known_hosts
-      - name: Prepare repository and production environment
+
+      - name: Rebuild complete production environment and deploy exact revision
         env:
-          AUTH_MODE: ${{ vars.AUTH_MODE || secrets.AUTH_MODE }}
-          JWT_ISSUER: ${{ vars.JWT_ISSUER || secrets.JWT_ISSUER }}
-          JWT_JWKS_URL: ${{ vars.JWT_JWKS_URL || secrets.JWT_JWKS_URL }}
-          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || secrets.JWT_AUDIENCE }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT_URL: ${{ vars.R2_ENDPOINT_URL || secrets.R2_ENDPOINT_URL }}
-          R2_BUCKET: ${{ vars.R2_BUCKET || secrets.R2_BUCKET }}
+          RELEASE_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "if [ ! -d '$ORACLE_VM_DEPLOY_PATH/.git' ]; then git clone https://github.com/danielcanfly/knowledge-engine.git '$ORACLE_VM_DEPLOY_PATH'; fi"
+          backend_token="$(openssl rand -hex 32)"
+          public_hmac="$(openssl rand -hex 32)"
+          echo "::add-mask::$backend_token"
+          echo "::add-mask::$public_hmac"
           umask 077
           cat > /tmp/knowledge-engine.env <<EOF_ENV
           APP_ENV=production
@@ -82,13 +93,25 @@ jobs:
           KNOWLEDGE_CHANNEL=production
           CACHE_DIR=/var/lib/knowledge-engine/cache
           LOG_LEVEL=INFO
+          MINIMAX_API_KEY=$MINIMAX_API_KEY
+          CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID
+          CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN
+          CLOUDFLARE_AI_TOKEN=$CLOUDFLARE_AI_TOKEN
+          QDRANT_URL=$QDRANT_URL
+          QDRANT_API_KEY_READ=$QDRANT_API_KEY_READ
+          QDRANT_READ_ONLY_API_KEY=$QDRANT_READ_ONLY_API_KEY
+          M26_PA7_DENSE_COLLECTION=$M26_PA7_DENSE_COLLECTION
+          KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH=$KNOWLEDGE_ENGINE_OWNER_SUBJECT_HASH
+          M26_QUERY_BACKEND_TOKEN=$backend_token
+          M26_QUERY_BUILD_SHA=$RELEASE_SHA
+          M26_QUERY_REQUIRE_REMOTE_DENSE=true
+          M26_PA7_GATE_PATH=pilot/m26/m26-pa-7-corrected-resolved-production-gate.json
+          KNOWLEDGE_ENGINE_ROOT=/app
+          M26_PUBLIC_IP_HMAC_SECRET=$public_hmac
+          M26_PUBLIC_ALLOWED_ORIGINS=https://danielcanfly.com,https://www.danielcanfly.com,https://api-staging.danielcanfly.com
           EOF_ENV
+          sed -i 's/^          //' /tmp/knowledge-engine.env
           scp /tmp/knowledge-engine.env "$ORACLE_VM_USER@$ORACLE_VM_HOST:$ORACLE_VM_DEPLOY_PATH/.env.next"
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "chmod 600 '$ORACLE_VM_DEPLOY_PATH/.env.next' && mv '$ORACLE_VM_DEPLOY_PATH/.env.next' '$ORACLE_VM_DEPLOY_PATH/.env'"
           rm -f /tmp/knowledge-engine.env
-      - name: Deploy exact requested revision
-        env:
-          RELEASE_SHA: ${{ inputs.git_sha }}
-        run: |
-          set -euo pipefail
           ssh "$ORACLE_VM_USER@$ORACLE_VM_HOST" "DEPLOY_PATH='$ORACLE_VM_DEPLOY_PATH' RELEASE_SHA='$RELEASE_SHA' bash '$ORACLE_VM_DEPLOY_PATH/deploy/deploy.sh'"
