@@ -305,6 +305,17 @@ def test_deterministic_surface_uses_contract_recognized_comparison_cue() -> None
 def test_strict_evidence_preflight_keeps_all_publication_gates() -> None:
     source = inspect.getsource(semantic_contract._try_strict_evidence_bound_answer)
 
+    assert "_supported_semantic_recovery_candidate" in source
+    assert "_verify_multi_evidence_provider_output" in source
+    assert "evaluate_visible_semantics" in source
+    assert "_question_answer_alignment_failures" in source
+    assert "_endpoint_aware_requirement_support_failures" in source
+    assert "case_id" not in source
+
+
+def test_local_fast_seed_recovery_keeps_all_publication_gates() -> None:
+    source = inspect.getsource(semantic_contract._try_locally_verified_fast_seed)
+
     assert "_verify_multi_evidence_provider_output" in source
     assert "evaluate_visible_semantics" in source
     assert "_question_answer_alignment_failures" in source

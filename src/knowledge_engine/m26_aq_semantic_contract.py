@@ -4440,96 +4440,117 @@ def _try_strict_evidence_bound_answer(
     started: float,
 ) -> dict[str, Any] | None:
     """Publish an exact-evidence answer only after every existing public gate passes."""
+    candidates: list[Mapping[str, Any]] = []
     try:
         candidate = legacy._deterministic_provider_candidate(
             question=question,
             intent_class=intent_class,
             evidence=evidence,
         )
-        if not isinstance(candidate, Mapping):
-            return None
-        verified = legacy._verify_multi_evidence_provider_output(
-            trace_id=trace_id,
+        if isinstance(candidate, Mapping):
+            candidates.append(candidate)
+    except Exception:
+        pass
+    try:
+        recovery_candidate = _supported_semantic_recovery_candidate(
             question=question,
             intent_class=intent_class,
             evidence=evidence,
-            provider_text=json.dumps(
-                runtime._verification_candidate(candidate),
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-        )
-        answer = legacy._verified_multi_evidence_answer(
-            intent_class=intent_class,
-            verified=verified,
-            evidence=evidence,
-            calls=[],
-            repair_attempted=False,
-        )
-        _use_verified_natural_surface(
-            answer,
-            _public_candidate_surface(candidate, answer),
+            requirements=requirements,
+            endpoint_proof=endpoint_proof,
         )
     except Exception:
-        return None
-    if answer.get("status") != "owner_only_cited_answer":
-        return None
-    answer_text = str(answer.get("answer_text", ""))
-    if evaluate_visible_semantics(answer_text, requirements, question):
-        return None
-    if _internal_reference_leaks(answer_text, question):
-        return None
-    if _question_answer_alignment_failures(
-        question=question,
-        answer_text=answer_text,
-        evidence=evidence,
-    ):
-        return None
-    support_failures, support_proof = _endpoint_aware_requirement_support_failures(
-        runtime=_RUNTIME_FACADE,
-        requirements=requirements,
-        evidence=_candidate_evidence(candidate, evidence),
-        endpoint_proof=endpoint_proof,
-    )
-    if support_failures:
-        return None
-    answer["answer_source"] = "deterministic_verified_evidence_preflight"
-    answer["multi_evidence_verification"] = {
-        **dict(answer.get("multi_evidence_verification", {})),
-        "deterministic_evidence_synthesis_used": True,
-        "provider_contract": "strict_runtime_bound_evidence_preflight/v1",
-        "served_answer_surface": "verified_exact_evidence_surface",
-        "verification_failure_codes_by_attempt": [],
-    }
-    return _response_with_contract(
-        runtime._response_from_verification(
-            gate=gate,
-            bundle=bundle,
-            dense_result=dense_result,
-            lexical_result=lexical_result,
+        recovery_candidate = None
+    if isinstance(recovery_candidate, Mapping):
+        recovery_fingerprint = canonical_sha256(recovery_candidate)
+        if all(canonical_sha256(item) != recovery_fingerprint for item in candidates):
+            candidates.append(recovery_candidate)
+
+    for candidate in candidates:
+        try:
+            verified = legacy._verify_multi_evidence_provider_output(
+                trace_id=trace_id,
+                question=question,
+                intent_class=intent_class,
+                evidence=evidence,
+                provider_text=json.dumps(
+                    runtime._verification_candidate(candidate),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            )
+            answer = legacy._verified_multi_evidence_answer(
+                intent_class=intent_class,
+                verified=verified,
+                evidence=evidence,
+                calls=[],
+                repair_attempted=False,
+            )
+            _use_verified_natural_surface(
+                answer,
+                _public_candidate_surface(candidate, answer),
+            )
+        except Exception:
+            continue
+        if answer.get("status") != "owner_only_cited_answer":
+            continue
+        answer_text = str(answer.get("answer_text", ""))
+        if evaluate_visible_semantics(answer_text, requirements, question):
+            continue
+        if _internal_reference_leaks(answer_text, question):
+            continue
+        if _question_answer_alignment_failures(
+            question=question,
+            answer_text=answer_text,
             evidence=evidence,
-            verification=answer,
-            trace_id=trace_id,
-            question_sha=question_sha,
-            started=started,
-            intent_class=intent_class,
-            semantic_closure={
-                "requirements": [
-                    runtime._requirement_public(item) for item in requirements
-                ],
-                "support_proof": support_proof,
-                "endpoint_proof": dict(endpoint_proof),
-                "failures": [],
-                "strict_evidence_preflight": {
-                    "attempted": True,
-                    "accepted": True,
-                    "case_specific": False,
-                    "provider_calls_avoided": 1,
-                },
-                "semantic_contract": _semantic_contract_public(),
-            },
+        ):
+            continue
+        support_failures, support_proof = _endpoint_aware_requirement_support_failures(
+            runtime=_RUNTIME_FACADE,
+            requirements=requirements,
+            evidence=_candidate_evidence(candidate, evidence),
+            endpoint_proof=endpoint_proof,
         )
-    )
+        if support_failures:
+            continue
+        answer["answer_source"] = "deterministic_verified_evidence_preflight"
+        answer["multi_evidence_verification"] = {
+            **dict(answer.get("multi_evidence_verification", {})),
+            "deterministic_evidence_synthesis_used": True,
+            "provider_contract": "strict_runtime_bound_evidence_preflight/v1",
+            "served_answer_surface": "verified_exact_evidence_surface",
+            "verification_failure_codes_by_attempt": [],
+        }
+        return _response_with_contract(
+            runtime._response_from_verification(
+                gate=gate,
+                bundle=bundle,
+                dense_result=dense_result,
+                lexical_result=lexical_result,
+                evidence=evidence,
+                verification=answer,
+                trace_id=trace_id,
+                question_sha=question_sha,
+                started=started,
+                intent_class=intent_class,
+                semantic_closure={
+                    "requirements": [
+                        runtime._requirement_public(item) for item in requirements
+                    ],
+                    "support_proof": support_proof,
+                    "endpoint_proof": dict(endpoint_proof),
+                    "failures": [],
+                    "strict_evidence_preflight": {
+                        "attempted": True,
+                        "accepted": True,
+                        "case_specific": False,
+                        "provider_calls_avoided": 1,
+                    },
+                    "semantic_contract": _semantic_contract_public(),
+                },
+            )
+        )
+    return None
 
 
 def _fast_recovery_seed(
@@ -4643,6 +4664,96 @@ def _fast_seed_candidate(
         intent_class=intent_class,
         unresolved_required_ids=(),
     )
+
+
+def _try_locally_verified_fast_seed(
+    *,
+    seed: FastRecoverySeed,
+    question: str,
+    trace_id: str,
+    intent_class: str,
+    evidence: Sequence[Mapping[str, Any]],
+    requirements: Sequence[Any],
+    endpoint_proof: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Accept a retained provider seed only when every non-provider gate also passes."""
+    try:
+        candidate = _fast_seed_candidate(
+            seed=seed,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+        )
+        candidate["answer_text"] = legacy._deterministic_answer_text(
+            candidate.get("claims", []),
+            question=question,
+        )
+        verified = legacy._verify_multi_evidence_provider_output(
+            trace_id=trace_id,
+            question=question,
+            intent_class=intent_class,
+            evidence=evidence,
+            provider_text=json.dumps(
+                runtime._verification_candidate(candidate),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+        )
+        answer = legacy._verified_multi_evidence_answer(
+            intent_class=intent_class,
+            verified=verified,
+            evidence=evidence,
+            calls=[],
+            repair_attempted=False,
+        )
+        _use_verified_natural_surface(
+            answer,
+            _public_candidate_surface(candidate, answer),
+        )
+    except Exception:
+        return None
+    answer_text = str(answer.get("answer_text", ""))
+    if answer.get("status") != "owner_only_cited_answer":
+        return None
+    if evaluate_visible_semantics(answer_text, requirements, question):
+        return None
+    if _internal_reference_leaks(answer_text, question):
+        return None
+    if _question_answer_alignment_failures(
+        question=question,
+        answer_text=answer_text,
+        evidence=evidence,
+    ):
+        return None
+    support_failures, support_proof = _endpoint_aware_requirement_support_failures(
+        runtime=_RUNTIME_FACADE,
+        requirements=requirements,
+        evidence=_candidate_evidence(candidate, evidence),
+        endpoint_proof=endpoint_proof,
+    )
+    if support_failures:
+        return None
+    answer.update(
+        {
+            "answer_source": "fast_seed_locally_verified_recovery",
+            "provider_invoked": True,
+            "provider_call_count": 1,
+        }
+    )
+    return answer, {
+        "schema_version": "m26-aq-semantic-closure/v1",
+        "requirements": [
+            runtime._requirement_public(item)
+            for item in _runtime_semantic_requirements(requirements)
+        ],
+        "support_proof": support_proof,
+        "endpoint_proof": dict(endpoint_proof),
+        "failures": [],
+        "provider_contract": "strict_local_fast_seed_verification/v1",
+        "bp5c_r2_recovery": True,
+        "fast_seed_used": True,
+        "semantic_review_provider_call_avoided": True,
+    }
 
 
 def _provider_attempts_remaining(provider_client: Any) -> int:
@@ -4999,16 +5110,28 @@ def _consolidated_semantic_recovery(
             )
             route_trace = initial_decision.public()
         else:
-            verification, closure = _fast_seed_review(
+            local_seed_result = _try_locally_verified_fast_seed(
                 seed=seed,
                 question=question,
                 trace_id=trace_id,
                 intent_class=intent_class,
                 evidence=evidence,
-                provider_client=provider_client,
                 requirements=requirements,
                 endpoint_proof=endpoint_proof,
             )
+            if local_seed_result is not None:
+                verification, closure = local_seed_result
+            else:
+                verification, closure = _fast_seed_review(
+                    seed=seed,
+                    question=question,
+                    trace_id=trace_id,
+                    intent_class=intent_class,
+                    evidence=evidence,
+                    provider_client=provider_client,
+                    requirements=requirements,
+                    endpoint_proof=endpoint_proof,
+                )
             failures = [str(item) for item in closure.get("failures", ())]
             repairable_semantic_failure = any(
                 item.endswith(":INSUFFICIENT")
